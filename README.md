@@ -27,6 +27,19 @@ ruff check
 
 GUI tests run on Qt's offscreen platform, so no window opens.
 
+## Synthetic recordings
+
+`tools/make_fixtures.py` creates synthetic IQ recordings. Tests use it through the
+`make_recording` fixture in `tests/conftest.py`, which writes under `tmp_path`. For
+manual testing, write under `fixtures_out/`, which git ignores:
+
+```
+python tools/make_fixtures.py fixtures_out/demo --channels 2 --gap 3-4 --junk
+python tools/make_fixtures.py --help
+```
+
+The tool only creates files. It refuses an output folder that exists and is not empty.
+
 ## Run
 
 ```
