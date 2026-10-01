@@ -3,6 +3,7 @@
 These tests read the files under src/iqdm/ and parse them with ast. They write nothing.
 
 - Only iqdm.gui and iqdm.app may import PySide6, so business logic stays portable.
+- Only iqdm.db may import sqlite3, so all SQL lives in src/iqdm/db/.
 - Only iqdm.transfer.delete may call .unlink() or .rmdir(). Ruff's banned-API rule
   (TID251 in pyproject.toml) covers os.remove, shutil.rmtree and similar functions.
 """
@@ -15,6 +16,7 @@ import pytest
 PACKAGE_DIR = Path(__file__).resolve().parents[1] / "src" / "iqdm"
 
 QT_ALLOWED = ("gui/", "app.py")
+SQLITE_ALLOWED = ("db/",)
 DELETE_ALLOWED = ("transfer/delete.py",)
 DELETE_METHODS = {"unlink", "rmdir"}
 
@@ -31,8 +33,8 @@ def _allowed(rel: str, prefixes: tuple[str, ...]) -> bool:
     return any(rel == p or rel.startswith(p) for p in prefixes)
 
 
-def qt_imports(tree: ast.AST) -> list[int]:
-    """Return line numbers of imports of PySide6 or any of its submodules."""
+def module_imports(tree: ast.AST, module: str) -> list[int]:
+    """Return line numbers of imports of `module` or any of its submodules."""
     lines = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -41,9 +43,13 @@ def qt_imports(tree: ast.AST) -> list[int]:
             names = [node.module or ""]
         else:
             continue
-        if any(n == "PySide6" or n.startswith("PySide6.") for n in names):
+        if any(n == module or n.startswith(f"{module}.") for n in names):
             lines.append(node.lineno)
     return lines
+
+
+def qt_imports(tree: ast.AST) -> list[int]:
+    return module_imports(tree, "PySide6")
 
 
 def delete_calls(tree: ast.AST) -> list[int]:
@@ -110,3 +116,14 @@ def test_delete_methods_only_in_delete_module():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         offenders += [f"{rel}:{line}" for line in delete_calls(tree)]
     assert offenders == [], f"unlink/rmdir called outside transfer/delete.py: {offenders}"
+
+
+def test_sqlite3_imported_only_in_db():
+    offenders = []
+    for path in _source_files():
+        rel = _rel(path)
+        if _allowed(rel, SQLITE_ALLOWED):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders += [f"{rel}:{line}" for line in module_imports(tree, "sqlite3")]
+    assert offenders == [], f"sqlite3 imported outside db/: {offenders}"
