@@ -1,4 +1,6 @@
--- IQ Data Manager: SQLite schema (draft for review)
+-- IQ Data Manager: SQLite schema, version 1
+-- Edited in place until the first real database exists (SPEC section 14, D4).
+-- After that, every change is a numbered migration in migrations.py.
 -- All timestamps are ISO 8601 UTC text, e.g. '2026-09-30T08:15:00Z'.
 -- Run on every connection:  PRAGMA foreign_keys = ON;
 -- Journal mode: keep default rollback journal (no WAL) since the DB lives on an SMB share.
@@ -29,6 +31,7 @@ CREATE TABLE recordings (
     -- start_unix / end_unix are the envelope across all channels:
     -- earliest channel start, latest channel end. end is exclusive
     -- (last file's timestamp + file_duration_s), so span = end - start.
+    -- The repository derives date, start_unix and end_unix from the channel rows.
     date                TEXT NOT NULL,                      -- ISO 8601 UTC of recording start
     start_unix          REAL NOT NULL,
     end_unix            REAL NOT NULL,
@@ -36,8 +39,9 @@ CREATE TABLE recordings (
 
     site_id             INTEGER NOT NULL REFERENCES sites(id),
 
-    -- File format (shared by all channels)
-    dtype               TEXT NOT NULL DEFAULT 'int16',
+    -- File format (shared by all channels). Samples are always complex IQ.
+    dtype               TEXT NOT NULL DEFAULT 'int16'
+                            CHECK (dtype IN ('int8', 'int16', 'float32')),  -- SPEC D1
     iq_layout           TEXT NOT NULL DEFAULT 'interleaved_iq'
                             CHECK (iq_layout IN (
                                 'interleaved_iq',   -- I0 Q0 I1 Q1 ... (standard)
@@ -46,7 +50,7 @@ CREATE TABLE recordings (
                             )),
     endianness          TEXT NOT NULL DEFAULT 'little'
                             CHECK (endianness IN ('little', 'big')),
-    header_bytes        INTEGER NOT NULL DEFAULT 0 CHECK (header_bytes >= 0),
+    header_bytes        INTEGER NOT NULL DEFAULT 0 CHECK (header_bytes >= 0),  -- at the start of every file
 
     -- Location: storage_root is a UNC root (e.g. \\192.168.1.50\recordings)
     -- or the laptop path while archive_state = 'local'
@@ -54,12 +58,13 @@ CREATE TABLE recordings (
     rel_path            TEXT NOT NULL,
     archive_state       TEXT NOT NULL DEFAULT 'local'
                             CHECK (archive_state IN ('local', 'archived')),
-    archived_at         TEXT,                               -- set when state becomes 'archived'
+    archived_at         TEXT,                               -- set exactly when state is 'archived'
 
     recording_plan_ref  TEXT,                               -- path or ID of the recording plan
     remarks             TEXT,
 
     CHECK (end_unix >= start_unix),
+    CHECK ((archive_state = 'archived') = (archived_at IS NOT NULL)),
     UNIQUE (storage_root, rel_path)                         -- same folder can't be logged twice
 );
 
@@ -104,7 +109,7 @@ CREATE INDEX idx_channels_recording ON channels(recording_id);
 -- Recording params: flexible RF chain details
 -- channel_id NULL  -> applies to the whole recording (e.g. SDR = X310)
 -- channel_id set   -> applies to one channel (e.g. Antenna on channel 1)
--- App logic must ensure channel_id belongs to the same recording_id.
+-- The triggers below reject a channel_id from a different recording.
 -- ------------------------------------------------------------------
 CREATE TABLE recording_params (
     id              INTEGER PRIMARY KEY,
@@ -117,6 +122,24 @@ CREATE TABLE recording_params (
 
 CREATE INDEX idx_params_recording ON recording_params(recording_id);
 CREATE INDEX idx_params_param     ON recording_params(param);
+
+CREATE TRIGGER trg_params_channel_insert
+BEFORE INSERT ON recording_params
+FOR EACH ROW
+WHEN NEW.channel_id IS NOT NULL
+ AND NEW.recording_id IS NOT (SELECT recording_id FROM channels WHERE id = NEW.channel_id)
+BEGIN
+    SELECT RAISE(ABORT, 'recording_params.channel_id belongs to a different recording');
+END;
+
+CREATE TRIGGER trg_params_channel_update
+BEFORE UPDATE OF recording_id, channel_id ON recording_params
+FOR EACH ROW
+WHEN NEW.channel_id IS NOT NULL
+ AND NEW.recording_id IS NOT (SELECT recording_id FROM channels WHERE id = NEW.channel_id)
+BEGIN
+    SELECT RAISE(ABORT, 'recording_params.channel_id belongs to a different recording');
+END;
 
 
 -- ------------------------------------------------------------------
@@ -132,6 +155,10 @@ CREATE TABLE transfer_log (
     destination         TEXT,                               -- NULL for 'check'
     range_start_unix    REAL,                               -- NULL = whole recording
     range_end_unix      REAL,
+    channels            TEXT                                -- NULL = all channels, else sorted indices e.g. '0,2'
+                            CHECK (channels IS NULL OR (channels <> '' AND channels NOT GLOB '*[^0-9,]*')),
+    hash_mode           TEXT                                -- NULL when no verification ran
+                            CHECK (hash_mode IN ('none', 'sample', 'all')),
     started_at          TEXT NOT NULL,
     finished_at         TEXT,                               -- NULL = interrupted / never completed
     n_files             INTEGER,

@@ -48,7 +48,7 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks. |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
-| `transfer_log` | History of moves, copies and archive checks, including time ranges and verification result. |
+| `transfer_log` | History of moves, copies and archive checks, including time ranges, channel subset, hash mode and verification result. |
 
 Key semantics:
 
@@ -68,15 +68,17 @@ Key semantics:
   `transfer_log` does not, so a recording with transfer history cannot be deleted
   without explicit handling.
 - **Schema version**: `PRAGMA user_version`. Changes are numbered migrations in
-  `src/iqdm/db/migrations.py`, applied on startup with a backup copy made first.
+  `src/iqdm/db/migrations.py`. They run only from an explicit, user-confirmed
+  upgrade action, with a backup copy made first (section 14, D6). Until the first
+  real database exists, `schema.sql` is edited in place as version 1 (D4).
 
 ### DB access rules
 
 - Every connection: `PRAGMA foreign_keys = ON`, `PRAGMA busy_timeout = 5000`, default
   rollback journal (never WAL on an SMB share).
 - Open, do the work, close. Never hold a connection open while the GUI is idle.
-- Writes are short transactions with retry and backoff on `database is locked`
-  (e.g. 5 attempts over ~10 s), then a clear error to the user.
+- Writes are short transactions with retry and backoff on `database is locked`, then
+  a clear error to the user. Attempts and pauses are in section 14, D7.
 - The viewer opens connections read-only (`file:...?mode=ro` URI).
 
 ## 4. Configuration
@@ -373,3 +375,50 @@ Resolved questions. Other sections refer to these by number.
   slightly overstated for that channel.
 - The scanner reports the size of each channel's last file separately from the set of
   distinct sizes.
+
+### D4. Schema baseline (2026-10-02)
+
+- No database uses the new schema yet. The first real database is created by the
+  legacy migration in Milestone 7.
+- Until then, `schema.sql` is edited in place and stays at `user_version = 1`.
+- From the first real database on, every schema change is a numbered migration.
+
+### D5. Transfer log columns (2026-10-02)
+
+- `transfer_log.channels` records the channel subset: NULL for all channels, else
+  sorted indices separated by commas, e.g. `'0,2'`.
+- `transfer_log.hash_mode` records the verification hash mode: `none`, `sample` or
+  `all`. It is NULL when no verification ran.
+- Source deletion stays recorded in `transfer_log.notes` (section 8). A structured
+  deletion record and a per-file verification manifest are reconsidered in
+  Milestone 5.
+
+### D6. Running migrations (2026-10-02)
+
+- The app never migrates on startup. When the database version is older than the
+  app's, the app refuses to write and offers an "Upgrade database" action.
+- The upgrade asks for confirmation, writes a backup next to the database through
+  SQLite's online backup API, and never overwrites an existing backup file.
+- Each migration step runs in its own transaction and sets `user_version` inside it.
+  A failed step leaves the database at the last good version.
+- Reads are allowed on a database newer than the app, with a warning. Reads are
+  refused on an older database. Writes need the current version.
+
+### D7. Database layer defaults (2026-10-02)
+
+- The repository derives `recordings.date`, `start_unix` and `end_unix` from the
+  channel rows. `date` is `start_unix` as ISO 8601 UTC, in whole seconds.
+- Triggers reject a `recording_params.channel_id` that belongs to a different
+  recording.
+- `archived_at` is set exactly when `archive_state = 'archived'` (CHECK constraint).
+  Logging in place (D2) and the legacy import set it to the time the row is written.
+- A parameter names its channel by `channel_index` in the app. The repository maps
+  the index to `channel_id`.
+- Editing a recording updates channels in place by `channel_index` and inserts new
+  ones. Removing a channel needs an explicit flag, because it deletes that channel's
+  parameters. Parameters are replaced as a set.
+- Write retry: `busy_timeout = 5000`, 3 attempts, pauses of 1 s and 2 s between
+  them. The worst case is about 18 s before the error is shown.
+- Channel coverage is undefined (NULL in the app) when `n_files` is NULL or the span
+  is zero.
+- Sites can be added and listed. The app has no rename or delete for sites.
