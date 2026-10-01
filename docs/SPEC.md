@@ -29,10 +29,11 @@ truth where they differ.
   authentication beyond network access.
 - **Storage**: NAS shares reached over gigabit Ethernet, usually as mapped drives.
   The app stores and uses UNC paths, not drive letters.
-- **Data**: raw IQ, typically int16 interleaved I then Q, little-endian, sometimes
-  with a fixed-size header. Sample rates from kHz to tens of MHz; at 50 MS/s a
-  one-second file is 200 MB. Recordings range up to 1 TB per folder. Files may be
-  missing (gaps) inside a recording.
+- **Data**: raw complex IQ, typically int16 interleaved I then Q, little-endian.
+  Allowed sample types are `int8`, `int16` and `float32` (section 14, D1). Some
+  recordings have a fixed-size header at the start of every file. Sample rates from
+  kHz to tens of MHz; at 50 MS/s a one-second file is 200 MB. Recordings range up to
+  1 TB per folder. Files may be missing (gaps) inside a recording.
 - **Multi-channel**: multi-channel captures store each channel in a numbered
   subfolder (`<recording>/0/`, `<recording>/1/`). Single-channel recordings may have
   files directly in the recording folder or in `0/`.
@@ -60,7 +61,9 @@ Key semantics:
   the laptop folder while `archive_state = 'local'`. `rel_path` is relative to it.
   Full path = `storage_root / rel_path`, channel path adds `channels.sub_path`.
 - **Archive state**: `local` (data only on the recording laptop) or `archived` (on
-  the NAS and verified). The app sets `archived` only after verification passes.
+  the NAS and verified). The app sets `archived` only after verification passes, with
+  one exception. A folder logged in place on the NAS is set to `archived` without
+  verification, and its log entry marks it as unverified (section 14, D2).
 - **Deletion**: `channels` and `recording_params` cascade on recording delete.
   `transfer_log` does not, so a recording with transfer history cannot be deleted
   without explicit handling.
@@ -118,9 +121,11 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    1.0 s), logged by (pre-filled with the Windows login name, editable), site
    (dropdown plus "Add site"), recording plan reference, storage root and relative
    path (derived from the folder, read-only), archive state (derived: `local` unless
-   the folder is under a configured NAS root, then `archived`), remarks.
-3. **File format**: sample type (int16 default), IQ layout (`interleaved_iq` default,
-   `interleaved_qi`, `planar_iq`), endianness (little default), header bytes (0).
+   the folder is under a configured NAS root, then `archived`; see section 14, D2 for
+   the `transfer_log` row written in that case), remarks.
+3. **File format**: sample type (`int8`, `int16` default, `float32`), IQ layout
+   (`interleaved_iq` default, `interleaved_qi`, `planar_iq`), endianness (little
+   default), header bytes (0, at the start of every file).
 4. **Channels**: one row per detected channel with folder, start, end, files and
    coverage from the scan; band, fc (MHz in the UI, Hz in the DB) and fs entered by
    the user.
@@ -132,8 +137,10 @@ Validation before save (shown as a checklist):
 - Folder scanned and contains at least one channel with files.
 - Folder not already logged (`UNIQUE (storage_root, rel_path)`).
 - File sizes consistent with fs: expected bytes per file =
-  `header_bytes + fs_hz * file_duration_s * 2 * bytes_per_sample`. Mismatch is an
-  error that names the channel and the expected and actual sizes.
+  `header_bytes + fs_hz * file_duration_s * 2 * bytes_per_sample`. A channel's last
+  file may be shorter than expected; that is reported as information (section 14,
+  D3). Any other mismatch, including a last file larger than expected, is an error
+  that names the channel and the expected and actual sizes.
 - Required fields present; fc and fs positive.
 - Gaps are reported as information, not errors.
 
@@ -152,7 +159,8 @@ duration. Output: a dataclass per channel.
   fractional part), extensions `.dat` and `.bin` (configurable). Other files are
   ignored and counted as "unrecognised" in the result.
 - Per channel: sorted timestamps, first and last, `n_files`, `total_bytes`, set of
-  distinct file sizes, and gaps as a list of `(start_unix, missing_seconds)` runs.
+  distinct file sizes, the size of the last file (section 14, D3), and gaps as a list
+  of `(start_unix, missing_seconds)` runs.
 - Uses `os.scandir` for speed; must handle tens of thousands of files per channel.
 - **Gap detail**: gaps are not stored in the DB. The viewer computes them on demand
   with a "Scan" action; transfer previews compute them for the selected range.
@@ -319,3 +327,49 @@ Assumptions in this spec that the user may revise:
 - Coverage highlight threshold of 99%.
 - Out of scope for v1: Linux build, rsync generator, file-level gap storage in the DB,
   user accounts, editing RF chain templates.
+
+## 14. Decisions
+
+Resolved questions. Other sections refer to these by number.
+
+### D1. Sample types (2026-10-02)
+
+- Data is always complex IQ, so the size formula in section 6 keeps the factor 2.
+- Allowed `dtype` values are `int8`, `int16` and `float32`, with 1, 2 and 4 bytes per
+  sample. The default is `int16`.
+- `int8` covers the USRP `sc8` wire format. `float32` is allowed in the schema. Whether
+  down-converted float32 data belongs in this catalogue is a team policy question.
+- `uint8` and packed sub-byte formats (4-bit, 2-bit) are out of scope.
+- A header, when present, sits at the start of every file. `header_bytes` is its size.
+- Milestone 1 adds `CHECK (dtype IN ('int8', 'int16', 'float32'))` to `schema.sql`.
+  Until then, `schema.sql` has no CHECK on `dtype`.
+
+### D2. Logging a folder that is already on the NAS (2026-10-02)
+
+- Data reaches the NAS by manual copy. Nobody records straight to the NAS.
+- Logging a folder under a configured NAS root sets `archive_state = 'archived'`. The
+  same transaction writes a `transfer_log` row with these values:
+  - `operation = 'check'`
+  - `verification = 'skipped'`
+  - `source` = the folder's full path
+  - `destination` = NULL
+  - `performed_by` = the logged-by name
+  - `notes = 'logged in place, not verified against a source'`
+- The Viewer reads this row and marks the recording as unverified. The schema has no
+  separate archive state for this case.
+- Laptop copies are deleted only when the storage space is needed, so the laptop copy
+  often still exists when a NAS folder is logged. Milestone 6 reconsiders a "verify
+  against source" action for this case. That milestone also decides how a later
+  verification clears the unverified mark.
+
+### D3. Short last file (2026-10-02)
+
+- The first file of a channel is never short. A short first file is an error.
+- A channel's last file may be shorter than expected when a capture stops mid-file.
+  The Log tab reports it as information. A last file larger than expected is an
+  error, as is a size mismatch in any other file.
+- The short last file counts as one file in `n_files`. `end_unix` keeps its
+  definition (last file's timestamp + `file_duration_s`), so span and coverage are
+  slightly overstated for that channel.
+- The scanner reports the size of each channel's last file separately from the set of
+  distinct sizes.
