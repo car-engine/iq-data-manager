@@ -44,4 +44,19 @@ The tool only creates files. It refuses an output folder that exists and is not 
 
 ```
 python -m iqdm
+python -m iqdm --smoke-test   # builds the window, quits, exit code 0 on success
 ```
+
+## Build
+
+`build/iqdm.spec` makes a windowed onedir build. Build into output folders that do
+not exist yet. Do not pass `--noconfirm` or `--clean`, because both delete existing
+output.
+
+```
+PYINSTALLER_CONFIG_DIR=build/pyinstaller-cache pyinstaller build/iqdm.spec --distpath dist/<name> --workpath build/work-<name>
+dist/<name>/IQDataManager/IQDataManager.exe --smoke-test
+```
+
+`PYINSTALLER_CONFIG_DIR` keeps PyInstaller's cache inside the repository. Git ignores
+`build/` (except the spec) and `dist/`. Remove old build output by hand.
