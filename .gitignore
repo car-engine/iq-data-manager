@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Build output
+build/*
+!build/iqdm.spec
+dist/
+
+# Databases: never commit real or dev databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+dev/
+
+# Test / fixture output
+fixtures_out/
+
+# Claude Code personal settings
+.claude/settings.local.json

@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(del *)",
+      "Bash(erase *)",
+      "Bash(rd *)",
+      "Bash(*Remove-Item*)",
+      "Bash(*rimraf*)",
+      "Bash(*rmtree*)",
+      "Bash(format *)",
+      "Bash(*diskpart*)",
+      "Bash(robocopy *)",
+      "Bash(*robocopy*)",
+      "Bash(net use*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(git rebase*)",
+      "Bash(shutdown*)",
+      "Edit(./.claude/**)",
+      "Edit(**/*.db)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(pip install*)",
+      "Bash(pip uninstall*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_destructive.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
