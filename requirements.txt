@@ -1,0 +1,5 @@
+# Runtime dependencies, exact pins. Loose range in pyproject.toml.
+PySide6-Essentials==6.11.2
+
+# Transitive
+shiboken6==6.11.2

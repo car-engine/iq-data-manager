@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iqdm"
+dynamic = ["version"]
+description = "Log RF IQ recordings and run verified copy and archive operations."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Exact pins live in requirements.txt.
+dependencies = ["PySide6-Essentials>=6.11,<6.12"]
+
+[tool.setuptools.dynamic]
+version = { attr = "iqdm.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"iqdm.db" = ["schema.sql"]
+
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "tools"]
+# Safety configuration, maintained by hand outside the app's lint rules.
+extend-exclude = [".claude"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "N", "RUF",
+    "PTH",   # pathlib only
+    "DTZ",   # no naive or local-time datetimes
+    "ANN",   # type hints on functions
+    "S",     # bandit: shell=True, os.system, SQL built from strings
+    "TID",   # banned APIs below
+]
+ignore = [
+    "S603",  # subprocess with an argument list is the intended pattern
+    "S607",  # partial executable paths (e.g. "robocopy") are resolved by the OS
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "S101"]
+# The only module allowed to delete files (Milestone 5).
+"src/iqdm/transfer/delete.py" = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.remove".msg = "File deletion lives only in src/iqdm/transfer/delete.py."
+"os.unlink".msg = "File deletion lives only in src/iqdm/transfer/delete.py."
+"os.rmdir".msg = "File deletion lives only in src/iqdm/transfer/delete.py."
+"os.removedirs".msg = "File deletion lives only in src/iqdm/transfer/delete.py."
+"shutil.rmtree".msg = "File deletion lives only in src/iqdm/transfer/delete.py."
+"shutil.move".msg = "shutil.move removes the source. Copy, verify, then delete through transfer/delete.py."
+
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["src", "tools"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+qt_api = "pyside6"
