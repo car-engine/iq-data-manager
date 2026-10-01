@@ -1,6 +1,7 @@
 {
   "permissions": {
     "deny": [
+      "PowerShell",
       "Bash(rm *)",
       "Bash(rmdir *)",
       "Bash(del *)",
