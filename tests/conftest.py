@@ -3,15 +3,25 @@
 import itertools
 import os
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
 # Run Qt without a display so GUI tests open no windows. Set before any Qt import.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# tools/ is on the pytest pythonpath (see pyproject.toml).
+# make_fixtures lives in tools/, which is on the pytest pythonpath (see pyproject.toml).
 import make_fixtures
+from iqdm.db.connection import create_database
 from make_fixtures import FixtureInfo, RecordingSpec
+
+
+@pytest.fixture
+def db_path(tmp_path) -> Path:
+    """A fresh database created from schema.sql under tmp_path."""
+    path = tmp_path / "catalog.db"
+    create_database(path)
+    return path
 
 
 @pytest.fixture

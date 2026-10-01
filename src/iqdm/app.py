@@ -2,12 +2,12 @@
 
 import argparse
 import sys
-from importlib import resources
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget
 
 from iqdm import __version__
+from iqdm.db.connection import schema_sql
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
@@ -36,11 +36,6 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Version {__version__}")
 
 
-def read_schema_text() -> str:
-    """Return the bundled schema.sql. Fails if the package data is missing."""
-    return resources.files("iqdm.db").joinpath("schema.sql").read_text(encoding="utf-8")
-
-
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="iqdm", description=APP_NAME)
     parser.add_argument(
@@ -58,7 +53,7 @@ def _smoke_test(app: QApplication) -> int:
     A windowed PyInstaller build has no console, so the exit code is the result.
     """
     try:
-        if "CREATE TABLE recordings" not in read_schema_text():
+        if "CREATE TABLE recordings" not in schema_sql():
             print("smoke test: schema.sql has no recordings table", file=sys.stderr)
             return 1
         window = MainWindow()

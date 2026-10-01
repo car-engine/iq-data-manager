@@ -1,7 +1,8 @@
 """Construction and wiring of the main window."""
 
 from iqdm import __version__
-from iqdm.app import MainWindow, main, read_schema_text
+from iqdm.app import MainWindow, main
+from iqdm.db.connection import schema_sql
 
 
 def test_main_window_has_three_tabs_in_order(qtbot):
@@ -18,7 +19,7 @@ def test_window_title_shows_version(qtbot):
 
 
 def test_schema_resource_is_bundled():
-    schema = read_schema_text()
+    schema = schema_sql()
     assert "CREATE TABLE recordings" in schema
     assert "PRAGMA user_version" in schema
 
@@ -31,5 +32,5 @@ def test_smoke_test_exits_one_when_schema_missing(qapp, monkeypatch):
     def missing() -> str:
         raise FileNotFoundError("schema.sql")
 
-    monkeypatch.setattr("iqdm.app.read_schema_text", missing)
+    monkeypatch.setattr("iqdm.app.schema_sql", missing)
     assert main(["--smoke-test"]) == 1
