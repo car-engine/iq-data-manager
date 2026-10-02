@@ -20,7 +20,8 @@ This app replaces both with one Windows desktop tool with three tabs:
 1. **Viewer**: browse and filter recordings, their channels and RF chain details.
 2. **Log recording**: scan a recording folder and add it to the database.
 3. **Move / copy**: archive recordings to the NAS, or copy whole recordings or time
-   ranges to a local PC, via previewed and verified generated scripts.
+   ranges to a local PC. The app copies the files itself, with a preview before and a
+   verification after each transfer (DECISIONS.md D48).
 
 A fourth tab, **Settings**, edits the per-machine configuration and shows the state
 of the database (section 4; DECISIONS.md D29).
@@ -60,7 +61,7 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
-| `transfer_log` | History of moves, copies and archive checks, including time ranges, channel subset, hash mode and verification result. |
+| `transfer_log` | History of moves, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row names the move it follows in `parent_id` (D52). |
 
 Key semantics:
 
@@ -112,6 +113,7 @@ hash_sample_fraction = 0.05
 nas_roots = ['\\192.168.1.50\recordings']   # UNC roots; a folder under one is on the NAS (D14)
 display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 0.25 (D24)
 coverage_highlight_percent = 99   # the Viewer marks coverage below this; above 0, at most 100 (D39)
+free_space_margin_gb = 10         # kept free on a transfer destination; 0 or more (D51)
 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
@@ -134,8 +136,8 @@ text": no key names, decision numbers or database internals on screen (D38).
 The tab shows these four keys only (D34). Milestone 3a added the first three, and
 Milestone 4 added the coverage threshold (D39). Keys that later milestones need are
 added to the tab by those milestones: `default_local_copy_root`,
-`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and a free-space
-margin (Milestones 5 and 6).
+`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and
+`free_space_margin_gb` (Milestone 6; Milestone 5 reads them from the file only).
 
 Not in the Settings tab (D30):
 
@@ -359,58 +361,101 @@ list of unrecognised entries.
 
 ## 8. Tab: Move / copy
 
+Milestone 5 builds the transfer core in `src/iqdm/transfer/` without a GUI. Milestone 6
+builds the tab over it.
+
 ### Operations
 
 - **Copy to a local PC**: source is a recording (usually archived on the NAS). The
   recording entry is unchanged; a `transfer_log` row is added with `operation =
   'copy'`.
-- **Archive to the NAS (move)**: source is a `local` recording on the laptop. Steps:
-  copy, verify, then on success update `storage_root`, `rel_path`,
-  `archive_state = 'archived'`, `archived_at`, and log the transfer. Deleting the
-  laptop copy is a separate, explicit, user-confirmed action offered only after
-  verification passes, and is itself logged in `transfer_log.notes`.
-- **Check archive**: verify an archived recording on the NAS against its DB entry
-  (count and size per channel, optional hashes), logged with `operation = 'check'`.
+- **Archive to the NAS (move)**: source is a `local` recording on the laptop, whole,
+  with all channels, and its folder must match the database entry (D50). Steps: copy,
+  verify, then on success update `storage_root`, `rel_path`,
+  `archive_state = 'archived'` and `archived_at` in the same transaction that
+  finishes the `transfer_log` row. A failed verification leaves the recording `local`.
+- **Delete the laptop copy**: a separate, explicit, user-confirmed action, offered
+  only after a move passed verification. It is logged as a `transfer_log` row with
+  `operation = 'delete'` and the move in `parent_id` (D52).
+- **Check archive**: compare an archived recording's folder with its database entry:
+  channels, and file count and total size per channel. It is logged with
+  `operation = 'check'`. Counts the database does not hold (legacy entries) are
+  filled in from the folder, and that check is logged as `'skipped'`.
+
+Each copy or move first writes its `transfer_log` row with `started_at`. A row with no
+`finished_at` is a transfer that never completed, for example after a crash. A
+cancelled transfer is finished with `verification = 'skipped'` and a note.
 
 ### Scope
 
-- Whole recording, or a time range (start inclusive, end exclusive), entered as UTC
-  date-time or Unix time, kept in sync.
+- Whole recording, or a time range. A file at time `t` is in the range when
+  `start <= t < end` (D49). Input is UTC date-time or Unix time, kept in sync.
 - Channel checkboxes: any subset of the recording's channels.
 - Timeline showing the selected range against each channel's available data and gaps.
 
-### Script generation
+### Selection
 
-Behind one interface (`ScriptGenerator`), with a Windows implementation now and a
-Linux (rsync) implementation later.
+`transfer/selection.py`. Before every transfer the app rescans the source folder with
+the scanner (D53). The rescan gives the real file names, the size of each file and the
+gaps. The selection holds, per channel, the files in the range, their total size and
+the missing seconds inside the range (D49). It also lists where the folder differs
+from the database entry.
 
-- Whole recording, all channels: robocopy with `/E /COPY:DAT /R:3 /W:5 /MT:8 /NP
-  /LOG+:<logfile>` (tune `/MT` in testing). Never `/MIR` or `/PURGE`.
-- Time range or channel subset: a manifest file listing relative paths
-  (`<sub_path>\<timestamp>.dat`), one per line, plus a PowerShell script that reads it
-  and copies each file, creating folders as needed. This avoids command-length limits
-  and handles gaps naturally. The database does not store the file extension, so how
-  the manifest gets the real file names is open (O32).
-- Scripts start with a comment header: operation, recording ID, range, channels,
-  generated time, app version.
-- Both can be saved to disk for the user to run, or run by the app (subprocess with
-  argument lists, output streamed to a progress view, cancellable).
-- Dry run: robocopy `/L`, or a manifest check that lists what would be copied, with
-  missing source files reported.
+### Copy engine
+
+`transfer/copier.py` copies the selection itself (D48). There are no scripts.
+
+- Each file is copied in chunks to `<name>.partial` in its destination folder, with
+  missing folders created. When the copy is complete, the file gets the source's
+  modification time and is renamed to its real name. The rename never replaces an
+  existing file.
+- A target file that already exists with the source's size counts as copied and is
+  skipped (resume, D51). A target file with another size stops the transfer before
+  anything is written.
+- Each file gets up to 3 retries after the first attempt, 5 s apart.
+- Progress reports files and bytes. Cancel stops between chunks and leaves the
+  `.partial` file, which a later run overwrites.
+- The engine can compute the source's SHA-256 while it copies, and can copy several
+  files at once.
+- A dry run is the preview: it computes the selection, the destination checks and the
+  estimate, and writes nothing.
+- `transfer/power.py` keeps Windows from sleeping while a transfer runs.
+
+### Manifest
+
+After each copy or move, the app writes a manifest (D52): a JSON file in the
+`manifests` folder next to the configuration file, named `transfer-<id>.json`. It
+lists each file's relative path (`/`-separated), size and SHA-256 where one was
+computed, with the transfer's source, destination, range and channels. It is written
+only to a new file. `transfer_log.manifest_path` holds its path and
+`transfer_log.manifest_sha256` the SHA-256 of its bytes.
 
 ### Transfer safety
 
-- Destination validation: not a drive root, not equal to or inside the source,
-  source not inside the destination, destination empty or new, enough free space
-  (with a margin), path length under limits or long-path support enabled.
-- Preview before running: file count, total size, missing seconds per channel,
-  estimated time from `network_speed_mb_s`, full script text and manifest preview.
-- Verification: always compare file count and per-file size between source selection
-  and destination. Optional SHA-256 (`hash_mode`: none, sample fraction, all), read in
-  chunks, with estimated added time shown beforehand.
-- All deletion goes through one module (`src/iqdm/transfer/delete.py`) that requires
-  a passed verification record for exactly the files being deleted, deletes only
-  those files (never whole trees by pattern), and logs the result.
+- **Destination validation** (`transfer/pathcheck.py`): not a drive root or a share
+  root, not equal to or inside the source, source not inside the destination. Paths
+  compare without letter case. A move needs a destination that is new, empty, or
+  holds only the target files of an interrupted move of the same selection. A copy
+  also accepts a destination that holds other files (D51). Free space must cover the
+  bytes still to copy plus `free_space_margin_gb`. Paths must stay within the Windows
+  limits (259 characters for a file, 247 for a folder) unless long paths are enabled.
+  An archive destination must lie under a NAS root, at a location no other recording
+  uses (D50).
+- **Preview** before running: file count, total size, missing seconds per channel,
+  estimated time from `network_speed_mb_s` and for the chosen hash mode, the
+  destination checks, and the file list.
+- **Verification** (`transfer/verify.py`): always compare the count and each file's
+  size between the selection and the destination. Optional SHA-256 by `hash_mode`:
+  `none`; `sample`, which hashes `ceil(hash_sample_fraction × n)` files, at least one,
+  chosen as the files whose relative path has the smallest SHA-256; or `all`. Source
+  hashes come from the copy where it computed them. Files in the destination that are
+  not in the selection are reported and do not fail the verification.
+- **Deletion**: all deletion goes through `src/iqdm/transfer/delete.py` (D52). It
+  needs a move with a passed verification and a manifest whose SHA-256 matches. The
+  recording must point at the move's destination. Right before each source file is
+  deleted, its destination copy and the source file must still have the manifest
+  size. It deletes only the files in the manifest, never whole trees by pattern, and
+  then removes folders that are empty. The result is logged as a delete row.
 
 ## 9. Architecture
 
@@ -447,16 +492,15 @@ iq-data-manager/
     scan/
       scanner.py
     transfer/
-      selection.py            # resolve range + channels -> file list, gaps
+      selection.py            # rescan + range + channels -> file list, gaps (D53)
       pathcheck.py            # destination validation
-      manifest.py
-      scripts/
-        base.py               # ScriptGenerator interface
-        windows.py            # robocopy + PowerShell/manifest
-      runner.py               # subprocess execution, progress, cancel
+      manifest.py             # per-file manifest, written once (D52)
+      copier.py               # the copy engine (D48)
       verify.py               # count/size/hash verification
       delete.py               # the only module that deletes files
       estimate.py             # size/time estimates
+      operations.py           # copy, move, check and delete flows with their log rows
+      power.py                # keeps Windows awake during a transfer
     gui/
       viewer_tab.py
       log_tab.py
@@ -467,6 +511,7 @@ iq-data-manager/
   tools/
     make_fixtures.py          # synthetic IQ recordings for tests and manual testing
     db_check.py               # create, write and locking checks on a scratch database (O21)
+    copy_check.py             # copy-engine throughput on a scratch folder (D48)
     migrate_legacy.py         # legacy DB -> new schema (writes a NEW file)
   tests/
   build/
@@ -496,12 +541,10 @@ written to a report, not guessed. A later "Check archive" fills in counts and si
 - `tools/make_fixtures.py` creates synthetic recordings in a given folder: N channels,
   duration, fs (small, e.g. 1 kS/s so files are tiny), gaps at chosen seconds,
   optional header, optional wrong-size file. Used by pytest fixtures via `tmp_path`.
-- Unit tests for scanner, selection, gap detection, manifest, script text, path
-  validation, estimates, verification, repository and migrations.
-- Script generators are tested on their text output only. Tests never execute
-  robocopy or generated scripts.
-- `runner.py` is tested with a fake command (e.g. a tiny Python script) inside
-  `tmp_path`.
+- Unit tests for scanner, selection, gap detection, manifest, path validation,
+  estimates, the copy engine, verification, deletion, repository and migrations.
+- The copy engine, verification and deletion run on synthetic recordings under
+  `tmp_path`. Tests never run robocopy or any script.
 - GUI tests use `pytest-qt` on Qt's offscreen platform. Logic that needs no Qt is
   tested without it (`entry.py` for the Log tab). GUI tests drive the real widgets,
   wait for the `TaskRunner`, and replace modal dialogs with stubs. They also check
@@ -529,10 +572,11 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    writer, Settings tab with database status and check, NAS roots and display
    offset, applying changes without a restart, tests (scope narrowed by D30).
 4. **Viewer tab**: filters, recordings table, channels, details, actions.
-5. **Transfer core**: selection, path checks, manifest, script generators, estimates,
-   verification, delete module. No GUI. Heavily tested.
-6. **Move / copy tab**: GUI over the core, dry run, run with progress and cancel,
-   transfer logging, archive state update, post-verification delete flow. The
+5. **Transfer core**: selection, path checks, manifest, copy engine (D48), estimates,
+   verification, delete module, and the copy, move, check and delete flows with their
+   `transfer_log` rows. No GUI. Heavily tested.
+6. **Move / copy tab**: GUI over the core, preview, run with progress and cancel,
+   post-verification delete flow, the transfer keys in the Settings tab. The
    Viewer's Copy / move button comes with this tab (D42).
 7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
    it runs without Python), an admin option `--create-db PATH` for an empty database,
@@ -541,7 +585,7 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 
 ## 13. Scope
 
-Out of scope for v1: Linux build, rsync generator, file-level gap storage in the DB,
+Out of scope for v1: Linux build, transfer scripts (D48), file-level gap storage in the DB,
 user accounts, editing RF chain templates, deleting catalogue entries from the GUI
 (D41).
 

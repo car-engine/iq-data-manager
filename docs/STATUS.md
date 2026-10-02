@@ -11,8 +11,9 @@ report. Last updated: 2026-10-03 (Milestone 4 merged).
   the manual tests on 2026-10-03, and they passed.
 - 918 tests pass and 2 skip on `main`. One skip needs the symbolic-link privilege;
   the other runs only off Windows. `ruff check` is clean.
-- **Next: Milestone 5, Transfer core**, on a new branch `m5-transfer-core`. Open
-  items to raise in its plan: O6, O7, O8, O9 and O32.
+- **In progress: Milestone 5, Transfer core**, on branch `m5-transfer-core`. The
+  user approved the plan on 2026-10-03 and decided D48–D53, which close O6, O7, O8,
+  O9, O13 and O32. The app copies files itself (D48); there are no transfer scripts.
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
   `tests/test_user_text.py` checks the Viewer, Log and Settings tabs.
 - The NAS part of O21 is still open. The local part is done
@@ -30,7 +31,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
-| 5. Transfer core | Not started | | | |
+| 5. Transfer core | In progress | `m5-transfer-core` | | |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
 
@@ -50,24 +51,19 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O1 | Time input in the Move / copy tab. Displayed times follow `display_utc_offset_hours` (D24, default 8). The Viewer's date filters already read dates at that offset (D43). | 6 | Input fields stay UTC and say so. | M0 review 9 |
-| O6 | Which files a time range includes | 5 | A file at time `t` is in range when `start <= t < end`. | M0 review 18 |
-| O7 | Archiving a time range or channel subset would point the DB at a partial copy | 5, 6 | "Archive to NAS" accepts only a whole recording with all channels. | M0 review 13 |
-| O8 | "Destination empty or new" blocks resuming a copy and copying a second range into the same folder | 5 | Keep for moves. For copies, allow a non-empty destination when none of the target files exist there. | M0 review 14 |
-| O9 | Structured deletion record and per-file verification manifest for `delete.py` | 5 | Reconsider a `'delete'` operation with `parent_id`, a DB trigger requiring a passed move, and `manifest_path` (proposed in Milestone 1; the user deferred them). | M0 review 3, 4; D5 |
 | O10 | Copy-to-PC destination layout: keep `rel_path` under `default_local_copy_root`, or a folder the user picks | 6 | None yet | M0 review 19 |
 | O11 | "Verify against source" for recordings logged in place on the NAS, and how a later verification clears the unverified mark. The Viewer shows the mark while the D2 row exists (D44). | 6 | None yet | D2 |
 | O12 | `finish_transfer` replaces `notes`; source deletion is recorded in `notes` | 6 | Add to the existing text instead of replacing it. | M1 review |
-| O13 | The app can both save scripts and run them. If the user prefers "generate only", drop the run path in Milestone 6 and keep verification as a "Check" action. | 6 | Save and run. | Former SPEC section 13 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
-| O32 | Real file names for transfers. The database does not store the file extension, and SPEC section 8 writes manifests as `<timestamp>.dat`. | 5 | Store the extension per channel when a recording is logged (a schema change while `schema.sql` is still edited in place, D4). The fallback is a rescan of the source folder before each transfer. | D30 |
+| O33 | Long paths in the packaged app. `transfer/pathcheck.py` allows paths above the Windows limits when long paths are enabled in the registry. The executable also needs a manifest that declares `longPathAware`. | 7 | Check the PyInstaller build's manifest. Until then, keep destination paths short. | Milestone 5 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D47). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D53). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -88,6 +84,12 @@ Decided items are in `docs/DECISIONS.md` (D1–D47). The M0 review table in
 | O15 | Coverage highlight threshold | D39 (2026-10-03) |
 | O16 | `list_recordings` at the size of the catalogue | D40 (2026-10-03) |
 | O17 | Deleting a wrongly logged recording in the GUI | D41 (2026-10-03) |
+| O13 | Save scripts, run scripts, or both | D48 (2026-10-03): the app copies files itself |
+| O6 | Which files a time range includes | D49 (2026-10-03) |
+| O7 | Archiving a time range or channel subset | D50 (2026-10-03) |
+| O8 | "Destination empty or new" blocks resuming and second ranges | D51 (2026-10-03) |
+| O9 | Deletion record and per-file manifest | D52 (2026-10-03) |
+| O32 | Real file names for transfers | D53 (2026-10-03) |
 
 ## Pending checks for the user
 

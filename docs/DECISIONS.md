@@ -22,7 +22,7 @@ Rules for this file:
 | D2 | Logging a folder that is already on the NAS | 2026-10-02, before Milestone 1 | Active |
 | D3 | Short last file | 2026-10-02, before Milestone 1 | Active |
 | D4 | Schema baseline | 2026-10-02, Milestone 1 | Active |
-| D5 | Transfer log columns | 2026-10-02, Milestone 1 | Active |
+| D5 | Transfer log columns | 2026-10-02, Milestone 1 | Active; D52 adds the deletion record |
 | D6 | Running migrations | 2026-10-02, Milestone 1 | Active |
 | D7 | Database layer defaults | 2026-10-02, Milestone 1 | Active |
 | D8 | PyInstaller onedir build | 2026-10-02, Milestone 0 | Active |
@@ -65,6 +65,12 @@ Rules for this file:
 | D45 | Edit entry with unsaved input in the Log tab | 2026-10-03, Milestone 4 | Active |
 | D46 | The Viewer refreshes after a Log tab save | 2026-10-03, Milestone 4 | Active |
 | D47 | When a recording last changed | 2026-10-03, Milestone 4 | Active |
+| D48 | The app copies files itself | 2026-10-03, Milestone 5 | Active |
+| D49 | Files in a time range | 2026-10-03, Milestone 5 | Active |
+| D50 | Archiving needs the whole recording | 2026-10-03, Milestone 5 | Active |
+| D51 | Destination folders and resuming | 2026-10-03, Milestone 5 | Active |
+| D52 | Deletion record and transfer manifest | 2026-10-03, Milestone 5 | Active |
+| D53 | File names come from a rescan | 2026-10-03, Milestone 5 | Active |
 
 ## D1. Sample types
 
@@ -132,7 +138,7 @@ Affects: SPEC section 3, `schema.sql`, `db/migrations.py`.
   `all`. It is NULL when no verification ran.
 - Source deletion stays recorded in `transfer_log.notes` (SPEC section 8). A
   structured deletion record and a per-file verification manifest are reconsidered in
-  Milestone 5.
+  Milestone 5. D52 adds both.
 
 Affects: SPEC sections 3 and 8, `schema.sql`, `db/repository.py`.
 
@@ -837,3 +843,138 @@ chose the smallest option on 2026-10-03.
   column and against an edit history.
 
 Affects: SPEC sections 5 and 6, `entry.py`, `gui/log_tab.py`, `gui/viewer_tab.py`.
+
+## D48. The app copies files itself
+
+Closes O13. The user chose this on 2026-10-03, while planning Milestone 5, after the
+agent compared four approaches: scripts the user runs, scripts the app runs, a copy
+engine in the app, and the engine with a script export.
+
+- The app copies files with its own Python copy engine, `transfer/copier.py`, in a
+  worker thread. It generates no robocopy or PowerShell scripts in v1. `scripts/` and
+  `runner.py` leave the SPEC layout.
+- Reasons:
+  - Agents may not run robocopy or generated scripts. With scripts, the first real
+    run of the copy, verify and delete chain would have been the user's manual test.
+    The engine runs in the tests on synthetic recordings under `tmp_path`.
+  - Robocopy has no option that reads a list of relative paths, so a time range or a
+    channel subset needed a second mechanism in PowerShell.
+  - Windows 10 and 11 clients do not run PowerShell scripts by default.
+  - Progress from robocopy comes from its text output. Its exit codes 1 to 7 also
+    mean success.
+  - A script the user runs alone leaves the app without a start time, an end time or
+    a result.
+  - The engine needs no rsync generator for Linux.
+- The engine copies each file to `<name>.partial`, keeps the source's modification
+  time, and renames the file to its real name only when it is complete. The rename
+  never replaces an existing file. A file under its real name is therefore always
+  complete.
+- Each file gets up to 3 retries after the first attempt, with 5 s between them, as
+  robocopy's `/R:3 /W:5` did. Progress counts files and bytes. Cancel stops between
+  chunks and leaves the `.partial` file in place.
+- The engine can hash the source while it reads it, and can copy several files at
+  once. The number of files at once is a parameter. Milestone 6 sets it from the
+  results of `tools/copy_check.py`.
+- Throughput on the NAS is not measured yet. `tools/copy_check.py` measures it, and
+  the user runs it before Milestone 6.
+- A copy made by hand outside the app is still covered by "Check archive".
+- The safety rules for agents in CLAUDE.md are unchanged.
+
+Affects: SPEC sections 1, 8, 9, 11 and 12, CLAUDE.md, `transfer/copier.py`,
+`tools/copy_check.py`.
+
+## D49. Files in a time range
+
+Closes O6. The user chose the proposed default on 2026-10-03.
+
+- A file with timestamp `t` belongs to the range from `start` to `end` when
+  `start <= t < end`. The end is exclusive, as `end_unix` is everywhere else.
+- The missing seconds of a range are the gap seconds (D12) that fall inside the range.
+  Time before a channel's first file or after its last file is not counted as missing.
+
+Affects: SPEC section 8, `transfer/selection.py`.
+
+## D50. Archiving needs the whole recording
+
+Closes O7. The user chose the proposed default on 2026-10-03.
+
+- "Archive to NAS" moves only a whole recording with all its channels. A time range or
+  a channel subset would point the database at a partial copy.
+- The recording must be `local`.
+- The folder must match the database entry: the same channels, and the same file
+  count and total size per channel where the database holds them. Otherwise the
+  stored counts would not describe the archived copy. The user rescans the folder in
+  the Log tab first.
+- The destination must lie under a configured NAS root. Its `storage_root` and
+  `rel_path` follow D14, and no other recording may use that location.
+
+Affects: SPEC section 8, `transfer/operations.py`, `transfer/pathcheck.py`.
+
+## D51. Destination folders and resuming
+
+Closes O8. The user chose this on 2026-10-03: the proposed default, with resuming.
+
+- The target files are the selection's files under their relative paths in the
+  destination folder.
+- A move needs a destination that is new, is empty, or holds only target files,
+  their `.partial` files and their channel folders. The last case is an interrupted
+  move of the same selection, which the engine resumes.
+- A copy also accepts a destination that holds other files.
+- A target file that already exists with the source file's size counts as copied.
+  The engine skips it, and verification checks it like every other file.
+- A target file that exists with another size stops the transfer before anything is
+  written. The engine never replaces it.
+- A free-space margin is kept on the destination. A new key, `free_space_margin_gb`
+  (default 10), sets it. Milestone 5 reads the key; the Settings tab shows it from
+  Milestone 6 (D34).
+
+Affects: SPEC sections 4 and 8, `config.py`, `transfer/pathcheck.py`,
+`transfer/copier.py`.
+
+## D52. Deletion record and transfer manifest
+
+Closes O9 and the deferred part of D5. The user chose this on 2026-10-03.
+
+- `transfer_log` gets three columns: `parent_id`, `manifest_path` and
+  `manifest_sha256`. `operation` also accepts `'delete'`. `schema.sql` is edited in
+  place (D4).
+- A deletion of the laptop copy is a `transfer_log` row with `operation = 'delete'`.
+  Its `parent_id` is the move it follows. A trigger refuses the row unless the parent
+  is a move of the same recording with `verification = 'pass'`. `parent_id` is set
+  exactly for delete rows.
+- A delete row's `verification` is `'pass'` when every listed file was deleted and
+  `'fail'` when any remained. `notes` names what remained.
+- After each copy or move, the app writes a manifest: a JSON file in a `manifests`
+  folder next to the configuration file, normally
+  `%APPDATA%\IQDataManager\manifests\transfer-<id>.json`. It lists each file's
+  relative path, size and SHA-256 where one was computed. The app writes it only to
+  a new file. `manifest_path` holds its path, and `manifest_sha256` the SHA-256 of
+  its bytes.
+- `transfer/delete.py` deletes source files only when all of these hold:
+  - the move row has `verification = 'pass'` and a manifest;
+  - the manifest's SHA-256 matches `manifest_sha256`;
+  - the recording now points at the move's destination;
+  - each destination file still has its manifest size, checked right before its
+    source file is deleted;
+  - each source file still has its manifest size.
+- It deletes only the files in the manifest. Afterwards it removes channel folders
+  and the recording folder only when they are empty. It refuses relative paths with
+  `..`, absolute paths and links.
+
+Affects: SPEC sections 3 and 8, `schema.sql`, `models.py`, `db/repository.py`,
+`viewer.py`, `transfer/manifest.py`, `transfer/delete.py`.
+
+## D53. File names come from a rescan
+
+Closes O32. The user chose this on 2026-10-03 in place of the proposed default
+(storing the extension).
+
+- Before every transfer the app rescans the source folder with the scanner. The
+  rescan gives the real file names, including `.dat` or `.bin`, each file's size and
+  the gaps inside the range.
+- The preview needs per-file sizes and the gaps of the range in any case, and the
+  database stores neither. A rescan also handles a channel that holds both
+  extensions, which the scanner allows (D11).
+- The schema stores no file extension.
+
+Affects: SPEC section 8, `transfer/selection.py`.
