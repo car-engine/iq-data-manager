@@ -5,6 +5,7 @@ tab's TaskRunner to be idle before it checks results.
 """
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,9 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 from iqdm import entry
 from iqdm.config import Config
 from iqdm.db import repository
-from iqdm.db.connection import DatabaseBusyError, open_db
+from iqdm.db.connection import DatabaseBusyError, create_database, open_db
 from iqdm.entry import ItemState
-from iqdm.gui.log_tab import LogTab, scan_summary, time_text
+from iqdm.gui.log_tab import LogTab, channel_headers, scan_summary, time_text
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
@@ -994,3 +995,133 @@ def test_rf_chain_names_take_the_stored_spelling(qtbot, make_tab, make_recording
     )
     save_and_wait(qtbot, tab)
     assert entry.load_recording(db_path, 2).params[0].param == "LNA gain"
+
+
+# ---------------------------------------------------------------------------
+# New configuration from the Settings tab (Milestone 3a, O28)
+# ---------------------------------------------------------------------------
+
+
+def header_texts(tab: LogTab) -> list[str]:
+    table = tab.channel_table
+    return [table.horizontalHeaderItem(i).text() for i in range(table.columnCount())]
+
+
+def test_offset_change_redraws_times_and_keeps_the_form(qtbot, make_tab, make_recording, db_path):
+    info = make_recording(n_channels=2)
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    fill_channels(tab, fc_mhz="433.92")
+    tab.remarks_edit.setPlainText("keep me")
+    start = tab.scan.channels[0].start_unix
+    assert tab.start_edit.text() == time_text(start, 8.0)
+
+    new = replace(tab.config, display_utc_offset_hours=0.0)
+    assert not tab.apply_clears_form(new)
+    tab.apply_config(new)
+    wait_idle(qtbot, tab)
+    assert tab.start_label.text() == "Start (UTC) · from scan"
+    assert tab.end_label.text() == "End (UTC) · from scan"
+    assert header_texts(tab) == list(channel_headers("UTC"))
+    assert tab.start_edit.text() == time_text(start, 0.0)
+    assert tab.channel_table.item(0, 5).text() == time_text(start, 0.0)
+    assert tab.scan_summary.text() == scan_summary(tab.scan, 0.0)
+    assert tab.folder_edit.text() == info.root
+    assert tab.remarks_edit.toPlainText() == "keep me"
+    assert tab.channel_widgets(1)[1].text() == "433.92"
+    assert tab.config.display_utc_offset_hours == 0.0
+
+
+def test_offset_change_in_edit_mode_keeps_typed_values(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(n_channels=2)
+    tab = saved_tab(qtbot, make_tab, info, site_id)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    tab.channel_widgets(1)[1].setText("433.92")
+    tab.apply_config(replace(tab.config, display_utc_offset_hours=5.5))
+    wait_idle(qtbot, tab)
+    assert tab.editing is not None
+    assert tab.start_edit.text() == time_text(tab.editing.start_unix, 5.5)
+    assert tab.channel_widgets(1)[1].text() == "433.92"
+    assert header_texts(tab) == list(channel_headers("UTC+5:30"))
+
+
+def test_new_database_clears_the_form_and_loads_its_lists(
+    qtbot, make_tab, make_recording, site_id, tmp_path
+):
+    other = tmp_path / "other.db"
+    create_database(other)
+    other_site = entry.add_site(other, "Elsewhere")
+    info = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    choose_site(tab, site_id)
+    new = replace(tab.config, db_path=str(other))
+    assert tab.apply_clears_form(new)
+    tab.apply_config(new)
+    wait_idle(qtbot, tab)
+    assert tab.folder_edit.text() == ""
+    assert tab.scan is None
+    sites = [tab.site_combo.itemData(i) for i in range(tab.site_combo.count())]
+    assert sites == [other_site.id]
+    assert tab.site_combo.currentIndex() == -1
+    assert tab.config.db_path == str(other)
+
+
+def test_removing_the_database_path_disables_save(qtbot, make_tab, make_recording, site_id):
+    tab = make_tab()
+    tab.apply_config(Config())
+    wait_idle(qtbot, tab)
+    assert tab.site_combo.count() == 0
+    assert "No database configured" in tab.message_label.text()
+    assert not tab.save_button.isEnabled()
+
+
+def test_new_nas_roots_clear_the_form(qtbot, make_tab, make_recording):
+    info = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    new = replace(tab.config, nas_roots=(NAS,))
+    assert tab.apply_clears_form(new)
+    tab.apply_config(new)
+    wait_idle(qtbot, tab)
+    assert tab.folder_edit.text() == ""
+    assert tab.config.nas_roots == (NAS,)
+
+
+def test_lists_from_the_old_database_are_dropped(qtbot, make_tab, site_id, tmp_path):
+    other = tmp_path / "other.db"
+    create_database(other)
+    tab = make_tab()
+    tab.reload_choices()  # still loading from the first database
+    tab.apply_config(replace(tab.config, db_path=str(other)))
+    wait_idle(qtbot, tab)
+    assert tab.site_combo.count() == 0
+
+
+def test_has_unsaved_input(qtbot, make_tab, make_recording, site_id):
+    tab = make_tab()
+    assert not tab.has_unsaved_input()
+    tab.plan_edit.setText("plan 7")
+    assert tab.has_unsaved_input()
+    tab.clear_form()
+    tab.remarks_edit.setPlainText("note")
+    assert tab.has_unsaved_input()
+    tab.clear_form()
+    tab.param_table.add_row(entry.ParamInput(param="", value=""))
+    assert not tab.has_unsaved_input()  # an empty row holds nothing
+    tab.param_table.row_widgets(0)[2].setText("30")
+    assert tab.has_unsaved_input()
+    tab.clear_form()
+    tab.folder_edit.setText(make_recording().root)
+    assert tab.has_unsaved_input()
+    tab.clear_form()
+    assert not tab.has_unsaved_input()
+
+
+def test_edit_mode_counts_as_unsaved_input(qtbot, make_tab, make_recording, site_id):
+    tab = saved_tab(qtbot, make_tab, make_recording(n_channels=2), site_id)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.has_unsaved_input()
+    assert not tab.is_saving

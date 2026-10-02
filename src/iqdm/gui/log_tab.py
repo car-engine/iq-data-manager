@@ -54,7 +54,7 @@ FS_FILLED_TOOLTIP = (
     "Filled in from the file size, sample type, header bytes and file duration. "
     "Type a value to replace it."
 )
-NO_DATABASE = "No database configured. Set db_path in the configuration file, or start with --db."
+NO_DATABASE = "No database configured. Set the database path in the Settings tab."
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
@@ -118,6 +118,7 @@ class LogTab(QWidget):
         self.runner = TaskRunner(self) if runner is None else runner
 
         self._choices = Choices(sites=[], param_names=[], bands=[])
+        self._choices_id = 0
         self._raw_scan: ScanResult | None = None  # at the duration used for the scan
         self._scan: ScanResult | None = None  # at the current duration
         self._location: Location | None = None
@@ -214,9 +215,13 @@ class LogTab(QWidget):
         site_row.addWidget(self.site_combo, 1)
         site_row.addWidget(self.add_site_button)
 
+        self.start_label = QLabel()
+        self.end_label = QLabel()
+        self._label_times()
+
         grid = QGridLayout(box)
-        grid.addWidget(QLabel(f"Start ({self._zone}) · from scan"), 0, 0)
-        grid.addWidget(QLabel(f"End ({self._zone}) · from scan"), 0, 1)
+        grid.addWidget(self.start_label, 0, 0)
+        grid.addWidget(self.end_label, 0, 1)
         grid.addWidget(QLabel("File duration"), 0, 2)
         grid.addWidget(QLabel("Logged by"), 0, 3)
         grid.addWidget(self.start_edit, 1, 0)
@@ -236,6 +241,10 @@ class LogTab(QWidget):
         grid.addWidget(QLabel("Remarks (optional)"), 6, 0, 1, 4)
         grid.addWidget(self.remarks_edit, 7, 0, 1, 4)
         return box
+
+    def _label_times(self) -> None:
+        self.start_label.setText(f"Start ({self._zone}) · from scan")
+        self.end_label.setText(f"End ({self._zone}) · from scan")
 
     def _build_format(self) -> QGroupBox:
         box = QGroupBox("3 · File format")
@@ -334,6 +343,63 @@ class LogTab(QWidget):
         ):
             _restyle_fields(self)
         super().changeEvent(event)
+
+    # =====================================================================
+    # New configuration from the Settings tab (Milestone 3a, O28)
+    # =====================================================================
+
+    @property
+    def is_saving(self) -> bool:
+        """True while a save runs in the worker."""
+        return self._saving
+
+    def has_unsaved_input(self) -> bool:
+        """True in edit mode, or when the form holds a folder, a plan reference,
+        remarks or an RF chain row with text."""
+        return (
+            self._original is not None
+            or bool(self.folder_edit.text().strip())
+            or bool(self.plan_edit.text().strip())
+            or bool(self.remarks_edit.toPlainText().strip())
+            or any(
+                p.param.strip() or p.value.strip() or p.unit.strip()
+                for p in self.param_table.rows()
+            )
+        )
+
+    def apply_clears_form(self, config: Config) -> bool:
+        """True when `config` changes db_path or nas_roots, so apply_config() clears the form.
+
+        The folder location, the duplicate check and edit mode all depend on these two
+        keys.
+        """
+        return config.db_path != self.config.db_path or config.nas_roots != self.config.nas_roots
+
+    def apply_config(self, config: Config) -> None:
+        """Take a new configuration without a restart (O28).
+
+        A new display offset redraws the times and keeps the form. A new db_path or new
+        NAS roots clear the form and reload the lists. The caller asks the user first
+        when has_unsaved_input() is True.
+        """
+        clears = self.apply_clears_form(config)
+        self.config = config
+        if config.display_utc_offset_hours != self._offset:
+            self._offset = config.display_utc_offset_hours
+            self._zone = offset_label(self._offset)
+            self._label_times()
+            self.channel_table.setHorizontalHeaderLabels(channel_headers(self._zone))
+            if self._scan is not None:
+                self._show_scan()
+            elif self._original is not None:
+                self._show_stored_channels(self._original, self._inputs_by_index())
+        if clears:
+            self._choices_id += 1  # drop lists still loading from the old database
+            self._choices_loaded(Choices(sites=[], param_names=[], bands=[]), None)
+            self.clear_form()
+            self.reload_choices()
+        else:
+            self.refresh_checklist()
 
     def show_message(self, text: str) -> None:
         self.message_label.setText(text)
@@ -564,13 +630,18 @@ class LogTab(QWidget):
         self.end_edit.setText(time_text(max(ends), self._offset) if ends else "")
         self.scan_summary.setText(scan_summary(scan, self._offset))
 
-    def _show_stored_channels(self, rec: Recording) -> None:
+    def _show_stored_channels(
+        self, rec: Recording, inputs: dict[int, ChannelInput] | None = None
+    ) -> None:
+        """Channel rows and times of a stored recording. `inputs` keep typed values."""
+        if inputs is None:
+            inputs = {c.channel_index: c for c in entry.input_from_recording(rec).channels}
         self._set_channel_rows(
             [
                 (c.channel_index, c.sub_path, c.start_unix, c.end_unix, c.n_files)
                 for c in rec.channels
             ],
-            {c.channel_index: c for c in entry.input_from_recording(rec).channels},
+            inputs,
         )
         self.start_edit.setText(time_text(rec.start_unix, self._offset))
         self.end_edit.setText(time_text(rec.end_unix, self._offset))
@@ -622,9 +693,16 @@ class LogTab(QWidget):
         if not db:
             return
         keep = self.site_combo.currentData() if select_site is None else select_site
+        self._choices_id += 1
+        choices_id = self._choices_id  # a later reload replaces this one
+
+        def loaded(result: Choices) -> None:
+            if choices_id == self._choices_id:
+                self._choices_loaded(result, keep)
+
         self.runner.start(
             lambda task: entry.load_choices(db),
-            on_success=lambda result: self._choices_loaded(result, keep),
+            on_success=loaded,
             on_failure=lambda exc: self.show_message(f"Cannot read the database: {exc}"),
         )
 

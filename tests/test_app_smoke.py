@@ -1,10 +1,19 @@
 """Construction and wiring of the main window."""
 
 import pytest
+from PySide6.QtWidgets import QMessageBox
 
 from iqdm import __version__
-from iqdm.app import MainWindow, _parse_args, main, resolve_config, status_text
-from iqdm.config import Config
+from iqdm.app import (
+    LOG_TAB_SAVING,
+    MainWindow,
+    _parse_args,
+    config_path_for,
+    main,
+    resolve_config,
+    status_text,
+)
+from iqdm.config import Config, load_config
 from iqdm.db.connection import schema_sql
 
 
@@ -23,11 +32,12 @@ def smoke_app(qapp):
     qapp.setQuitOnLastWindowClosed(before)
 
 
-def test_main_window_has_three_tabs_in_order(qtbot):
+def test_main_window_has_four_tabs_in_order(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
     labels = [window.tabs.tabText(i) for i in range(window.tabs.count())]
-    assert labels == ["Viewer", "Log recording", "Move / copy"]
+    assert labels == ["Viewer", "Log recording", "Move / copy", "Settings"]
+    assert window.tabs.currentWidget() is window.viewer_tab
 
 
 def test_window_title_shows_version(qtbot):
@@ -109,3 +119,142 @@ def test_status_bar_names_the_database(qtbot, db_path):
 def test_status_text_without_database_or_with_an_error():
     assert "No database configured" in status_text(Config(), None)
     assert status_text(Config(), "boom") == "Configuration error: boom"
+
+
+# ---------------------------------------------------------------------------
+# Settings tab in the main window (Milestone 3a)
+# ---------------------------------------------------------------------------
+
+
+def test_config_path_for(tmp_path):
+    given = tmp_path / "my.toml"
+    assert config_path_for(_parse_args(["--config", str(given)]), {}) == given
+    assert config_path_for(_parse_args([]), {"APPDATA": str(tmp_path)}) == (
+        tmp_path / "IQDataManager" / "config.toml"
+    )
+    assert config_path_for(_parse_args([]), {}) is None
+
+
+def make_window(qtbot, config_file, **kw) -> MainWindow:
+    config, error = resolve_config(_parse_args(["--config", str(config_file)]))
+    window = MainWindow(config, config_error=error, config_path=config_file, **kw)
+    qtbot.addWidget(window)
+    wait_window(qtbot, window)
+    return window
+
+
+def wait_window(qtbot, window: MainWindow) -> None:
+    for runner in (window.log_tab.runner, window.settings_tab.runner):
+        qtbot.waitUntil(lambda r=runner: not r.busy, timeout=10_000)
+
+
+def save_settings(qtbot, window: MainWindow) -> None:
+    window.settings_tab.save_button.click()
+    wait_window(qtbot, window)
+
+
+@pytest.fixture
+def questions(monkeypatch) -> list[str]:
+    """Record QMessageBox.question calls and answer No. A real box would block."""
+    asked: list[str] = []
+
+    def question(parent, title, text, *args):
+        asked.append(text)
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", question)
+    return asked
+
+
+def test_bad_config_opens_on_the_settings_tab(qtbot, tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("db_path = ", encoding="utf-8")
+    window = make_window(qtbot, path)
+    assert window.tabs.currentWidget() is window.settings_tab
+    assert window.statusBar().currentMessage().startswith("Configuration error:")
+    assert "cannot be read" in window.settings_tab.problem_label.text()
+
+
+def test_good_config_opens_on_the_viewer(qtbot, tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("", encoding="utf-8")
+    window = make_window(qtbot, path)
+    assert window.tabs.currentWidget() is window.viewer_tab
+
+
+def test_saved_settings_apply_without_a_restart(qtbot, tmp_path, db_path):
+    path = tmp_path / "config.toml"
+    window = make_window(qtbot, path)
+    assert window.log_tab.config.db_path is None
+    window.settings_tab.db_edit.setText(str(db_path))
+    window.settings_tab.offset_spin.setValue(0)
+    save_settings(qtbot, window)
+    assert window.statusBar().currentMessage() == f"Database: {db_path}"
+    assert window.config == Config(db_path=str(db_path), display_utc_offset_hours=0.0)
+    assert window.log_tab.config == window.config
+    assert window.log_tab.start_label.text().startswith("Start (UTC)")
+
+
+def test_db_override_stays_in_force_after_save(qtbot, tmp_path, db_path):
+    path = tmp_path / "config.toml"
+    window = make_window(qtbot, path, db_override=str(db_path))
+    window.settings_tab.db_edit.setText("written-to-file.db")
+    save_settings(qtbot, window)
+    assert load_config(path).db_path == "written-to-file.db"
+    assert window.config.db_path == str(db_path)
+    assert window.log_tab.config.db_path == str(db_path)
+
+
+def test_unsaved_log_input_answer_no_keeps_everything(qtbot, tmp_path, db_path, questions):
+    path = tmp_path / "config.toml"
+    path.write_text(f"db_path = '{db_path}'\n", encoding="utf-8")
+    window = make_window(qtbot, path)
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.settings_tab.db_edit.setText(str(tmp_path / "other.db"))
+    save_settings(qtbot, window)
+    assert len(questions) == 1
+    assert "clear the Log tab form" in questions[0]
+    assert path.read_text(encoding="utf-8") == f"db_path = '{db_path}'\n"
+    assert window.log_tab.remarks_edit.toPlainText() == "not saved yet"
+    assert window.config.db_path == str(db_path)
+
+
+def test_unsaved_log_input_answer_yes_clears_the_form(qtbot, tmp_path, db_path, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    path = tmp_path / "config.toml"
+    path.write_text(f"db_path = '{db_path}'\n", encoding="utf-8")
+    window = make_window(qtbot, path)
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.settings_tab.offset_spin.setValue(1)
+    window.settings_tab.db_edit.setText("")
+    save_settings(qtbot, window)
+    assert load_config(path).db_path is None
+    assert window.log_tab.remarks_edit.toPlainText() == ""
+    assert window.statusBar().currentMessage().startswith("No database configured")
+
+
+def test_offset_change_asks_nothing_and_keeps_the_form(qtbot, tmp_path, db_path, questions):
+    path = tmp_path / "config.toml"
+    path.write_text(f"db_path = '{db_path}'\n", encoding="utf-8")
+    window = make_window(qtbot, path)
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.settings_tab.offset_spin.setValue(1)
+    save_settings(qtbot, window)
+    assert questions == []
+    assert load_config(path).display_utc_offset_hours == 1.0
+    assert window.log_tab.remarks_edit.toPlainText() == "not saved yet"
+
+
+def test_settings_wait_for_a_log_tab_save(qtbot, tmp_path, db_path, monkeypatch):
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text, *a: shown.append(text)
+    )
+    path = tmp_path / "config.toml"
+    window = make_window(qtbot, path)
+    window.log_tab._saving = True
+    window.settings_tab.db_edit.setText(str(db_path))
+    save_settings(qtbot, window)
+    window.log_tab._saving = False
+    assert shown == [LOG_TAB_SAVING]
+    assert not path.exists()
