@@ -70,3 +70,6 @@ addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = ["error"]
 qt_api = "pyside6"
+markers = [
+    "slow: creates tens of thousands of files; runs by default, skip with -m 'not slow'",
+]
