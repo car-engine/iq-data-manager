@@ -220,6 +220,17 @@ def test_list_param_names(conn, site_id):
     assert [n.lower() for n in names] == ["antenna", "lna gain", "sdr"]
 
 
+def test_list_bands_is_distinct_sorted_and_skips_empty(conn, site_id):
+    bands = ["VHF", "uhf", None, "", "vhf", "L"]
+    for i, band in enumerate(bands):
+        ch = channel(0)
+        ch.band = band
+        repo.insert_recording(conn, recording(site_id, f"r{i}", channels=[ch], params=[]))
+    result = repo.list_bands(conn)
+    assert [b.lower() for b in result] == ["l", "uhf", "vhf"]
+    assert result[0] == "L"
+
+
 # ---------------------------------------------------------------------------
 # Update
 # ---------------------------------------------------------------------------
@@ -401,8 +412,12 @@ def test_finish_transfer(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     tid = repo.insert_transfer(conn, transfer(rid, notes="started"))
     repo.finish_transfer(
-        conn, tid, finished_at="2026-10-02T01:10:00Z", verification=Verification.PASS,
-        n_files=20, total_bytes=80000,
+        conn,
+        tid,
+        finished_at="2026-10-02T01:10:00Z",
+        verification=Verification.PASS,
+        n_files=20,
+        total_bytes=80000,
     )
     (got,) = repo.list_transfers(conn, rid)
     assert got.finished_at == "2026-10-02T01:10:00Z"

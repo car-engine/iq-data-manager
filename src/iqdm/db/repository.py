@@ -471,6 +471,18 @@ def list_param_names(conn: sqlite3.Connection) -> list[str]:
     return [r[0] for r in rows]
 
 
+def list_bands(conn: sqlite3.Connection) -> list[str]:
+    """Distinct channel bands for the Log tab's dropdown, one spelling per band ignoring case.
+
+    NULL and empty bands are left out (DECISIONS.md D19).
+    """
+    rows = conn.execute(
+        "SELECT MIN(band) FROM channels WHERE band IS NOT NULL AND band <> ''"
+        " GROUP BY band COLLATE NOCASE ORDER BY 1 COLLATE NOCASE"
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Transfer log
 # ---------------------------------------------------------------------------

@@ -17,6 +17,9 @@ from urllib.parse import quote
 
 from iqdm.db.version import SchemaStatus, schema_status
 
+Connection = sqlite3.Connection
+"""Connection type for type hints outside db/, which may not import sqlite3 (D7)."""
+
 BUSY_TIMEOUT_MS = 5000
 RETRY_DELAYS_S: tuple[float, ...] = (1.0, 2.0)  # pauses between attempts (DECISIONS.md D7)
 
