@@ -428,7 +428,7 @@ def test_transfers_listed_oldest_first(conn, site_id):
 
 
 # ---------------------------------------------------------------------------
-# Logging in place on the NAS (SPEC D2): recording and log row in one transaction
+# Logging in place on the NAS (DECISIONS.md D2): recording and log row in one transaction
 # ---------------------------------------------------------------------------
 
 

@@ -84,3 +84,19 @@ CLAUDE.md, then propose a plan with the test list before implementing.
 
 For milestones 5 and 6 (anything that moves or deletes files), also ask Claude to list
 every code path that can delete or overwrite a file, and review that list yourself.
+
+## Resuming in a new session
+
+A new session has no memory of earlier ones. Everything it needs is in the repository.
+Paste this in plan mode, with the milestone filled in:
+
+```
+Read CLAUDE.md, docs/STATUS.md and the latest report in docs/reports/. Then read
+the docs/SPEC.md sections for Milestone <n> and the DECISIONS.md entries they
+refer to. Summarise the current state and the open items in STATUS.md that belong
+to Milestone <n>, then propose a plan for Milestone <n> with its test list. Ask me
+about the open items before writing code.
+```
+
+At the end of the milestone, Claude writes a report in `docs/reports/` that follows
+`docs/REPORT_TEMPLATE.md` and updates `docs/STATUS.md`.

@@ -1,5 +1,5 @@
 -- IQ Data Manager: SQLite schema, version 1
--- Edited in place until the first real database exists (SPEC section 14, D4).
+-- Edited in place until the first real database exists (docs/DECISIONS.md D4).
 -- After that, every change is a numbered migration in migrations.py.
 -- All timestamps are ISO 8601 UTC text, e.g. '2026-09-30T08:15:00Z'.
 -- Run on every connection:  PRAGMA foreign_keys = ON;
@@ -41,7 +41,7 @@ CREATE TABLE recordings (
 
     -- File format (shared by all channels). Samples are always complex IQ.
     dtype               TEXT NOT NULL DEFAULT 'int16'
-                            CHECK (dtype IN ('int8', 'int16', 'float32')),  -- SPEC D1
+                            CHECK (dtype IN ('int8', 'int16', 'float32')),  -- DECISIONS.md D1
     iq_layout           TEXT NOT NULL DEFAULT 'interleaved_iq'
                             CHECK (iq_layout IN (
                                 'interleaved_iq',   -- I0 Q0 I1 Q1 ... (standard)

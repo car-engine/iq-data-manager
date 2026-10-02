@@ -4,7 +4,7 @@ Every function takes an open connection. The caller decides the transaction:
 writes run inside connection.write_transaction, queries on a read-only connection
 from connection.open_db. All SQL uses parameters.
 
-Rules from SPEC D7:
+Rules from DECISIONS.md D7:
 - date, start_unix and end_unix of a recording are derived from its channels.
 - A Param names its channel by channel_index. This module maps it to channel_id.
 - update_recording updates channels in place by channel_index. Removing a channel

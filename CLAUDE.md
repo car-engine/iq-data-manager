@@ -3,7 +3,8 @@
 Windows desktop app (Python 3.12, PySide6) that logs RF IQ recordings into a shared
 SQLite database and generates/runs safe copy and archive operations between recording
 laptops, the NAS and local PCs. Full requirements: `docs/SPEC.md`. Read it before
-starting any task. Database schema: `src/iqdm/db/schema.sql`.
+starting any task. Database schema: `src/iqdm/db/schema.sql`. Decision log:
+`docs/DECISIONS.md`. Progress, open questions and notes for agents: `docs/STATUS.md`.
 
 ## Safety rules (non-negotiable)
 
@@ -77,7 +78,16 @@ The app itself will move and delete real data, so its code must follow these rul
 
 ## Workflow
 
+- At the start of a session, read `docs/STATUS.md` and the latest report in
+  `docs/reports/`.
 - Work in the milestone order in `docs/SPEC.md`. One milestone per branch or session.
 - For each task: propose a plan first, wait for approval, then implement with tests.
+  The safety hook blocks plan files outside the repository, so present plans in chat.
 - Commit in small steps with clear messages. Do not push unless asked.
 - When requirements are unclear or conflict with this file, ask rather than guess.
+- Record each decision in `docs/DECISIONS.md` and update `docs/SPEC.md` so it states
+  the current requirement. Track undecided questions as open items in
+  `docs/STATUS.md`.
+- At the end of a milestone, or after other significant work, write a report that
+  follows `docs/REPORT_TEMPLATE.md` in `docs/reports/`, update `docs/STATUS.md`, and
+  give the same summary in chat.

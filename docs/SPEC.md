@@ -1,5 +1,12 @@
 # IQ Data Manager: specification
 
+This file states the current requirements. Related documents:
+
+- `docs/DECISIONS.md`: resolved questions, with dates and reasons. References such
+  as "DECISIONS.md D2" point there.
+- `docs/STATUS.md`: milestone progress, open questions and pending checks.
+- `docs/reports/`: one report per milestone.
+
 ## 1. Purpose
 
 The team records raw RF IQ data (SDRs such as the USRP X310) as one-second binary files
@@ -15,22 +22,22 @@ This app replaces both with one Windows desktop tool with three tabs:
 3. **Move / copy**: archive recordings to the NAS, or copy whole recordings or time
    ranges to a local PC, via previewed and verified generated scripts.
 
-Mockups of all three tabs exist on a design canvas; this document is the source of
-truth where they differ.
+Mockups of all three tabs exist on a design canvas, with exports in `docs/mockup/`;
+this document is the source of truth where they differ.
 
 ## 2. Environment and constraints
 
 - **Platform**: Windows 10/11 first. Linux support is planned later, so all
   business logic must be OS-agnostic (see section 9).
-- **Language / GUI**: Python 3.12, PySide6. Packaged as a single executable with
-  PyInstaller, built on Windows.
+- **Language / GUI**: Python 3.12, PySide6. Packaged with PyInstaller as a onedir
+  build (a folder holding the executable), built on Windows (DECISIONS.md D8).
 - **Database**: one master SQLite file on a NAS SMB share, accessed directly by every
   PC. Practically one writer at a time; occasional concurrent readers. No
   authentication beyond network access.
 - **Storage**: NAS shares reached over gigabit Ethernet, usually as mapped drives.
   The app stores and uses UNC paths, not drive letters.
 - **Data**: raw complex IQ, typically int16 interleaved I then Q, little-endian.
-  Allowed sample types are `int8`, `int16` and `float32` (section 14, D1). Some
+  Allowed sample types are `int8`, `int16` and `float32` (DECISIONS.md D1). Some
   recordings have a fixed-size header at the start of every file. Sample rates from
   kHz to tens of MHz; at 50 MS/s a one-second file is 200 MB. Recordings range up to
   1 TB per folder. Files may be missing (gaps) inside a recording.
@@ -63,13 +70,13 @@ Key semantics:
 - **Archive state**: `local` (data only on the recording laptop) or `archived` (on
   the NAS and verified). The app sets `archived` only after verification passes, with
   one exception. A folder logged in place on the NAS is set to `archived` without
-  verification, and its log entry marks it as unverified (section 14, D2).
+  verification, and its log entry marks it as unverified (DECISIONS.md D2).
 - **Deletion**: `channels` and `recording_params` cascade on recording delete.
   `transfer_log` does not, so a recording with transfer history cannot be deleted
   without explicit handling.
 - **Schema version**: `PRAGMA user_version`. Changes are numbered migrations in
   `src/iqdm/db/migrations.py`. They run only from an explicit, user-confirmed
-  upgrade action, with a backup copy made first (section 14, D6). Until the first
+  upgrade action, with a backup copy made first (DECISIONS.md D6). Until the first
   real database exists, `schema.sql` is edited in place as version 1 (D4).
 
 ### DB access rules
@@ -78,7 +85,7 @@ Key semantics:
   rollback journal (never WAL on an SMB share).
 - Open, do the work, close. Never hold a connection open while the GUI is idle.
 - Writes are short transactions with retry and backoff on `database is locked`, then
-  a clear error to the user. Attempts and pauses are in section 14, D7.
+  a clear error to the user. Attempts and pauses are in DECISIONS.md D7.
 - The viewer opens connections read-only (`file:...?mode=ro` URI).
 
 ## 4. Configuration
@@ -123,7 +130,7 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    1.0 s), logged by (pre-filled with the Windows login name, editable), site
    (dropdown plus "Add site"), recording plan reference, storage root and relative
    path (derived from the folder, read-only), archive state (derived: `local` unless
-   the folder is under a configured NAS root, then `archived`; see section 14, D2 for
+   the folder is under a configured NAS root, then `archived`; see DECISIONS.md D2 for
    the `transfer_log` row written in that case), remarks.
 3. **File format**: sample type (`int8`, `int16` default, `float32`), IQ layout
    (`interleaved_iq` default, `interleaved_qi`, `planar_iq`), endianness (little
@@ -140,7 +147,7 @@ Validation before save (shown as a checklist):
 - Folder not already logged (`UNIQUE (storage_root, rel_path)`).
 - File sizes consistent with fs: expected bytes per file =
   `header_bytes + fs_hz * file_duration_s * 2 * bytes_per_sample`. A channel's last
-  file may be shorter than expected; that is reported as information (section 14,
+  file may be shorter than expected; that is reported as information (DECISIONS.md
   D3). Any other mismatch, including a last file larger than expected, is an error
   that names the channel and the expected and actual sizes.
 - Required fields present; fc and fs positive.
@@ -161,7 +168,7 @@ duration. Output: a dataclass per channel.
   fractional part), extensions `.dat` and `.bin` (configurable). Other files are
   ignored and counted as "unrecognised" in the result.
 - Per channel: sorted timestamps, first and last, `n_files`, `total_bytes`, set of
-  distinct file sizes, the size of the last file (section 14, D3), and gaps as a list
+  distinct file sizes, the size of the last file (DECISIONS.md D3), and gaps as a list
   of `(start_unix, missing_seconds)` runs.
 - Uses `os.scandir` for speed; must handle tens of thousands of files per channel.
 - **Gap detail**: gaps are not stored in the DB. The viewer computes them on demand
@@ -230,7 +237,14 @@ iq-data-manager/
   requirements.txt            # pinned runtime deps
   requirements-dev.txt        # pytest, ruff, pyinstaller
   .claude/                    # Claude Code settings and safety hook
-  docs/SPEC.md
+  docs/
+    SPEC.md                   # current requirements (this file)
+    DECISIONS.md              # decision log D1, D2, ...
+    STATUS.md                 # progress, open questions, pending checks
+    REPORT_TEMPLATE.md        # format of milestone reports
+    reports/                  # one report per milestone: M0.md, M1.md, ...
+    KICKOFF.md                # session start-up and resume prompts
+    mockup/                   # exported GUI mockups
   src/iqdm/
     __main__.py               # python -m iqdm
     app.py                    # QApplication, main window with three tabs
@@ -271,8 +285,9 @@ iq-data-manager/
     iqdm.spec                 # PyInstaller spec
 ```
 
-Rules: nothing outside `gui/` and `app.py` imports PySide6. `db/repository.py` is the
-only place with SQL. `transfer/delete.py` is the only place that deletes files.
+Rules: nothing outside `gui/` and `app.py` imports PySide6. All SQL lives in `db/`,
+and only `db/` imports `sqlite3` (DECISIONS.md D7). `transfer/delete.py` is the only
+place that deletes files.
 
 ## 10. Legacy data migration
 
@@ -301,10 +316,14 @@ written to a report, not guessed. A later "Check archive" fills in counts and si
   `tmp_path`.
 - GUI smoke tests with `pytest-qt` are optional and limited to construction and basic
   wiring.
+- `tests/test_architecture.py` enforces the module rules in section 9 by reading the
+  package source (DECISIONS.md D10).
 
 ## 12. Milestones
 
-Each milestone ends with passing tests, `ruff check` clean, and a commit.
+Each milestone ends with passing tests, `ruff check` clean, a commit, and a report in
+`docs/reports/` that follows `docs/REPORT_TEMPLATE.md`. Progress is tracked in
+`docs/STATUS.md`.
 
 0. **Scaffold**: pyproject, requirements, package layout, ruff and pytest config,
    empty three-tab main window, `make_fixtures.py`, PyInstaller smoke build.
@@ -321,106 +340,10 @@ Each milestone ends with passing tests, `ruff check` clean, and a commit.
 7. **Packaging and migration**: settings dialog, config file, PyInstaller build,
    legacy migration tool, short user guide.
 
-## 13. Open decisions
+## 13. Scope
 
-Assumptions in this spec that the user may revise:
+Out of scope for v1: Linux build, rsync generator, file-level gap storage in the DB,
+user accounts, editing RF chain templates.
 
-- The app can both save scripts and run them. If the user prefers "generate only",
-  drop the run path in milestone 6 and keep verification as a "Check" action.
-- Logging works on any folder, local or on the NAS; scanning NAS folders is slower.
-- Coverage highlight threshold of 99%.
-- Out of scope for v1: Linux build, rsync generator, file-level gap storage in the DB,
-  user accounts, editing RF chain templates.
-
-## 14. Decisions
-
-Resolved questions. Other sections refer to these by number.
-
-### D1. Sample types (2026-10-02)
-
-- Data is always complex IQ, so the size formula in section 6 keeps the factor 2.
-- Allowed `dtype` values are `int8`, `int16` and `float32`, with 1, 2 and 4 bytes per
-  sample. The default is `int16`.
-- `int8` covers the USRP `sc8` wire format. `float32` is allowed in the schema. Whether
-  down-converted float32 data belongs in this catalogue is a team policy question.
-- `uint8` and packed sub-byte formats (4-bit, 2-bit) are out of scope.
-- A header, when present, sits at the start of every file. `header_bytes` is its size.
-- Milestone 1 adds `CHECK (dtype IN ('int8', 'int16', 'float32'))` to `schema.sql`.
-  Until then, `schema.sql` has no CHECK on `dtype`.
-
-### D2. Logging a folder that is already on the NAS (2026-10-02)
-
-- Data reaches the NAS by manual copy. Nobody records straight to the NAS.
-- Logging a folder under a configured NAS root sets `archive_state = 'archived'`. The
-  same transaction writes a `transfer_log` row with these values:
-  - `operation = 'check'`
-  - `verification = 'skipped'`
-  - `source` = the folder's full path
-  - `destination` = NULL
-  - `performed_by` = the logged-by name
-  - `notes = 'logged in place, not verified against a source'`
-- The Viewer reads this row and marks the recording as unverified. The schema has no
-  separate archive state for this case.
-- Laptop copies are deleted only when the storage space is needed, so the laptop copy
-  often still exists when a NAS folder is logged. Milestone 6 reconsiders a "verify
-  against source" action for this case. That milestone also decides how a later
-  verification clears the unverified mark.
-
-### D3. Short last file (2026-10-02)
-
-- The first file of a channel is never short. A short first file is an error.
-- A channel's last file may be shorter than expected when a capture stops mid-file.
-  The Log tab reports it as information. A last file larger than expected is an
-  error, as is a size mismatch in any other file.
-- The short last file counts as one file in `n_files`. `end_unix` keeps its
-  definition (last file's timestamp + `file_duration_s`), so span and coverage are
-  slightly overstated for that channel.
-- The scanner reports the size of each channel's last file separately from the set of
-  distinct sizes.
-
-### D4. Schema baseline (2026-10-02)
-
-- No database uses the new schema yet. The first real database is created by the
-  legacy migration in Milestone 7.
-- Until then, `schema.sql` is edited in place and stays at `user_version = 1`.
-- From the first real database on, every schema change is a numbered migration.
-
-### D5. Transfer log columns (2026-10-02)
-
-- `transfer_log.channels` records the channel subset: NULL for all channels, else
-  sorted indices separated by commas, e.g. `'0,2'`.
-- `transfer_log.hash_mode` records the verification hash mode: `none`, `sample` or
-  `all`. It is NULL when no verification ran.
-- Source deletion stays recorded in `transfer_log.notes` (section 8). A structured
-  deletion record and a per-file verification manifest are reconsidered in
-  Milestone 5.
-
-### D6. Running migrations (2026-10-02)
-
-- The app never migrates on startup. When the database version is older than the
-  app's, the app refuses to write and offers an "Upgrade database" action.
-- The upgrade asks for confirmation, writes a backup next to the database through
-  SQLite's online backup API, and never overwrites an existing backup file.
-- Each migration step runs in its own transaction and sets `user_version` inside it.
-  A failed step leaves the database at the last good version.
-- Reads are allowed on a database newer than the app, with a warning. Reads are
-  refused on an older database. Writes need the current version.
-
-### D7. Database layer defaults (2026-10-02)
-
-- The repository derives `recordings.date`, `start_unix` and `end_unix` from the
-  channel rows. `date` is `start_unix` as ISO 8601 UTC, in whole seconds.
-- Triggers reject a `recording_params.channel_id` that belongs to a different
-  recording.
-- `archived_at` is set exactly when `archive_state = 'archived'` (CHECK constraint).
-  Logging in place (D2) and the legacy import set it to the time the row is written.
-- A parameter names its channel by `channel_index` in the app. The repository maps
-  the index to `channel_id`.
-- Editing a recording updates channels in place by `channel_index` and inserts new
-  ones. Removing a channel needs an explicit flag, because it deletes that channel's
-  parameters. Parameters are replaced as a set.
-- Write retry: `busy_timeout = 5000`, 3 attempts, pauses of 1 s and 2 s between
-  them. The worst case is about 18 s before the error is shown.
-- Channel coverage is undefined (NULL in the app) when `n_files` is NULL or the span
-  is zero.
-- Sites can be added and listed. The app has no rename or delete for sites.
+Open questions and assumptions that may still change are listed in `docs/STATUS.md`.
+Resolved decisions are in `docs/DECISIONS.md`.

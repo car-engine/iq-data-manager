@@ -1,4 +1,4 @@
-"""Numbered schema migrations based on PRAGMA user_version (SPEC section 3 and D6).
+"""Numbered schema migrations based on PRAGMA user_version (SPEC section 3, DECISIONS.md D6).
 
 The app never migrates on startup. upgrade() runs only from an explicit,
 user-confirmed action. Its sequence:
@@ -11,7 +11,7 @@ user-confirmed action. Its sequence:
    leaves the database at the last good version.
 4. Run PRAGMA quick_check.
 
-Until the first real database exists, schema.sql is edited in place (SPEC D4) and
+Until the first real database exists, schema.sql is edited in place (DECISIONS.md D4) and
 MIGRATIONS stays empty.
 """
 

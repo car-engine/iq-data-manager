@@ -18,7 +18,7 @@ from urllib.parse import quote
 from iqdm.db.version import SchemaStatus, schema_status
 
 BUSY_TIMEOUT_MS = 5000
-RETRY_DELAYS_S: tuple[float, ...] = (1.0, 2.0)  # pauses between attempts (SPEC D7)
+RETRY_DELAYS_S: tuple[float, ...] = (1.0, 2.0)  # pauses between attempts (DECISIONS.md D7)
 
 
 class DatabaseError(Exception):
@@ -105,7 +105,7 @@ def open_unchecked(path: Path | str, *, readonly: bool = False) -> sqlite3.Conne
 
 
 def connect(path: Path | str, *, readonly: bool = False) -> sqlite3.Connection:
-    """Open a database whose schema version allows this access (SPEC D6).
+    """Open a database whose schema version allows this access (DECISIONS.md D6).
 
     Writes need the current version. Reads also accept a newer version.
     """

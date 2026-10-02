@@ -138,7 +138,7 @@ def test_open_db_closes_connection_on_error(db_path):
 
 
 # ---------------------------------------------------------------------------
-# Schema version rules (SPEC D6)
+# Schema version rules (DECISIONS.md D6)
 # ---------------------------------------------------------------------------
 
 
