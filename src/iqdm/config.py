@@ -4,8 +4,8 @@ A missing file gives the defaults. Unknown keys are ignored. A wrong type or val
 raises ConfigError, which names the file and the key (DECISIONS.md D15).
 
 The Settings tab writes the file through save_config() with tomli-w (Milestone 3a,
-O18). The tab shows three keys (SETTINGS_KEYS). Every other key in the file is kept
-as it was. Comments are lost.
+O18). The tab shows four keys (SETTINGS_KEYS; the coverage threshold since D39).
+Every other key in the file is kept as it was. Comments are lost.
 """
 
 import math
@@ -25,10 +25,16 @@ CONFIG_DIR_NAME = "IQDataManager"
 CONFIG_FILE_NAME = "config.toml"
 NEW_SUFFIX = ".new"  # written first, then renamed over config.toml
 BACKUP_SUFFIX = ".bak"  # the file as it was before the last Save (O31)
-SETTINGS_KEYS = ("db_path", "nas_roots", "display_utc_offset_hours")  # shown in the Settings tab
+SETTINGS_KEYS = (  # shown in the Settings tab
+    "db_path",
+    "nas_roots",
+    "display_utc_offset_hours",
+    "coverage_highlight_percent",
+)
 OFFSET_MIN_HOURS = -12.0
 OFFSET_MAX_HOURS = 14.0
 OFFSET_STEP_HOURS = 0.25
+COVERAGE_MAX_PERCENT = 100.0  # the threshold is above 0 and at most this (D39)
 
 
 class ConfigError(Exception):
@@ -46,6 +52,7 @@ class Config:
     hash_sample_fraction: float = 0.05
     nas_roots: tuple[str, ...] = ()  # UNC roots, without a trailing separator (D14)
     display_utc_offset_hours: float = 8.0  # displayed times only; storage stays UTC (D24)
+    coverage_highlight_percent: float = 99.0  # the Viewer marks coverage below this (D39)
     storage_roots: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -105,6 +112,13 @@ def offset_error(hours: float) -> str | None:
     return None
 
 
+def coverage_error(percent: float) -> str | None:
+    """Why `percent` cannot be coverage_highlight_percent, or None if it can (D39)."""
+    if not 0 < percent <= COVERAGE_MAX_PERCENT:
+        return "coverage_highlight_percent must be above 0 and at most 100"
+    return None
+
+
 def _nas_roots(data: Mapping[str, Any], where: str) -> tuple[str, ...]:
     value = data.get("nas_roots", [])
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
@@ -139,6 +153,12 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     error = offset_error(offset)
     if error is not None:
         raise ConfigError(f"{where}: {error}")
+    threshold = _number(
+        data, "coverage_highlight_percent", where, Config.coverage_highlight_percent
+    )
+    error = coverage_error(threshold)
+    if error is not None:
+        raise ConfigError(f"{where}: {error}")
     mode_text = data.get("default_hash_mode", str(Config.default_hash_mode))
     try:
         mode = HashMode(mode_text)
@@ -153,6 +173,7 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
         hash_sample_fraction=fraction,
         nas_roots=_nas_roots(data, where),
         display_utc_offset_hours=offset,
+        coverage_highlight_percent=threshold,
         storage_roots=_storage_roots(data, where),
     )
 
@@ -190,6 +211,13 @@ class SettingsInput:
     db_path: str = ""
     nas_roots: tuple[str, ...] = ()
     display_utc_offset_hours: float = Config.display_utc_offset_hours
+    coverage_highlight_percent: float = Config.coverage_highlight_percent
+
+
+def _number_or_default(value: object, default: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return default
+    return float(value)
 
 
 def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
@@ -200,13 +228,15 @@ def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
     """
     db = data.get("db_path")
     roots = data.get("nas_roots")
-    offset = data.get("display_utc_offset_hours")
-    if isinstance(offset, bool) or not isinstance(offset, int | float):
-        offset = Config.display_utc_offset_hours
     return SettingsInput(
         db_path=db.strip() if isinstance(db, str) else "",
         nas_roots=tuple(r for r in roots if isinstance(r, str)) if isinstance(roots, list) else (),
-        display_utc_offset_hours=float(offset),
+        display_utc_offset_hours=_number_or_default(
+            data.get("display_utc_offset_hours"), Config.display_utc_offset_hours
+        ),
+        coverage_highlight_percent=_number_or_default(
+            data.get("coverage_highlight_percent"), Config.coverage_highlight_percent
+        ),
     )
 
 
@@ -219,6 +249,9 @@ def settings_errors(settings: SettingsInput) -> dict[str, str]:
     error = offset_error(settings.display_utc_offset_hours)
     if error is not None:
         errors["display_utc_offset_hours"] = error
+    error = coverage_error(settings.coverage_highlight_percent)
+    if error is not None:
+        errors["coverage_highlight_percent"] = error
     return errors
 
 
@@ -243,7 +276,7 @@ def merge_settings(data: Mapping[str, Any], settings: SettingsInput) -> dict[str
     """`data` with the shown keys replaced by `settings`. Every other key stays.
 
     A blank db_path removes the key. NAS roots lose a trailing separator. A whole
-    number of hours is written as an integer.
+    number of hours or percent is written as an integer.
     """
     merged = dict(data)
     db = settings.db_path.strip()
@@ -254,6 +287,8 @@ def merge_settings(data: Mapping[str, Any], settings: SettingsInput) -> dict[str
     merged["nas_roots"] = [_clean_root(r) for r in _stripped(settings.nas_roots)]
     offset = float(settings.display_utc_offset_hours)
     merged["display_utc_offset_hours"] = int(offset) if offset.is_integer() else offset
+    threshold = float(settings.coverage_highlight_percent)
+    merged["coverage_highlight_percent"] = int(threshold) if threshold.is_integer() else threshold
     return merged
 
 

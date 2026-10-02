@@ -159,6 +159,23 @@ def test_display_offset_must_be_a_real_offset(tmp_path, text):
         load_config(path)
 
 
+def test_coverage_threshold_defaults_to_99_percent(tmp_path):
+    assert load_config(tmp_path / "absent.toml").coverage_highlight_percent == 99.0
+
+
+@pytest.mark.parametrize(("text", "percent"), [("100", 100.0), ("95.5", 95.5), ("0.1", 0.1)])
+def test_coverage_threshold_is_read(tmp_path, text, percent):
+    path = write(tmp_path, f"coverage_highlight_percent = {text}")
+    assert load_config(path).coverage_highlight_percent == percent
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "100.1", "101", "true", "'99'", "nan"])
+def test_coverage_threshold_must_be_above_0_and_at_most_100(tmp_path, text):
+    path = write(tmp_path, f"coverage_highlight_percent = {text}")
+    with pytest.raises(ConfigError, match="coverage_highlight_percent"):
+        load_config(path)
+
+
 # =========================================================================
 # Writing (Settings tab, Milestone 3a)
 # =========================================================================
@@ -213,6 +230,16 @@ def test_settings_from_data_gives_the_default_offset_for_a_wrong_type(offset):
     assert settings_from_data({"display_utc_offset_hours": offset}).display_utc_offset_hours == 8.0
 
 
+def test_settings_from_data_takes_the_coverage_threshold():
+    assert settings_from_data({"coverage_highlight_percent": 97}).coverage_highlight_percent == 97.0
+
+
+@pytest.mark.parametrize("percent", ["99", True, [99]])
+def test_settings_from_data_gives_the_default_threshold_for_a_wrong_type(percent):
+    settings = settings_from_data({"coverage_highlight_percent": percent})
+    assert settings.coverage_highlight_percent == 99.0
+
+
 def test_settings_errors_accept_valid_input():
     settings = SettingsInput(
         db_path="", nas_roots=(r"\\nas\rec", r" \\nas\rec2\ "), display_utc_offset_hours=-3.75
@@ -238,8 +265,24 @@ def test_settings_errors_refuse_a_wrong_offset(hours):
     assert list(errors) == ["display_utc_offset_hours"]
 
 
+@pytest.mark.parametrize("percent", [0.1, 50.0, 99.0, 100.0])
+def test_settings_errors_accept_a_threshold_in_range(percent):
+    assert settings_errors(SettingsInput(coverage_highlight_percent=percent)) == {}
+
+
+@pytest.mark.parametrize("percent", [0.0, -1.0, 100.5])
+def test_settings_errors_refuse_a_threshold_out_of_range(percent):
+    errors = settings_errors(SettingsInput(coverage_highlight_percent=percent))
+    assert list(errors) == ["coverage_highlight_percent"]
+
+
 def test_hidden_key_error_ignores_the_shown_keys():
-    data = {"nas_roots": ["D:\\data"], "display_utc_offset_hours": 99, "db_path": 3}
+    data = {
+        "nas_roots": ["D:\\data"],
+        "display_utc_offset_hours": 99,
+        "db_path": 3,
+        "coverage_highlight_percent": 0,
+    }
     assert hidden_key_error(data, "config.toml") is None
 
 
@@ -278,6 +321,13 @@ def test_merge_writes_whole_hours_as_an_integer(hours, written):
     assert type(merged["display_utc_offset_hours"]) is type(written)
 
 
+@pytest.mark.parametrize(("percent", "written"), [(99.0, 99), (100.0, 100), (97.5, 97.5)])
+def test_merge_writes_the_coverage_threshold(percent, written):
+    merged = merge_settings({}, SettingsInput(coverage_highlight_percent=percent))
+    assert merged["coverage_highlight_percent"] == written
+    assert type(merged["coverage_highlight_percent"]) is type(written)
+
+
 def test_save_creates_a_missing_folder(tmp_path):
     path = tmp_path / "AppData" / "IQDataManager" / "config.toml"
     save_config(path, {"db_path": r"D:\a.db"})
@@ -290,6 +340,7 @@ def test_save_reads_back_the_same_config(tmp_path):
         db_path=r"\\nas\recordings\iq_catalog.db",
         nas_roots=(r"\\nas\recordings", r"\\nas2\Récordings é"),
         display_utc_offset_hours=-9.5,
+        coverage_highlight_percent=97.5,
     )
     returned = save_config(path, merge_settings(read_config_data(path), settings))
     loaded = load_config(path)
@@ -297,6 +348,7 @@ def test_save_reads_back_the_same_config(tmp_path):
     assert loaded.db_path == r"\\nas\recordings\iq_catalog.db"
     assert loaded.nas_roots == (r"\\nas\recordings", r"\\nas2\Récordings é")
     assert loaded.display_utc_offset_hours == -9.5
+    assert loaded.coverage_highlight_percent == 97.5
     assert loaded.network_speed_mb_s == 95.0
     assert read_config_data(path)["extra"] == {"nested": {"a": [1, 2]}}
 

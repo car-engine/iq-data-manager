@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from iqdm import __version__
 from iqdm.config import (
+    COVERAGE_MAX_PERCENT,
     OFFSET_MAX_HOURS,
     OFFSET_MIN_HOURS,
     OFFSET_STEP_HOURS,
@@ -164,6 +165,12 @@ def nas_root_message(text: str) -> str:
 
 
 OFFSET_MESSAGE = "Use whole or quarter hours, for example 5.5 or 5.75."
+COVERAGE_MESSAGE = "Use a value above 0 % and at most 100 %."
+COVERAGE_TOOLTIP = (
+    "The Viewer marks a recording or channel whose coverage is below this value. "
+    "Coverage is the share of the recording's time span that has data files."
+)
+COVERAGE_STEP_PERCENT = 0.5
 
 
 def offset_preview(hours: float) -> str:
@@ -321,11 +328,22 @@ class SettingsTab(QWidget):
         self.offset_preview = QLabel()
         self.offset_error = QLabel()
         self.offset_error.setWordWrap(True)
+        self.coverage_spin = QDoubleSpinBox()
+        self.coverage_spin.setRange(0.0, COVERAGE_MAX_PERCENT)  # 0 shows the error line
+        self.coverage_spin.setSingleStep(COVERAGE_STEP_PERCENT)
+        self.coverage_spin.setDecimals(1)
+        self.coverage_spin.setSuffix(" %")
+        self.coverage_spin.setToolTip(COVERAGE_TOOLTIP)
+        self.coverage_spin.valueChanged.connect(self._validate)
+        self.coverage_error = QLabel()
+        self.coverage_error.setWordWrap(True)
 
         layout = QFormLayout(box)
         layout.addRow("Show times at UTC offset", self.offset_spin)
         layout.addRow("Example", self.offset_preview)
         layout.addRow(self.offset_error)
+        layout.addRow("Highlight coverage below", self.coverage_spin)
+        layout.addRow(self.coverage_error)
         return box
 
     def _build_about(self) -> QGroupBox:
@@ -370,6 +388,7 @@ class SettingsTab(QWidget):
             db_path=self.db_edit.text().strip(),
             nas_roots=tuple(self.roots_list.item(i).text() for i in range(self.roots_list.count())),
             display_utc_offset_hours=self.offset_spin.value(),
+            coverage_highlight_percent=self.coverage_spin.value(),
         )
 
     def has_changes(self) -> bool:
@@ -407,6 +426,7 @@ class SettingsTab(QWidget):
         for root in settings.nas_roots:
             self.roots_list.addItem(QListWidgetItem(root))
         self.offset_spin.setValue(settings.display_utc_offset_hours)
+        self.coverage_spin.setValue(settings.coverage_highlight_percent)
         self._update_root_buttons()
         self._validate()
 
@@ -486,6 +506,11 @@ class SettingsTab(QWidget):
         self.offset_error.setVisible(offset_bad)
         hours = settings.display_utc_offset_hours
         self.offset_preview.setText("" if offset_bad else offset_preview(hours))
+
+        coverage_bad = "coverage_highlight_percent" in errors
+        self.coverage_error.setText(COVERAGE_MESSAGE if coverage_bad else "")
+        self.coverage_error.setStyleSheet(error_style)
+        self.coverage_error.setVisible(coverage_bad)
 
         problem, detail = self._problem()
         self.problem_label.setText(problem)

@@ -16,6 +16,7 @@ from iqdm.db import version
 from iqdm.db.connection import inspect_database
 from iqdm.entry import ItemState
 from iqdm.gui.settings_tab import (
+    COVERAGE_MESSAGE,
     NO_CONFIG_PATH,
     NO_DB_PATH,
     OFFSET_MESSAGE,
@@ -376,6 +377,56 @@ def test_offset_stays_within_its_range(make_tab, config_file):
     assert tab.offset_spin.value() == 14.0
     tab.offset_spin.setValue(-20)
     assert tab.offset_spin.value() == -12.0
+
+
+# ---------------------------------------------------------------------------
+# Coverage threshold (D39)
+# ---------------------------------------------------------------------------
+
+
+def test_coverage_threshold_shows_the_default(make_tab, config_file):
+    tab = make_tab(config_file)
+    assert tab.coverage_spin.value() == 99.0
+    assert not tab.coverage_error.isVisibleTo(tab)
+
+
+def test_coverage_threshold_shows_the_file(make_tab, config_file):
+    write(config_file, "coverage_highlight_percent = 97.5\n")
+    tab = make_tab(config_file)
+    assert tab.coverage_spin.value() == 97.5
+    assert not tab.save_button.isEnabled()
+
+
+def test_coverage_threshold_change_enables_save_and_is_written(qtbot, make_tab, config_file):
+    tab = make_tab(config_file)
+    tab.coverage_spin.setValue(95.0)
+    assert tab.save_button.isEnabled()
+    config = save_and_get_config(qtbot, tab)
+    assert config.coverage_highlight_percent == 95.0
+    assert read_config_data(config_file)["coverage_highlight_percent"] == 95
+
+
+def test_coverage_threshold_of_zero_is_marked(make_tab, config_file):
+    tab = make_tab(config_file)
+    tab.coverage_spin.setValue(0.0)
+    assert tab.coverage_error.isVisibleTo(tab)
+    assert tab.coverage_error.text() == COVERAGE_MESSAGE
+    assert not tab.save_button.isEnabled()
+
+
+def test_coverage_threshold_of_zero_in_the_file_is_marked(make_tab, config_file):
+    write(config_file, "coverage_highlight_percent = 0\n")
+    tab = make_tab(config_file)
+    assert tab.coverage_error.isVisibleTo(tab)
+    assert tab.problem_label.isVisibleTo(tab)
+    tab.coverage_spin.setValue(99.0)
+    assert tab.save_button.isEnabled()
+
+
+def test_coverage_threshold_stays_at_most_100(make_tab, config_file):
+    tab = make_tab(config_file)
+    tab.coverage_spin.setValue(150.0)
+    assert tab.coverage_spin.value() == 100.0
 
 
 # ---------------------------------------------------------------------------

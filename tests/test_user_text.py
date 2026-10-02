@@ -23,7 +23,7 @@ from iqdm.gui.settings_tab import SettingsTab
 
 FORBIDDEN = re.compile(
     r"DECISIONS|\bSPEC\b|\bD\d{1,2}\b|\bO\d{1,2}\b|\bMilestone\b"
-    r"|db_path|nas_roots|display_utc_offset_hours|user_version"
+    r"|db_path|nas_roots|display_utc_offset_hours|coverage_highlight_percent|user_version"
     r"|schema|journal|busy timeout|foreign keys",
     re.IGNORECASE,
 )
