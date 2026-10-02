@@ -6,6 +6,10 @@ These tests read the files under src/iqdm/ and parse them with ast. They write n
 - Only iqdm.db may import sqlite3, so all SQL lives in src/iqdm/db/.
 - Only iqdm.transfer.delete may call .unlink() or .rmdir(). Ruff's banned-API rule
   (TID251 in pyproject.toml) covers os.remove, shutil.rmtree and similar functions.
+- iqdm.transfer runs no subprocess: the app copies files itself (DECISIONS.md D48).
+- iqdm.transfer calls no function that replaces or moves a file: os.replace and the
+  shutil copy and move functions. The copy engine renames without replacing (D48).
+  A Path.replace() call cannot be told from str.replace() here; review covers it.
 """
 
 import ast
@@ -116,6 +120,74 @@ def test_delete_methods_only_in_delete_module():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         offenders += [f"{rel}:{line}" for line in delete_calls(tree)]
     assert offenders == [], f"unlink/rmdir called outside transfer/delete.py: {offenders}"
+
+
+TRANSFER = ("transfer/",)
+REPLACING = {"os": {"replace"}, "shutil": {"copy", "copy2", "copyfile", "copytree", "move"}}
+
+
+def replacing_calls(tree: ast.AST) -> list[int]:
+    """Line numbers of os.replace and the shutil copy and move functions, used or imported."""
+
+    def used(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.attr in REPLACING.get(node.value.id, set())
+        )
+
+    def imported(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.ImportFrom)
+            and node.module in REPLACING
+            and any(a.name in REPLACING[node.module] for a in node.names)
+        )
+
+    return [node.lineno for node in ast.walk(tree) if used(node) or imported(node)]
+
+
+def _transfer_trees() -> list[tuple[str, ast.AST]]:
+    return [
+        (_rel(p), ast.parse(p.read_text(encoding="utf-8"), filename=str(p)))
+        for p in _source_files()
+        if _allowed(_rel(p), TRANSFER)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("snippet", "expected"),
+    [
+        ("os.replace(a, b)", [1]),
+        ("from os import replace", [1]),
+        ("import shutil\nshutil.copy2(a, b)", [2]),
+        ("from shutil import move", [1]),
+        ("shutil.disk_usage(p)", []),
+        ("text.replace('a', 'b')", []),
+    ],
+)
+def test_replacing_call_detector(snippet, expected):
+    assert replacing_calls(ast.parse(snippet)) == expected
+
+
+def test_transfer_package_is_checked():
+    rels = [rel for rel, _ in _transfer_trees()]
+    assert "transfer/copier.py" in rels
+
+
+def test_transfer_runs_no_subprocess():
+    offenders = [
+        f"{rel}:{line}"
+        for rel, tree in _transfer_trees()
+        for line in module_imports(tree, "subprocess")
+    ]
+    assert offenders == [], f"subprocess imported in transfer/: {offenders}"
+
+
+def test_transfer_never_replaces_or_moves_files():
+    offenders = [
+        f"{rel}:{line}" for rel, tree in _transfer_trees() for line in replacing_calls(tree)
+    ]
+    assert offenders == [], f"replacing or moving call in transfer/: {offenders}"
 
 
 def test_sqlite3_imported_only_in_db():
