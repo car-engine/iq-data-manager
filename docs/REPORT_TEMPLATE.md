@@ -53,6 +53,11 @@ SPEC section 12 defines this milestone as: "<objective text, quoted>".
 
 <New DECISIONS.md entries (numbers and titles), or "None".>
 
+## Changes after the user's review
+
+<Optional. What the user asked for after trying the work, and the commits that did
+it. Leave the section out when there were none.>
+
 ## Changes from the plan
 
 <Each deviation from the approved plan and why, or "None".>

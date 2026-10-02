@@ -57,7 +57,7 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | Table | Purpose |
 | --- | --- |
 | `sites` | Selectable site names, unique case-insensitively. Users can add new ones. |
-| `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks. |
+| `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
 | `transfer_log` | History of moves, copies and archive checks, including time ranges, channel subset, hash mode and verification result. |
@@ -167,7 +167,9 @@ Behaviour:
   redraws the Log tab's times and keeps its form. A new `db_path` or new NAS roots
   clear the Log tab form and reload its lists. If the form holds input that is not
   saved, the app asks first, and No writes nothing. While the Log tab saves a
-  recording, the Settings tab does not save.
+  recording, the Settings tab does not save. The Viewer takes a new offset,
+  threshold or `db_path` at once and asks nothing, because it holds no input
+  (section 5).
 - **Overrides.** `--config` and `--db` keep working. With `--db`, Save writes
   `db_path` to the file, and the `--db` path stays in force for the current run. The
   tab says so.

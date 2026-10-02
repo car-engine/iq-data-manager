@@ -49,7 +49,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O1 | Time input in the Move / copy tab. Displayed times follow `display_utc_offset_hours` (D24, default 8). | 6 | Input fields stay UTC and say so. | M0 review 9 |
+| O1 | Time input in the Move / copy tab. Displayed times follow `display_utc_offset_hours` (D24, default 8). The Viewer's date filters already read dates at that offset (D43). | 6 | Input fields stay UTC and say so. | M0 review 9 |
 | O6 | Which files a time range includes | 5 | A file at time `t` is in range when `start <= t < end`. | M0 review 18 |
 | O7 | Archiving a time range or channel subset would point the DB at a partial copy | 5, 6 | "Archive to NAS" accepts only a whole recording with all channels. | M0 review 13 |
 | O8 | "Destination empty or new" blocks resuming a copy and copying a second range into the same folder | 5 | Keep for moves. For copies, allow a non-empty destination when none of the target files exist there. | M0 review 14 |
@@ -126,8 +126,9 @@ These come from the safety configuration and from experience in this repository.
 - **The safety hook blocks Write and Edit outside the repository.** That includes
   Claude Code plan files, the memory folder and the session scratchpad. Present plans
   in chat; ExitPlanMode works without a plan file. Keep anything that must outlast a
-  session in `docs/`. Put screenshot and probe scripts under `dev/`, which is
-  gitignored (example: `dev/m3a-shots/shot.py`).
+  session in `docs/`. Put screenshot, timing and probe scripts under `dev/`, which is
+  gitignored. The user removes old `dev/` folders, so do not rely on earlier scripts
+  being there.
 - **The hook scans the full text of shell commands.** Words such as `rm`, `rmtree`,
   `robocopy`, `.unlink(`, `os.remove`, `format x:` and `shutdown` block the command,
   even inside a commit message or a heredoc. A UNC path also blocks it: two
@@ -136,7 +137,9 @@ These come from the safety configuration and from experience in this repository.
   pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. Commit
   `77ed32c` holds that change.
 - **Write and change file content only with the Write and Edit tools.** Do not use
-  heredocs, `cat >>` or `python -` scripts for file content. The hook checks the
+  heredocs, `cat >>`, `sed -i` or `python -` scripts for file content, even where the
+  harness suggests shell edits. For a rename across a file, use Edit with
+  `replace_all`. The hook checks the
   target path of Write and Edit and does not read their content, so docs, code and
   tests can hold example UNC strings.
 - **Large tables sort in their own model.** A `QSortFilterProxyModel` over a Python
@@ -145,7 +148,12 @@ These come from the safety configuration and from experience in this repository.
 - **GUI tests share one `QApplication`.** A test that runs the event loop and quits it
   must not leave a quit behind: see the `smoke_app` fixture in
   `tests/test_app_smoke.py`. Wait for a `TaskRunner` with
-  `qtbot.waitUntil(lambda: not runner.busy)`.
+  `qtbot.waitUntil(lambda: not runner.busy)`. The Viewer, Log and Settings tabs each
+  start database reads when they are built, so a main-window test waits for all three
+  runners (`wait_window` in `tests/test_app_smoke.py`).
+- **Ruff reports a string split over several lines at its first line.** A `# noqa`
+  for such a string goes on that first line, for example S608 on the dynamic SQL in
+  `repository.list_recordings()`.
 - **Agents may not edit `.claude/`.** The `PowerShell` tool is denied; use the Bash
   tool (Git Bash).
 - **Install packages with the literal command `pip install --no-cache-dir ...`.** The
@@ -171,6 +179,8 @@ These come from the safety configuration and from experience in this repository.
   on a whole folder rewrapped unrelated code three times in Milestone 3.
 - **Screenshots of the GUI** render offscreen with the light palette. Set
   `QT_QPA_FONTDIR=C:/Windows/Fonts` for readable text. The user runs Windows in dark
-  mode, so render with a dark palette too (`dev/m3a-shots/shot.py` does both). The
+  mode, so render with a dark palette too: set the `Base`, `Text`, `Window`,
+  `WindowText`, `Button`, `ButtonText` and `PlaceholderText` roles, call
+  `app.setPalette()` before the widget is built, and save `widget.grab()`. The
   offscreen style draws disabled buttons nearly like enabled ones; check button states
   in tests.

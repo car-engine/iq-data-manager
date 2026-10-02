@@ -51,9 +51,10 @@ python -m iqdm --config my.toml
 ```
 
 The app reads `%APPDATA%\IQDataManager\config.toml`. Without the file, the app has
-no database, and the Log tab cannot save. Set the database file and the NAS
-locations in the Settings tab and click Save. The tab writes the file and keeps the previous one as
-`config.toml.bak` (DECISIONS.md D31, D35). The keys are in `docs/SPEC.md` section 4.
+no database: the Viewer lists nothing and the Log tab cannot save. Set the database
+file and the NAS locations in the Settings tab and click Save. The tab writes the
+file and keeps the previous one as `config.toml.bak` (DECISIONS.md D31, D35). The
+keys are in `docs/SPEC.md` section 4.
 
 The file can also be written by hand. A minimal file:
 

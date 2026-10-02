@@ -51,7 +51,7 @@ Rules for this file:
 | D31 | Writing config.toml with tomli-w | 2026-10-02, Milestone 3a | Active |
 | D32 | Name of the Settings milestone | 2026-10-02, Milestone 3a | Active |
 | D33 | Applying settings without a restart | 2026-10-02, Milestone 3a | Active |
-| D34 | Keys in the Settings tab | 2026-10-02, Milestone 3a | Active |
+| D34 | Keys in the Settings tab | 2026-10-02, Milestone 3a | Active; D39 added the coverage threshold |
 | D35 | Backup of config.toml | 2026-10-02, Milestone 3a | Active |
 | D36 | A wrong value in a key the Settings tab does not show | 2026-10-02, Milestone 3a | Active |
 | D37 | Status line for an older database | 2026-10-02, Milestone 3a | Replaced by D38 |
