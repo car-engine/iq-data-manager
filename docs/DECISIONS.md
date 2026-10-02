@@ -45,6 +45,7 @@ Rules for this file:
 | D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
 | D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
 | D27 | Warning for a folder named like a channel folder | 2026-10-03, Milestone 3 | Active |
+| D28 | RF chain repeats, overrides and conflicts | 2026-10-03, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -481,5 +482,29 @@ Closes issue 16 of the Milestone 3 report.
 - Longer numbers, such as a Unix time like `1790733600`, do not trigger it. Channel
   indices are small, and recording folders named by Unix time would otherwise all
   get the warning.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D28. RF chain repeats, overrides and conflicts
+
+The user asked how the Log tab treats repeated and conflicting RF chain rows. Before
+this decision it accepted any rows and saved them as typed.
+
+- A Recording row is the value for every channel that has no row of its own.
+- Rows compare by scope (Recording or one channel) and by name without letter case,
+  as the schema's `COLLATE NOCASE` does. Values and units compare without letter case
+  and without surrounding spaces.
+- Same scope and same name with different values is an error, because nobody can tell
+  which value is true. A different unit counts as a different value.
+- Same scope, same name and same value is information. The row is saved once.
+- A channel row with the same value as the Recording row is information ("repeats
+  the Recording value"). It is saved as typed.
+- A channel row with a different value from the Recording row is information: an
+  override for that channel. It is saved as typed.
+- A name already in the database is saved with its stored spelling. A new name takes
+  the spelling of its first row in the form. The checklist names each changed
+  spelling.
+- A misspelt name, such as "Antena", is a separate parameter. The app does not try to
+  catch spelling slips.
 
 Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.

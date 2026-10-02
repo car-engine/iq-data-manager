@@ -1159,3 +1159,119 @@ def test_channel_like_folder_is_not_reported_in_edit_mode(db_path, site_id, make
     )
     items = checklist(form, scan=None, location=location, original=original)
     assert not any("named like a channel folder" in t for t in texts(items))
+
+
+# ---------------------------------------------------------------------------
+# RF chain repeats, overrides and conflicts (DECISIONS.md D28)
+# ---------------------------------------------------------------------------
+
+
+def rf_items(make_recording, params, known=(), n_channels=3):
+    info = make_recording(n_channels=n_channels)
+    scan = scan_of(info)
+    form = form_for(scan, 1, params=params)
+    items = ready_items(form, scan, local_location(info), known_param_names=known)
+    return form, scan, info, items
+
+
+def test_users_example_gives_information_only(make_recording):
+    params = [
+        ParamInput(param="Antenna", value="Omni"),
+        ParamInput(param="Antenna", value="Omni", channel_index=0),
+        ParamInput(param="Antenna", value="LogP", channel_index=1),
+        ParamInput(param="antenna", value="Omni", channel_index=2),
+    ]
+    form, scan, info, items = rf_items(make_recording, params)
+    assert can_save(items)
+    infos = texts(items, ItemState.INFO)
+    assert "Ch 0: Antenna repeats the Recording value." in infos
+    assert "Ch 1: Antenna is LogP; the Recording value Omni applies to the other channels." in infos
+    assert "Ch 2: Antenna repeats the Recording value." in infos
+    assert "antenna will be saved as Antenna, the spelling already in use." in infos
+    rec = build_recording(form, scan=scan, location=local_location(info))
+    assert [(p.param, p.value, p.channel_index) for p in rec.params] == [
+        ("Antenna", "Omni", None),
+        ("Antenna", "Omni", 0),
+        ("Antenna", "LogP", 1),
+        ("Antenna", "Omni", 2),
+    ]
+
+
+@pytest.mark.parametrize("scope", [None, 1])
+def test_same_scope_with_different_values_is_an_error(make_recording, scope):
+    params = [
+        ParamInput(param="Antenna", value="Omni", channel_index=scope),
+        ParamInput(param="ANTENNA", value="LogP", channel_index=scope),
+    ]
+    _, _, _, items = rf_items(make_recording, params)
+    label = "Recording" if scope is None else "Ch 1"
+    assert f"{label}: Antenna has 2 different values (Omni, LogP). Keep one row." in texts(
+        items, ItemState.ERROR
+    )
+    assert not can_save(items)
+
+
+def test_a_different_unit_is_a_different_value(make_recording):
+    params = [
+        ParamInput(param="Gain", value="30", unit="dB"),
+        ParamInput(param="Gain", value="30", unit="dBm"),
+    ]
+    _, _, _, items = rf_items(make_recording, params)
+    assert "Recording: Gain has 2 different values (30 dB, 30 dBm). Keep one row." in texts(
+        items, ItemState.ERROR
+    )
+
+
+def test_same_scope_same_value_is_saved_once(make_recording):
+    params = [
+        ParamInput(param="Antenna", value="Omni", channel_index=1),
+        ParamInput(param="antenna", value=" omni ", channel_index=1),
+        ParamInput(param="SDR", value="X310"),
+    ]
+    form, scan, info, items = rf_items(make_recording, params)
+    assert can_save(items)
+    assert "Ch 1: Antenna appears 2 times with the same value. It is saved once." in texts(
+        items, ItemState.INFO
+    )
+    rec = build_recording(form, scan=scan, location=local_location(info))
+    assert [(p.param, p.value, p.channel_index) for p in rec.params] == [
+        ("Antenna", "Omni", 1),
+        ("SDR", "X310", None),
+    ]
+
+
+def test_spelling_already_in_the_database_wins(make_recording):
+    params = [ParamInput(param="lna GAIN", value="20", unit="dB", channel_index=0)]
+    form, scan, info, items = rf_items(make_recording, params, known=["LNA gain"])
+    assert "lna GAIN will be saved as LNA gain, the spelling already in use." in texts(
+        items, ItemState.INFO
+    )
+    rec = build_recording(
+        form, scan=scan, location=local_location(info), known_param_names=["LNA gain"]
+    )
+    assert rec.params[0].param == "LNA gain"
+
+
+def test_a_typo_is_a_separate_parameter(make_recording):
+    params = [
+        ParamInput(param="Antenna", value="Omni"),
+        ParamInput(param="Antena", value="LogP", channel_index=1),
+    ]
+    _, _, _, items = rf_items(make_recording, params)
+    assert can_save(items)
+    assert not any("Antena" in t or "Antenna" in t for t in texts(items))
+
+
+def test_incomplete_rows_are_left_to_the_to_do_items(make_recording):
+    params = [
+        ParamInput(param="Antenna", value="Omni"),
+        ParamInput(param="Antenna", value="", channel_index=1),
+    ]
+    _, _, _, items = rf_items(make_recording, params)
+    assert texts(items, ItemState.TODO) == ["RF chain row 2 (Antenna): enter a value"]
+    assert not any("Ch 1: Antenna" in t for t in texts(items))
+
+
+def test_param_spellings():
+    params = [ParamInput(param=" sdr ", value="x"), ParamInput(param="Mixer", value="y")]
+    assert entry.param_spellings(params, ["SDR"]) == {"sdr": "SDR", "mixer": "Mixer"}

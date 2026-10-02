@@ -159,6 +159,12 @@ Flow: choose folder, scan, review and complete fields, validate, save.
 5. **RF chain**: editable rows of applies-to (Recording / Ch N), parameter, value,
    unit. Parameter names autocomplete from values already in the DB.
 
+   A Recording row is the value for every channel without a row of its own (D28).
+   Names compare without letter case and are saved with the spelling already in the
+   DB. In one scope, the same name with two different values is an error, and a
+   repeated row is saved once. A channel row that repeats or overrides the Recording
+   value is information.
+
 Validation before save (shown as a checklist):
 
 - Folder scanned and contains at least one channel with files.

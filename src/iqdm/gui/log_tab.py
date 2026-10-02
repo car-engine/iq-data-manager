@@ -593,6 +593,7 @@ class LogTab(QWidget):
             duplicate_checked=self._duplicate_checked,
             original=self._original,
             scan_problems=self._scan_problems,
+            known_param_names=self._choices.param_names,
         )
         self.checklist.set_items(items)
         self.state_note.setText(entry.state_note(self._location, self._original))
@@ -790,6 +791,7 @@ class LogTab(QWidget):
                 scan=self._scan,
                 location=self._location,
                 original=self._original,
+                known_param_names=self._choices.param_names,
             )
         except ValueError as exc:
             self.show_message(f"Not saved: {exc}")

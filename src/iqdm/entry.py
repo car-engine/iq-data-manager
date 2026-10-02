@@ -653,6 +653,132 @@ def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem
     return items
 
 
+# ---------------------------------------------------------------------------
+# RF chain consistency (DECISIONS.md D28)
+# ---------------------------------------------------------------------------
+
+
+def _name_key(name: str) -> str:
+    """Parameter names compare without letter case, as the schema does (COLLATE NOCASE)."""
+    return name.strip().casefold()
+
+
+def _value_key(p: ParamInput) -> tuple[str, str]:
+    """Value and unit compare without letter case and surrounding spaces."""
+    return p.value.strip().casefold(), p.unit.strip().casefold()
+
+
+def _value_text(p: ParamInput) -> str:
+    value, unit = p.value.strip(), p.unit.strip()
+    return f"{value} {unit}" if unit else value
+
+
+def _scope_label(channel_index: int | None) -> str:
+    return "Recording" if channel_index is None else f"Ch {channel_index}"
+
+
+def _complete_params(params: Sequence[ParamInput]) -> list[ParamInput]:
+    """Rows with a name and a value. Incomplete rows are to-do items elsewhere."""
+    return [p for p in params if p.param.strip() and p.value.strip()]
+
+
+def param_spellings(
+    params: Sequence[ParamInput], known_names: Sequence[str] = ()
+) -> dict[str, str]:
+    """The spelling to save for each parameter name, keyed by the name without case.
+
+    A name already in the database keeps its stored spelling. A new name takes the
+    spelling of its first row in the form (D28).
+    """
+    spelling: dict[str, str] = {}
+    for name in known_names:
+        spelling.setdefault(_name_key(name), name.strip())
+    for p in _complete_params(params):
+        spelling.setdefault(_name_key(p.param), p.param.strip())
+    return spelling
+
+
+def _distinct_values(rows: Sequence[ParamInput]) -> list[ParamInput]:
+    seen: set[tuple[str, str]] = set()
+    distinct = []
+    for p in rows:
+        if _value_key(p) not in seen:
+            seen.add(_value_key(p))
+            distinct.append(p)
+    return distinct
+
+
+def _param_groups(
+    params: Sequence[ParamInput],
+) -> dict[tuple[int | None, str], list[ParamInput]]:
+    """Complete rows grouped by scope (None for Recording) and name without case."""
+    groups: dict[tuple[int | None, str], list[ParamInput]] = {}
+    for p in _complete_params(params):
+        groups.setdefault((p.channel_index, _name_key(p.param)), []).append(p)
+    return dict(
+        sorted(groups.items(), key=lambda kv: (kv[0][0] is not None, kv[0][0] or 0, kv[0][1]))
+    )
+
+
+def _param_consistency_items(form: EntryInput, known_names: Sequence[str]) -> list[ChecklistItem]:
+    """Repeats, overrides, conflicts and spelling of RF chain names (D28).
+
+    A Recording row is the value for every channel that has no row of its own.
+    """
+    spelling = param_spellings(form.params, known_names)
+    groups = _param_groups(form.params)
+    items: list[ChecklistItem] = []
+    for (scope, key), rows in groups.items():
+        name = spelling[key]
+        values = _distinct_values(rows)
+        if len(values) > 1:
+            listed = ", ".join(_value_text(v) for v in values)
+            items.append(
+                ChecklistItem(
+                    ItemState.ERROR,
+                    f"{_scope_label(scope)}: {name} has {len(values)} different values "
+                    f"({listed}). Keep one row.",
+                )
+            )
+        elif len(rows) > 1:
+            items.append(
+                ChecklistItem(
+                    ItemState.INFO,
+                    f"{_scope_label(scope)}: {name} appears {len(rows)} times with the same "
+                    "value. It is saved once.",
+                )
+            )
+    for (scope, key), rows in groups.items():
+        recording_rows = groups.get((None, key))
+        if scope is None or recording_rows is None:
+            continue
+        channel_values, recording_values = _distinct_values(rows), _distinct_values(recording_rows)
+        if len(channel_values) != 1 or len(recording_values) != 1:
+            continue  # a conflict, reported above
+        name, own, shared = spelling[key], channel_values[0], recording_values[0]
+        if _value_key(own) == _value_key(shared):
+            text = f"Ch {scope}: {name} repeats the Recording value."
+        else:
+            text = (
+                f"Ch {scope}: {name} is {_value_text(own)}; the Recording value "
+                f"{_value_text(shared)} applies to the other channels."
+            )
+        items.append(ChecklistItem(ItemState.INFO, text))
+    renamed = {
+        p.param.strip(): spelling[_name_key(p.param)]
+        for p in _complete_params(form.params)
+        if p.param.strip() != spelling[_name_key(p.param)]
+    }
+    for typed, saved in renamed.items():
+        items.append(
+            ChecklistItem(
+                ItemState.INFO,
+                f"{typed} will be saved as {saved}, the spelling already in use.",
+            )
+        )
+    return items
+
+
 def _spacing_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
     """File duration against the spacing of the file names (D22)."""
     spacing = typical_spacing(scan)
@@ -783,10 +909,12 @@ def checklist(
     duplicate_checked: bool = False,
     original: Recording | None = None,
     scan_problems: Sequence[str] = (),
+    known_param_names: Sequence[str] = (),
 ) -> list[ChecklistItem]:
     """The "Before saving" checklist (SPEC section 6). Saving needs no ERROR or TODO item.
 
     scan_problems holds the problems of a scan that stopped (ScanError.problems).
+    known_param_names are the RF chain names already in the database (D28).
 
     New entry: original is None, and scan, location and the duplicate check come from
     the scan worker. Edit mode (D16): original is the stored recording, scan is None
@@ -833,6 +961,7 @@ def checklist(
     indices = _channel_indices(scan, original)
     items += _required_items(form, indices)
     items += _param_items(form, indices)
+    items += _param_consistency_items(form, known_param_names)
     if location is not None and location.outside_nas_roots and original is None:
         items.append(
             ChecklistItem(
@@ -899,17 +1028,28 @@ def _channel_from_stored(ch: Channel, form: EntryInput) -> Channel:
     )
 
 
-def _params(form: EntryInput) -> list[Param]:
-    return [
-        Param(
-            param=p.param.strip(),
-            value=p.value.strip(),
-            unit=p.unit.strip() or None,
-            channel_index=p.channel_index,
+def _params(form: EntryInput, known_names: Sequence[str] = ()) -> list[Param]:
+    """RF chain rows to store (D28): one spelling per name, and a row repeated in the
+    same scope with the same value stored once."""
+    spelling = param_spellings(form.params, known_names)
+    seen: set[tuple[int | None, str, tuple[str, str]]] = set()
+    params = []
+    for p in form.params:
+        if p.is_blank:
+            continue
+        key = (p.channel_index, _name_key(p.param), _value_key(p))
+        if key in seen:
+            continue
+        seen.add(key)
+        params.append(
+            Param(
+                param=spelling.get(_name_key(p.param), p.param.strip()),
+                value=p.value.strip(),
+                unit=p.unit.strip() or None,
+                channel_index=p.channel_index,
+            )
         )
-        for p in form.params
-        if not p.is_blank
-    ]
+    return params
 
 
 def build_recording(
@@ -918,8 +1058,12 @@ def build_recording(
     scan: ScanResult | None,
     location: Location | None = None,
     original: Recording | None = None,
+    known_param_names: Sequence[str] = (),
 ) -> Recording:
     """The Recording to save. Call only when checklist() has no ERROR item.
+
+    known_param_names are the names already in the database; their spelling is kept
+    (D28).
 
     A new entry takes its channels from the scan and its location from `location`.
     In edit mode the location, archive state and archived_at stay as stored, and the
@@ -948,7 +1092,7 @@ def build_recording(
         storage_root=storage_root,
         rel_path=rel_path,
         channels=channels,
-        params=_params(form),
+        params=_params(form, known_param_names),
         file_duration_s=form.file_duration_s,
         dtype=form.dtype,
         iq_layout=form.iq_layout,

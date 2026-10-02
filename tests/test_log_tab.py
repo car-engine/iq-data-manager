@@ -976,3 +976,21 @@ def test_no_channel_folder_warning_for_a_normal_folder(make_tab, make_recording)
     tab.folder_edit.setText(info.root)
     tab.refresh_checklist()
     assert not tab.use_parent_button.isVisibleTo(tab)
+
+
+def test_rf_chain_names_take_the_stored_spelling(qtbot, make_tab, make_recording, db_path, site_id):
+    """DECISIONS.md D28: the tab passes the names in the database to the checklist and save."""
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, first, site_id)
+    tab.param_table.add_row(entry.ParamInput(param="LNA gain", value="20", unit="dB"))
+    save_and_wait(qtbot, tab)
+    assert tab._choices.param_names == ["LNA gain"]
+
+    logged_ready(qtbot, tab, second, site_id)
+    tab.param_table.add_row(entry.ParamInput(param="lna GAIN", value="25", unit="dB"))
+    assert "lna GAIN will be saved as LNA gain, the spelling already in use." in (
+        checklist_texts(tab, ItemState.INFO)
+    )
+    save_and_wait(qtbot, tab)
+    assert entry.load_recording(db_path, 2).params[0].param == "LNA gain"
