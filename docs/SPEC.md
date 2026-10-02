@@ -115,18 +115,28 @@ display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 
 
 ### Settings tab (Milestone 3a)
 
-A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29). It edits
-`config.toml` and shows the state of the database. Its open questions are O18, O19
-and O27–O31 in `docs/STATUS.md`; each has a proposed default.
+A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29, D30). It edits
+`config.toml` and shows the state of the database. Its open questions are O18, O27,
+O28, O30 and O31 in `docs/STATUS.md`; each has a proposed default.
 
 | Section | Fields and actions |
 | --- | --- |
-| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database (`connection.database_status()`); journal mode, foreign keys and busy timeout (`connection.connection_settings()`). A "Check connection" button runs the same checks on demand, on a read-only connection. |
-| Database upgrade | An "Upgrade database" button, shown only when the status is `needs upgrade` (O19). It names the backup file, asks for confirmation, and calls `migrations.upgrade()`, which writes and verifies a backup first and never overwrites one (D6). |
+| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version and status `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database (`connection.database_status()`); journal mode, foreign keys and busy timeout (`connection.connection_settings()`). A "Check connection" button runs the same checks on demand, on a read-only connection. |
 | NAS roots | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule: a folder under a NAS root is logged as archived (D14, D2). |
 | Display | `display_utc_offset_hours`, from −12 to 14 in steps of 0.25 (D24), with a preview such as "2026-09-30 10:00:00 (UTC+8)". |
-| Log tab | `data_file_extensions`, a new key with the default `[".dat", ".bin"]` (O18). The Log tab passes it to `scan_recording(extensions=...)`. |
 | About | The path of the configuration file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
+
+Not in the Settings tab (D30):
+
+- **"Upgrade database".** It waits for the first real schema migration (O19). Until
+  then the status line shows the schema version only. With status `needs upgrade`,
+  the line says that this version of the app cannot write to the database.
+- **Data-file extensions.** They stay fixed in code as `.dat` and `.bin`
+  (`scanner.DEFAULT_EXTENSIONS`, any letter case), so every PC scans a folder the same
+  way. A new extension comes with a new release.
+- **Creating a database.** The real catalogue comes from the legacy migration tool
+  (Milestone 7). An empty database comes from `tools/db_check.py create`. Milestone 7
+  adds an admin command-line option, `--create-db PATH`, for packaged builds.
 
 Keys that later milestones need are added to the tab by those milestones (O30): the
 coverage threshold (Milestone 4, O15); `default_local_copy_root`,
@@ -152,14 +162,14 @@ Behaviour:
   tab says so.
 - **Startup errors.** A configuration file that cannot be read opens the app on the
   Settings tab with the error shown, so the user can correct it there.
-- **Database files.** The Settings tab never creates a database (O29). It opens the
-  chosen file read-only, except for the confirmed upgrade.
+- **Database files.** The Settings tab never creates or changes a database (D30). It
+  opens the chosen file read-only.
 - **Architecture.** The writer and its validation live in `config.py` (no Qt). The tab
-  is `gui/settings_tab.py`. Database checks and the upgrade run in the `TaskRunner`,
-  because a database on the NAS can take seconds to answer.
-- **Tests.** Configuration files are written only under `tmp_path`. The upgrade test
-  uses a database under `tmp_path` and a test migration, as `tests/test_migrations.py`
-  does.
+  is `gui/settings_tab.py`. Database checks run in the `TaskRunner`, because a
+  database on the NAS can take seconds to answer.
+- **Tests.** Configuration files are written only under `tmp_path`. Database checks
+  use databases under `tmp_path`, including one set to an older and one to a newer
+  `user_version` for the status line.
 
 ## 5. Tab: Viewer
 
@@ -281,8 +291,9 @@ list of unrecognised entries.
   is a channel with no files.
 - Data files: names whose stem parses as a Unix timestamp (integer, optionally with a
   fractional part: `^\d+(\.\d+)?$`), extensions `.dat` and `.bin` in any letter case
-  (configurable). Other files, other subfolders, folders inside a channel folder and
-  symbolic links are ignored and listed as "unrecognised" in the result.
+  (fixed in code; DECISIONS.md D30). Other files, other subfolders, folders inside a
+  channel folder and symbolic links are ignored and listed as "unrecognised" in the
+  result.
 - Scan errors (D11): data files in the recording folder next to channel folders; a
   numeric folder name with a leading zero, such as `01`; two files in one channel with
   the same timestamp value. The scan stops and lists every such problem.
@@ -332,7 +343,8 @@ Linux (rsync) implementation later.
 - Time range or channel subset: a manifest file listing relative paths
   (`<sub_path>\<timestamp>.dat`), one per line, plus a PowerShell script that reads it
   and copies each file, creating folders as needed. This avoids command-length limits
-  and handles gaps naturally.
+  and handles gaps naturally. The database does not store the file extension, so how
+  the manifest gets the real file names is open (O32).
 - Scripts start with a comment header: operation, recording ID, range, channels,
   generated time, app version.
 - Both can be saved to disk for the user to run, or run by the app (subprocess with
@@ -463,15 +475,17 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 3. **Log tab**: form, scan worker, validation checklist, save and edit mode.
 
    3a. **Settings tab** (brought forward from Milestone 7; DECISIONS.md D29): config
-   writer, Settings tab with database status, check and upgrade, NAS roots, display
-   offset and data-file extensions, applying changes without a restart, tests.
+   writer, Settings tab with database status and check, NAS roots and display
+   offset, applying changes without a restart, tests (scope narrowed by D30).
 4. **Viewer tab**: filters, recordings table, channels, details, actions.
 5. **Transfer core**: selection, path checks, manifest, script generators, estimates,
    verification, delete module. No GUI. Heavily tested.
 6. **Move / copy tab**: GUI over the core, dry run, run with progress and cancel,
    transfer logging, archive state update, post-verification delete flow.
-7. **Packaging and migration**: PyInstaller build, legacy migration tool, short user
-   guide. The settings dialog and the config writer moved to Milestone 3a (D29).
+7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
+   it runs without Python), an admin option `--create-db PATH` for an empty database,
+   short user guide (D30). The settings dialog and the config writer moved to
+   Milestone 3a (D29).
 
 ## 13. Scope
 

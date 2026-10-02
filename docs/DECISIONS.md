@@ -47,6 +47,7 @@ Rules for this file:
 | D27 | Warning for a folder named like a channel folder | 2026-10-03, Milestone 3 | Active |
 | D28 | RF chain repeats, overrides and conflicts | 2026-10-03, Milestone 3 | Active |
 | D29 | Settings tab before the Viewer | 2026-10-03, after Milestone 3 | Active |
+| D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-03, after Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -526,3 +527,30 @@ Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
   O27–O31 in `docs/STATUS.md`. The milestone's working name is "Milestone 3a" (O27).
 
 Affects: SPEC sections 1, 4, 9 and 12.
+
+## D30. Settings scope: no upgrade button, fixed extensions, no database creation
+
+Narrows D29. Closes O29. The user decided all three points on 2026-10-03 after
+questions about the first scope.
+
+- **No "Upgrade database" button in Milestone 3a.** No migration exists yet: the
+  schema stays at version 1 until the first real database exists (D4). A button that
+  cannot appear cannot be tested by hand. The status line shows the schema version.
+  The button comes with the first real migration (O19). D6 is unchanged.
+- **Data-file extensions are not a setting.** They stay fixed in code as `.dat` and
+  `.bin`, in any letter case. `config.toml` is per machine, so a setting would let
+  two PCs scan one folder differently. That would also affect the Viewer's gap scan
+  and the transfer file lists. A new extension comes with a new release.
+- **The app does not create databases from the GUI.**
+  - The real shared catalogue comes once from the legacy migration tool
+    (Milestone 7).
+  - An empty database comes from `tools/db_check.py create` in development.
+  - Milestone 7 packages the migration tool and adds an admin option,
+    `--create-db PATH`, because the Python tools do not run on PCs without Python.
+  - Reason: a "Create" button lets two people make two catalogues and log into
+    different ones without noticing.
+- **New open item O32.** The database does not store the file extension, and SPEC
+  section 8 writes manifests as `<timestamp>.dat`. Transfers of `.bin` recordings
+  need the real file names.
+
+Affects: SPEC sections 4, 7, 8 and 12.
