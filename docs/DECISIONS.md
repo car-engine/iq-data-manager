@@ -54,7 +54,8 @@ Rules for this file:
 | D34 | Keys in the Settings tab | 2026-10-02, Milestone 3a | Active |
 | D35 | Backup of config.toml | 2026-10-02, Milestone 3a | Active |
 | D36 | A wrong value in a key the Settings tab does not show | 2026-10-02, Milestone 3a | Active |
-| D37 | Status line for an older database | 2026-10-02, Milestone 3a | Active |
+| D37 | Status line for an older database | 2026-10-02, Milestone 3a | Replaced by D38 |
+| D38 | Plain text for users; coloured database status | 2026-10-03, Milestone 3a | Active |
 
 ## D1. Sample types
 
@@ -661,3 +662,36 @@ Found while planning Milestone 3a. The user chose the proposed text on 2026-10-0
   database."
 
 Affects: SPEC section 4, `gui/settings_tab.py`.
+
+## D38. Plain text for users; coloured database status
+
+Replaces the wording of D37. The user decided on 2026-10-03, after the first look at
+the Settings tab.
+
+- **Principle.** Text in the app is for the people who log and move recordings. It
+  must make sense without the planning documents. It names no decision numbers, open
+  items, SPEC sections, config key names or database internals, and it does not
+  explain design decisions. CLAUDE.md, "User-facing text", states the rules for
+  agents. `tests/test_user_text.py` checks the Log and Settings tabs.
+- **Database status colours.** The status line has a colour and a mark:
+  - green ✓: the app can read and write the database ("Connected. The database is
+    ready to use.");
+  - amber ○ or ⓘ: no path yet, a check in progress, or a database from a newer app
+    version, which the app can read only;
+  - red ✗: the file is missing, is a folder, cannot be opened, is not an IQ Data
+    Manager database, or comes from an older app version.
+- **Technical detail in the tooltip.** The schema version, the version this app
+  expects, the journal mode, foreign keys and busy timeout appear in the tooltip of
+  the status line, for support. The visible line names none of them.
+- **Older database.** The line reads "This database comes from an older version of
+  IQ Data Manager. This version cannot open it." The meaning of D37 is unchanged:
+  the app can neither read nor write it.
+- **Other text in the Settings tab.** Labels drop the key names. "NAS roots" became
+  "NAS locations". The note on displayed times and decision D24 is removed; the
+  example line shows the effect. Error lines say what is wrong in plain words. The
+  technical text of a settings-file error is in the tooltip.
+- A wrong key that the tab does not show is still named, because the user corrects
+  it by hand (D36).
+
+Affects: CLAUDE.md, SPEC section 4, `gui/settings_tab.py`, `db/connection.py`,
+`tests/test_user_text.py`.

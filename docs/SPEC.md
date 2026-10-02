@@ -119,15 +119,16 @@ display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 
 ### Settings tab (Milestone 3a)
 
 A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29, D30). It edits
-`config.toml` and shows the state of the database. Decisions D31 to D37 settle its
-details. The milestone is "Milestone 3a" (D32).
+`config.toml` and shows the state of the database. Decisions D31 to D38 settle its
+details. The milestone is "Milestone 3a" (D32). Its text follows CLAUDE.md, "User-facing
+text": no key names, decision numbers or database internals on screen (D38).
 
 | Section | Fields and actions |
 | --- | --- |
-| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version and status `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database; journal mode, foreign keys and busy timeout (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
-| NAS roots | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule: a folder under a NAS root is logged as archived (D14, D2). |
-| Display | `display_utc_offset_hours`, from −12 to 14 in steps of 0.25 (D24), with a preview such as "2026-09-30T02:00:00Z is shown as 2026-09-30 10:00:00 (UTC+8)." |
-| About | The path of the configuration file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
+| Database | "Database file" (`db_path`), with Browse for an existing `.db` file. A status line in green, amber or red with a mark (D38): ready to use; no path, checking, or a newer database the app can only read; missing, a folder, unreadable, not an IQ Data Manager database, or an older database. The tooltip holds the schema version and connection settings (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
+| NAS locations | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule in plain words: folders under these locations count as already archived on the NAS (D14, D2). |
+| Display | "Show times at UTC offset" (`display_utc_offset_hours`), from −12 to 14 in steps of 0.25 (D24), with an example such as "2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8)." |
+| About | The path of the settings file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
 
 The tab shows these three keys only (D34). Keys that later milestones need are added
 to the tab by those milestones: the coverage threshold (Milestone 4, O15);
@@ -137,9 +138,8 @@ to the tab by those milestones: the coverage threshold (Milestone 4, O15);
 Not in the Settings tab (D30):
 
 - **"Upgrade database".** It waits for the first real schema migration (O19). Until
-  then the status line shows the schema version only. With status `needs upgrade`,
-  the line says that this version of the app cannot read or write the database
-  (D37).
+  then the status line reports the state only. With status `needs upgrade`, the line
+  is red and says that this version of the app cannot open the database (D37, D38).
 - **Data-file extensions.** They stay fixed in code as `.dat` and `.bin`
   (`scanner.DEFAULT_EXTENSIONS`, any letter case), so every PC scans a folder the same
   way. A new extension comes with a new release.
@@ -471,6 +471,8 @@ written to a report, not guessed. A later "Check archive" fills in counts and si
   colours against a light and a dark palette.
 - `tests/test_architecture.py` enforces the module rules in section 9 by reading the
   package source (DECISIONS.md D10).
+- `tests/test_user_text.py` checks the visible text of each tab for decision numbers,
+  SPEC references, config key names and database internals (DECISIONS.md D38).
 
 ## 12. Milestones
 

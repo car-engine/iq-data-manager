@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | Branch | `m3a-settings` |
-| Commits | `8298a97` to `a7e647f` (5 commits), plus the commit that adds this report and the documentation |
-| Tests | 728 passed, 2 skipped (`pytest`), `ruff check` clean |
-| Report date | 2026-10-02 |
+| Commits | `8298a97` to `a7e647f` (5 commits), `40a3e24` (report and documentation), `f8c29e4` (dates), `d673cd8` (plain text, D38), plus the commit that records D38 |
+| Tests | 736 passed, 2 skipped (`pytest`), `ruff check` clean |
+| Report date | 2026-10-02, updated 2026-10-03 after the user's first look (D38) |
 | Merge status | Not merged |
 
 ## Objectives against what was delivered
@@ -21,15 +21,39 @@ narrowed by D30)."
 | Settings tab with database status and check | Done | [settings_tab.py](../../src/iqdm/gui/settings_tab.py). The status line comes from the new `inspect_database()` in [connection.py](../../src/iqdm/db/connection.py), which opens the file read-only. The check runs in the `TaskRunner` when the tab opens, after Browse, when the path field loses focus and on "Check connection". |
 | NAS roots and display offset | Done | Add, Edit and Remove for `nas_roots`. A wrong root is shown in the error colour, with a tooltip and an error line. The offset spin box runs from −12 to 14 h in steps of 0.25, with a preview. |
 | applying changes without a restart | Done | [app.py](../../src/iqdm/app.py) asks before a Save that would clear Log tab input, then passes the new configuration to `LogTab.apply_config()` in [log_tab.py](../../src/iqdm/gui/log_tab.py) (D33). The status bar follows. A configuration error opens the app on the Settings tab. |
-| tests | Done | 101 new tests, all under `tmp_path`. See the table below. |
+| tests | Done | 109 new tests, all under `tmp_path`. See the table below. |
 
 | File | Tests | Covers |
 | --- | --- | --- |
 | [test_config.py](../../tests/test_config.py) | 40 more (79) | `read_config_data`, `settings_from_data`, `settings_errors`, `hidden_key_error`, `merge_settings`, `save_config`: missing folder, read back with UNC and non-ASCII paths, comments lost, first and later backups, leftover `.new` file, wrong value, failed rename, failed serialising, unreadable old file |
 | [test_connection.py](../../tests/test_connection.py) | 8 more (33) | `inspect_database` for current, newer, older, foreign, non-database, missing and folder paths; the file stays byte-identical |
-| [test_settings_tab.py](../../tests/test_settings_tab.py) | 36 (new) | Status line texts and offset preview; loading; no configuration path; checks on demand, on focus loss and after Browse; late check results dropped; NAS roots; offset range and steps; Save, keys kept, backup, answer No, failed write; wrong hidden key; unreadable file; Reload; `--db` and `--config` notes; Open folder; version; error colours in a light and a dark palette |
+| [test_settings_tab.py](../../tests/test_settings_tab.py) | 41 (new) | Status line states, texts and tooltips; amber while checking; green, amber and red in a light and a dark palette; offset example; loading; no configuration path; checks on demand, on focus loss and after Browse; late check results dropped; NAS roots; offset range and steps; Save, keys kept, backup, answer No, failed write; wrong hidden key; unreadable file; Reload; `--db` and `--config` notes; Open folder; version; error colours in a light and a dark palette |
 | [test_log_tab.py](../../tests/test_log_tab.py) | 8 more (66) | New offset in new-entry and edit mode keeps the form; new database clears the form and loads its lists; database path removed; new NAS roots; lists from the old database dropped; `has_unsaved_input()` |
 | [test_app_smoke.py](../../tests/test_app_smoke.py) | 9 more (21) | Four tabs; `config_path_for`; a bad configuration opens on the Settings tab; Save applies to the Log tab and the status bar; `--db` stays in force; Yes and No for unsaved Log tab input; no question for an offset change; no Save while the Log tab saves |
+| [test_user_text.py](../../tests/test_user_text.py) | 3 (new) | The visible text of the Log and Settings tabs holds no decision numbers, SPEC references, config key names or database internals (D38) |
+
+## Changes after the user's first look (2026-10-03)
+
+The user asked for three changes to the Settings tab and for a general principle:
+
+1. **Colour on the database status.** The line is green with ✓ when the database is
+   ready, amber with ○ or ⓘ when there is no path, a check is running or the database
+   comes from a newer app version, and red with ✗ when the app cannot use the file.
+   The colours are the checklist colours, which pass the contrast check in both
+   themes. `DatabaseInfo` gained a `problem` code, so the tab chooses its message
+   without parsing error text.
+2. **No database internals on screen.** "File found. Schema version 1, current.
+   Journal mode delete ..." became "Connected. The database is ready to use." The
+   schema version and connection settings are in the tooltip, as the user chose.
+3. **No design explanations.** The note "Displayed times only. The database stores
+   UTC (DECISIONS.md D24) ..." is removed. Labels lost their key names ("Database
+   file (db_path)" became "Database file"). "NAS roots" became "NAS locations". Error
+   lines use plain words, and the technical text of a settings-file error moved to
+   the tooltip.
+
+The principle is in CLAUDE.md, section "User-facing text", and in D38.
+`tests/test_user_text.py` checks it for the Log and Settings tabs. The Log tab
+already passed: its visible text held no such references.
 
 ## Decisions made
 
@@ -43,7 +67,9 @@ while planning, on 2026-10-02:
 - D34, keys in the Settings tab (closes O30).
 - D35, backup of `config.toml` (closes O31).
 - D36, a wrong value in a key the Settings tab does not show: Save stays disabled.
-- D37, status line for an older database: "cannot read or write".
+- D37, status line for an older database: "cannot read or write". Its wording is
+  replaced by D38.
+- D38, plain text for users and a coloured database status (2026-10-03).
 
 The user also approved the new branch and the new dependency, `tomli-w==1.2.0`.
 
@@ -94,10 +120,10 @@ The user also approved the new branch and the new dependency, `tomli-w==1.2.0`.
 2. **The status line checks the path in the field.** With `--db`, the run uses the
    `--db` path, but the status line checks the database path in the field. The note
    under the field names the `--db` path. Left unchanged.
-3. **Foreign keys and busy timeout describe the app's connection.** The status line
-   shows them as SPEC section 4 asks. They are always "on" and 5000 ms, because the app
-   sets them on every connection. Only the journal mode describes the file. Left
-   unchanged.
+3. **Foreign keys and busy timeout describe the app's connection.** They are always
+   "on" and 5000 ms, because the app sets them on every connection. Only the journal
+   mode describes the file. Since D38 all three appear only in the tooltip of the
+   status line.
 4. **Wrong dates in the documentation.** STATUS.md, D27 to D30 and the Milestone 3
    report gave 2026-10-03 for the Milestone 3 merge and the Settings decisions. The
    commits (`ce48c2c` to `77ed32c`) are dated 2026-10-02, UTC+8. The new entries D31
@@ -135,19 +161,19 @@ python -m iqdm --config dev/m3a-manual/config.toml
 
 | Step | Action | Expected |
 | --- | --- | --- |
-| 1 | Open the Settings tab. | Database path `...\current.db`, root `\\nas\recordings`, offset 8.00 h. Status: "File found. Schema version 1, current. Journal mode delete, foreign keys on, busy timeout 5000 ms." Save disabled. About names `config.toml` and says "Started with --config". |
-| 2 | Browse to `newer.db`, then `other.db`, then `notadb.db`. Type `absent.db` and press Tab. | "Schema version 3, too new ..."; "Not an IQ Data Manager database (schema version 0)"; "Cannot read the file as an SQLite database ..."; "The file was not found." Click "Reload from file" afterwards. |
-| 3 | Set the offset to 5.5. Then type 5.1. | Preview "2026-09-30 07:30:00 (UTC+5:30)". With 5.1, a red line about steps of 0.25 and Save disabled. |
+| 1 | Open the Settings tab. | Database path `...\current.db`, location `\\nas\recordings`, offset 8.00 h. Status in green: "✓ Connected. The database is ready to use." Its tooltip shows the schema version and connection settings. Save disabled. About names `config.toml` and says "Started with --config". |
+| 2 | Browse to `newer.db`, then `other.db`, then `notadb.db`. Type the path of a file that does not exist (`...\absent.db`) and press Tab. | Amber: "This database comes from a newer version of IQ Data Manager ..."; red: "This file is not an IQ Data Manager database." (twice); red: "Database file not found. Check the path and the network connection." Click "Reload from file" afterwards. |
+| 3 | Set the offset to 5.5. Then type 5.1. | Example "2026-09-30 02:00:00 UTC is shown as 2026-09-30 07:30:00 (UTC+5:30)." With 5.1, a red line "Use whole or quarter hours, for example 5.5 or 5.75." and Save disabled. |
 | 4 | Set the offset to 0 and Save. Open the Log tab. | No question. Labels read "Start (UTC)" and "End (UTC)". |
-| 5 | Add root `D:\data`. | The entry turns red. A line reads "nas_roots entry 'D:\data' is not a UNC path". Save disabled. Edit it to `\\nas2\iq`: Save enabled. Do not save yet. |
+| 5 | Add the location `D:\data`. | The entry turns red. A line reads "D:\data is not a network location. Use the form \\server\share." Save disabled. Edit it to `\\nas2\iq`: Save enabled. Do not save yet. |
 | 6 | In the Log tab, type remarks. In the Settings tab, Browse to `second.db` and Save. | A question about clearing the Log tab form. Answer No: nothing is written (`config.toml` unchanged in an editor). |
 | 7 | Save again and answer Yes. | The Log tab form is empty. Its site list shows "Site in second.db". The status bar names `second.db`. |
 | 8 | Open `config.toml` and `config.toml.bak` in an editor. | The comment is gone. `colour` and `storage_roots` are still there. The roots are `\\nas\recordings` and `\\nas2\iq`. The `.bak` file holds the file as it was before step 7. |
 | 9 | Click "Open folder". | Explorer opens `dev\m3a-manual`. |
 | 10 | Quit. Start with `--config dev/m3a-manual/bad.toml`. | The app opens on the Settings tab. A red line says that the file cannot be read. Save is enabled. Save: `bad.toml` is valid, and `bad.toml.bak` holds `db_path = `. |
-| 11 | Quit. Start with `--config dev/m3a-manual/hidden.toml`. | A red line names `network_speed_mb_s`. Save stays disabled after any change. Set the value to 50 in an editor and click "Reload from file": the line goes. |
+| 11 | Quit. Start with `--config dev/m3a-manual/hidden.toml`. | A red line says that the settings file has a wrong value that the tab does not show, and names `network_speed_mb_s` so that it can be fixed by hand (D36). Save stays disabled after any change. Set the value to 50 in an editor and click "Reload from file": the line goes. |
 | 12 | Quit. Start with `--config dev/m3a-manual/config.toml --db dev/m3a-manual/current.db`. Change the path to `second.db` and Save. | Both "Started with --db" notes appear. After Save, the status bar still names `current.db`, and the Log tab keeps its form. |
-| 13 | Repeat steps 1 and 5 in Windows light mode. | All text readable. Red marks readable. |
+| 13 | Repeat steps 1, 2 and 5 in Windows light mode. | All text readable. Green, amber and red lines readable. |
 
 ## Build output and files for the user to remove
 

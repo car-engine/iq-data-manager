@@ -76,6 +76,28 @@ The app itself will move and delete real data, so its code must follow these rul
 - Type hints on all public functions. Dataclasses for data passed between layers.
 - Run `pytest` and `ruff check` before declaring a task done.
 
+## User-facing text
+
+The people who use the app log and move recordings. They have not read the
+planning documents. Every label, message, tooltip, dialog and status line must make
+sense to them on its own (DECISIONS.md D38).
+
+- Say what the user sees, what it means for them and what to do next. "Database file
+  not found. Check the path and the network connection."
+- Do not show decision numbers (D24), open items (O18), SPEC sections, milestone
+  names, config key names (`db_path`) or database internals (schema version, journal
+  mode, PRAGMAs). They belong in code comments, docs and logs.
+- Do not explain design decisions in the app. A preview or an example usually shows
+  the user enough.
+- Technical detail that helps support may go in a tooltip of the line it explains.
+  The visible text stays plain.
+- A message may name a config key only when the user must correct that key in the
+  file by hand (D36).
+- Show a state by colour and by a mark or word, so it does not rest on colour alone.
+  Use the checklist colours, which are readable in light and dark mode.
+- `tests/test_user_text.py` checks the visible text of each tab. Add each new tab to
+  it. Before a GUI milestone ends, read every new string as a user would.
+
 ## Workflow
 
 - At the start of a session, read `docs/STATUS.md` and the latest report in

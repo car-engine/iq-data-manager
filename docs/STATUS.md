@@ -2,15 +2,17 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-02 (Milestone 3a).
+report. Last updated: 2026-10-03 (Milestone 3a, D38).
 
 ## Current state
 
 - Milestone 3a (Settings tab) is complete on branch `m3a-settings` and waits for the
   user's manual tests and merge approval. Report: [reports/M3a.md](reports/M3a.md).
-  Decisions D31–D37. The dates "2026-10-03" in older documents are corrected to
-  2026-10-02, the date of their commits (issue 4).
-- 728 tests pass and 2 skip on `m3a-settings`. One skip needs the symbolic-link
+  Decisions D31–D38. The dates "2026-10-03" in older documents are corrected to
+  2026-10-02, the date of their commits (issue 4). After the user's first look,
+  D38 made the tab's text plain and coloured the database status. CLAUDE.md now has
+  a section "User-facing text" that applies to every later tab.
+- 736 tests pass and 2 skip on `m3a-settings`. One skip needs the symbolic-link
   privilege; the other runs only off Windows. `ruff check` is clean.
 - Milestone 3 (Log tab) is merged into `main`. Report: [reports/M3.md](reports/M3.md).
   Decisions D14–D28.
@@ -71,7 +73,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D37). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D38). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
