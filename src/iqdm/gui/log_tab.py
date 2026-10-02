@@ -797,7 +797,7 @@ def scan_summary(scan: ScanResult) -> str:
     for c in scan.channels:
         if c.gaps:
             missing = sum(g.missing_seconds for g in c.gaps)
-            parts.append(f"ch {c.channel_index} has {missing:g} missing seconds")
+            parts.append(f"ch {c.channel_index} has {entry.missing_text(missing)}")
     return " · ".join(parts)
 
 

@@ -803,3 +803,11 @@ def test_add_site_strips_the_name(db_path):
     assert site.name == "New site"
     with open_db(db_path, readonly=True) as c:
         assert repo.find_site(c, "new site").id == site.id
+
+
+@pytest.mark.parametrize(
+    ("seconds", "text"),
+    [(1.0, "1 missing second"), (3.0, "3 missing seconds"), (0.5, "0.5 missing seconds")],
+)
+def test_missing_text(seconds, text):
+    assert entry.missing_text(seconds) == text

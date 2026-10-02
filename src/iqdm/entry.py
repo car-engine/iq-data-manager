@@ -167,6 +167,11 @@ def _plural(n: int, word: str, plural: str | None = None) -> str:
     return f"{n:,} {word if n == 1 else plural or word + 's'}"
 
 
+def missing_text(seconds: float) -> str:
+    """'1 missing second', '3 missing seconds', '0.5 missing seconds'."""
+    return f"{seconds:g} missing second{'' if seconds == 1 else 's'}"
+
+
 def _index_list(indices: Iterable[int]) -> str:
     return ", ".join(str(i) for i in indices)
 
@@ -437,7 +442,7 @@ def _gap_items(scan: ScanResult) -> list[ChecklistItem]:
             items.append(
                 ChecklistItem(
                     ItemState.INFO,
-                    f"Channel {ch.channel_index} has {missing:g} missing seconds in "
+                    f"Channel {ch.channel_index} has {missing_text(missing)} in "
                     f"{_plural(len(ch.gaps), 'gap')}. Gaps are information only.",
                 )
             )

@@ -194,7 +194,7 @@ def test_scan_fills_channel_table_and_times(qtbot, make_tab, make_recording):
     summary = tab.scan_summary.text()
     assert summary.startswith("Found channel folders 0 and 1 · 19 files")
     assert "2026-09-30 02:00:00 to 2026-09-30 02:00:10 UTC" in summary
-    assert "ch 1 has 1 missing seconds" in summary
+    assert "ch 1 has 1 missing second" in summary
     assert "Folder not already in the database" in checklist_texts(tab, ItemState.OK)
 
 
