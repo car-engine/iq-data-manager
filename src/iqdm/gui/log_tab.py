@@ -2,7 +2,8 @@
 
 SPEC section 6. The logic lives in iqdm.entry, which has no Qt. This module builds
 the form, runs scans and database work in a TaskRunner, and shows the checklist.
-Edit mode follows DECISIONS.md D16, times are UTC (D17), fc and fs are MHz (D19).
+Edit mode follows DECISIONS.md D16. Times are shown at the configured offset from UTC
+(D24). fc is MHz (D19); fs takes a unit, Hz by default (D25).
 """
 
 from collections.abc import Callable, Sequence
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -43,19 +45,8 @@ from iqdm.gui.workers import Task, TaskRunner
 from iqdm.location import DriveResolver, Location, LocationError, mapped_drive_unc, split_location
 from iqdm.models import Endianness, IqLayout, Recording, SampleType
 from iqdm.scan.scanner import ScanCancelled, ScanError, ScanResult, scan_recording
-from iqdm.timeutil import unix_to_iso
+from iqdm.timeutil import display_time, offset_label
 
-CHANNEL_HEADERS = (
-    "Ch",
-    "Folder",
-    "Band",
-    "fc (MHz)",
-    "fs (MHz)",
-    "Start (UTC)",
-    "End (UTC)",
-    "Files",
-    "Coverage",
-)
 REFRESH_DELAY_MS = 150  # checklist refresh after typing stops
 DEFAULT_FILE_DURATION_S = 1.0
 FS_FILLED_TOOLTIP = (
@@ -63,11 +54,28 @@ FS_FILLED_TOOLTIP = (
     "Type a value to replace it."
 )
 NO_DATABASE = "No database configured. Set db_path in the configuration file, or start with --db."
+FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
+READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 
 
-def utc_text(t: float | None) -> str:
-    """'2026-09-30 02:00:00' for a Unix time, '' for None. Always UTC (D17)."""
-    return "" if t is None else unix_to_iso(t).replace("T", " ").removesuffix("Z")
+def channel_headers(zone: str) -> tuple[str, ...]:
+    """Channel table headings, with times in the display zone such as 'UTC+8' (D24)."""
+    return (
+        "Ch",
+        "Folder",
+        "Band",
+        "fc (MHz)",
+        "fs",
+        f"Start ({zone})",
+        f"End ({zone})",
+        "Files",
+        "Coverage",
+    )
+
+
+def time_text(t: float | None, offset_hours: float) -> str:
+    """'2026-09-30 10:00:00' at the display offset, or '' for None (D24)."""
+    return "" if t is None else display_time(t, offset_hours)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,6 +110,8 @@ class LogTab(QWidget):
     ) -> None:
         super().__init__(parent)
         self.config = Config() if config is None else config
+        self._offset = self.config.display_utc_offset_hours
+        self._zone = offset_label(self._offset)
         self._resolve_drive = resolve_drive
         self.runner = TaskRunner(self) if runner is None else runner
 
@@ -203,8 +213,8 @@ class LogTab(QWidget):
         site_row.addWidget(self.add_site_button)
 
         grid = QGridLayout(box)
-        grid.addWidget(QLabel("Start (UTC) · from scan"), 0, 0)
-        grid.addWidget(QLabel("End (UTC) · from scan"), 0, 1)
+        grid.addWidget(QLabel(f"Start ({self._zone}) · from scan"), 0, 0)
+        grid.addWidget(QLabel(f"End ({self._zone}) · from scan"), 0, 1)
         grid.addWidget(QLabel("File duration"), 0, 2)
         grid.addWidget(QLabel("Logged by"), 0, 3)
         grid.addWidget(self.start_edit, 1, 0)
@@ -247,8 +257,9 @@ class LogTab(QWidget):
 
     def _build_channels(self) -> QGroupBox:
         box = QGroupBox("4 · Channels")
-        self.channel_table = QTableWidget(0, len(CHANNEL_HEADERS))
-        self.channel_table.setHorizontalHeaderLabels(CHANNEL_HEADERS)
+        headers = channel_headers(self._zone)
+        self.channel_table = QTableWidget(0, len(headers))
+        self.channel_table.setHorizontalHeaderLabels(headers)
         self.channel_table.verticalHeader().setVisible(False)
         self.channel_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents
@@ -329,7 +340,7 @@ class LogTab(QWidget):
                     channel_index=r.index,
                     band=r.band.currentText(),
                     fc_mhz=r.fc.text(),
-                    fs_mhz=r.fs.text(),
+                    fs_text=r.fs.text(),
                     fs_inferred=r.fs_auto,
                 )
                 for r in self._channel_rows
@@ -347,7 +358,7 @@ class LogTab(QWidget):
         self.cancel_scan()
         self._original = None
         self._clear_scan()
-        self.folder_edit.setReadOnly(False)
+        _set_read_only(self.folder_edit, False)
         self.browse_button.setEnabled(True)
         self.folder_edit.blockSignals(True)
         self.folder_edit.clear()
@@ -393,6 +404,7 @@ class LogTab(QWidget):
             return
         self.cancel_scan()
         self._clear_scan()
+        self._clear_message()
         self._set_channel_rows([], self._inputs_by_index())
         if not text.strip():
             self._set_location(None, None)
@@ -452,7 +464,8 @@ class LogTab(QWidget):
             band.addItems(self._choices.bands)
             band.setCurrentText(inp.band)
             fc = QLineEdit(inp.fc_mhz)
-            fs = QLineEdit(inp.fs_mhz)
+            fs = QLineEdit(inp.fs_text)
+            fs.setPlaceholderText("e.g. 10M")
             row = _ChannelRow(index=index, band=band, fc=fc, fs=fs, fs_auto=inp.fs_inferred)
             _mark_fs(row)
             band.currentTextChanged.connect(self._schedule_refresh)
@@ -469,8 +482,8 @@ class LogTab(QWidget):
                 None,
                 None,
                 None,
-                utc_text(start),
-                utc_text(end),
+                time_text(start, self._offset),
+                time_text(end, self._offset),
                 "" if n_files is None else f"{n_files:,}",
                 coverage,
             )
@@ -504,7 +517,7 @@ class LogTab(QWidget):
                 header_bytes=self.header_spin.value(),
                 file_duration_s=self.duration_spin.value(),
             )
-            row.fs.setText("" if result.fs_hz is None else entry.format_mhz(result.fs_hz))
+            row.fs.setText("" if result.fs_hz is None else entry.format_frequency(result.fs_hz))
             row.fs_auto = result.fs_hz is not None
             _mark_fs(row)
 
@@ -523,9 +536,9 @@ class LogTab(QWidget):
         self._fill_inferred_fs()
         starts = [c.start_unix for c in scan.channels if c.start_unix is not None]
         ends = [c.end_unix for c in scan.channels if c.end_unix is not None]
-        self.start_edit.setText(utc_text(min(starts)) if starts else "")
-        self.end_edit.setText(utc_text(max(ends)) if ends else "")
-        self.scan_summary.setText(scan_summary(scan))
+        self.start_edit.setText(time_text(min(starts), self._offset) if starts else "")
+        self.end_edit.setText(time_text(max(ends), self._offset) if ends else "")
+        self.scan_summary.setText(scan_summary(scan, self._offset))
 
     def _show_stored_channels(self, rec: Recording) -> None:
         self._set_channel_rows(
@@ -535,8 +548,8 @@ class LogTab(QWidget):
             ],
             {c.channel_index: c for c in entry.input_from_recording(rec).channels},
         )
-        self.start_edit.setText(utc_text(rec.start_unix))
-        self.end_edit.setText(utc_text(rec.end_unix))
+        self.start_edit.setText(time_text(rec.start_unix, self._offset))
+        self.end_edit.setText(time_text(rec.end_unix, self._offset))
 
     # =====================================================================
     # Checklist
@@ -656,6 +669,7 @@ class LogTab(QWidget):
                 return ScanOutcome(scan=scan, db_error=str(exc))
             return ScanOutcome(scan=scan, logged_id=logged, duplicate_checked=True)
 
+        self._clear_message()
         self.scan_summary.setText("Scanning...")
         self._scan_task = self.runner.start(
             work,
@@ -806,12 +820,28 @@ class LogTab(QWidget):
         self.show_message(f"Saved as recording {recording_id}.")
         self.reload_choices()
         self.refresh_checklist()
+        details = ""
+        if self._location is not None:
+            details = (
+                f"\n\nFolder: {self._location.full_path}"
+                f"\nArchive state: {self._location.archive_state}"
+            )
+        QMessageBox.information(
+            self, "Recording saved", f"Saved as recording {recording_id}.{details}"
+        )
 
     def _saved_edit(self, recording_id: int | None) -> None:
         self._saving = False
         self.show_message(f"Saved changes to recording {recording_id}.")
         if recording_id is not None:
             self.load_recording(recording_id, message=self.message_label.text())
+        QMessageBox.information(
+            self, "Recording saved", f"Saved changes to recording {recording_id}."
+        )
+
+    def _clear_message(self) -> None:
+        """Drop a message about an earlier folder or save."""
+        self.show_message("" if self.config.db_path else NO_DATABASE)
 
     def _save_failed(self, exc: Exception) -> None:
         self._saving = False
@@ -847,7 +877,7 @@ class LogTab(QWidget):
         self.folder_edit.blockSignals(True)
         self.folder_edit.setText(location.full_path)
         self.folder_edit.blockSignals(False)
-        self.folder_edit.setReadOnly(True)
+        _set_read_only(self.folder_edit, True)
         self.browse_button.setEnabled(False)
         self._set_location(location, None)
         self._set_duration(form.file_duration_s)
@@ -873,8 +903,11 @@ class LogTab(QWidget):
 # =========================================================================
 
 
-def scan_summary(scan: ScanResult) -> str:
-    """One line about a scan, for example 'Found channel folders 0 and 1 · 20 files · ...'."""
+def scan_summary(scan: ScanResult, offset_hours: float = 0.0) -> str:
+    """One line about a scan, for example 'Found channel folders 0 and 1 · 20 files · ...'.
+
+    Times are shown at offset_hours from UTC (D24).
+    """
     if not scan.channels:
         return "No channel folders and no data files found."
     parts = []
@@ -892,7 +925,9 @@ def scan_summary(scan: ScanResult) -> str:
     starts = [c.start_unix for c in scan.channels if c.start_unix is not None]
     ends = [c.end_unix for c in scan.channels if c.end_unix is not None]
     if starts and ends:
-        parts.append(f"{utc_text(min(starts))} to {utc_text(max(ends))} UTC")
+        first = time_text(min(starts), offset_hours)
+        last = time_text(max(ends), offset_hours)
+        parts.append(f"{first} to {last} {offset_label(offset_hours)}")
     for c in scan.channels:
         if c.gaps:
             missing = sum(g.missing_seconds for g in c.gaps)
@@ -901,9 +936,21 @@ def scan_summary(scan: ScanResult) -> str:
 
 
 def _read_only() -> QLineEdit:
+    """A line edit the app fills in, with a grey background and a tooltip."""
     edit = QLineEdit()
-    edit.setReadOnly(True)
+    _set_read_only(edit, True)
     return edit
+
+
+def _set_read_only(edit: QLineEdit, read_only: bool) -> None:
+    """Read-only fields take the window colour as background, so they look inactive."""
+    edit.setReadOnly(read_only)
+    palette = edit.palette()
+    base = edit.style().standardPalette().color(QPalette.ColorRole.Base)
+    window = edit.style().standardPalette().color(QPalette.ColorRole.Window)
+    palette.setColor(QPalette.ColorRole.Base, window if read_only else base)
+    edit.setPalette(palette)
+    edit.setToolTip(READ_ONLY_TOOLTIP if read_only else "")
 
 
 def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness]) -> QComboBox:
@@ -916,7 +963,7 @@ def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness])
 def _mark_fs(row: _ChannelRow) -> None:
     """Italic text and a tooltip on an fs value filled in from the file size (D21)."""
     row.fs.setStyleSheet("font-style: italic;" if row.fs_auto else "")
-    row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else "")
+    row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else FS_TOOLTIP)
 
 
 def _cell(text: str) -> QTableWidgetItem:

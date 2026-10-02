@@ -7,7 +7,7 @@ from importlib import resources
 
 import pytest
 
-from iqdm import models
+from iqdm import models, timeutil
 from iqdm.models import Channel
 from iqdm.timeutil import iso_to_unix, unix_to_iso, utc_now_iso
 
@@ -123,3 +123,19 @@ def test_envelope():
     assert models.envelope([ch(start=2, end=8), ch(start=0, end=6, index=1)]) == (0, 8)
     with pytest.raises(ValueError, match="at least one channel"):
         models.envelope([])
+
+
+@pytest.mark.parametrize(
+    ("hours", "label"),
+    [(0, "UTC"), (8, "UTC+8"), (5.5, "UTC+5:30"), (-3.5, "UTC-3:30"), (12.75, "UTC+12:45")],
+)
+def test_offset_label(hours, label):
+    assert timeutil.offset_label(hours) == label
+
+
+def test_display_time_uses_the_offset_and_ignores_the_pc_time_zone():
+    t = 1790733600.9  # 2026-09-30T02:00:00.9Z
+    assert timeutil.display_time(t, 0) == "2026-09-30 02:00:00"
+    assert timeutil.display_time(t, 8) == "2026-09-30 10:00:00"
+    assert timeutil.display_time(t, -3.5) == "2026-09-29 22:30:00"
+    assert timeutil.display_time(1790784000, 8) == "2026-10-01 00:00:00"  # crosses midnight

@@ -9,6 +9,7 @@ D16 (edit mode) and D19 (input in MHz).
 import getpass
 import itertools
 import math
+import re
 import statistics
 from collections import Counter
 from collections.abc import Iterable, Sequence
@@ -69,15 +70,16 @@ class ChecklistItem:
 
 @dataclass(kw_only=True)
 class ChannelInput:
-    """What the user typed for one channel. fc and fs are MHz text (D19).
+    """What the user typed for one channel.
 
+    fc is MHz text (D19). fs is text with an optional unit, Hz by default (D25).
     fs_inferred is True while fs holds the value worked out from the file size (D21).
     """
 
     channel_index: int
     band: str = ""
     fc_mhz: str = ""
-    fs_mhz: str = ""
+    fs_text: str = ""
     fs_inferred: bool = False
 
 
@@ -164,6 +166,54 @@ def parse_mhz(text: str) -> float:
 def format_mhz(hz: float) -> str:
     """Hz as MHz text without trailing zeros: 145800000.0 gives '145.8'."""
     return format(Decimal(repr(float(hz))).scaleb(-6).normalize(), "f")
+
+
+# Units accepted in the fs field, with their power of ten (DECISIONS.md D25).
+# Letter case matters: 'm' would read as milli, so only 'M' means mega.
+FREQUENCY_UNITS: dict[str, int] = {
+    "": 0,
+    "Hz": 0,
+    "k": 3,
+    "kHz": 3,
+    "M": 6,
+    "MHz": 6,
+    "G": 9,
+    "GHz": 9,
+}
+FREQUENCY_HELP = "a number in Hz, or with k, kHz, M, MHz, G or GHz, for example 12.5k or 10 MHz"
+_FREQUENCY_RE = re.compile(r"^([0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+\.)\s*([A-Za-z]*)$")
+
+
+def parse_frequency(text: str) -> float:
+    """fs text to Hz (D25). No unit means Hz. '100k', '100 kHz', '1.5M', '2 GHz'.
+
+    The conversion goes through Decimal, so '12.5k' gives exactly 12500.0. Raises
+    ValueError with a short reason ('is empty', 'is not understood: ...', 'must be
+    positive: ...').
+    """
+    clean = text.strip()
+    if not clean:
+        raise ValueError("is empty")
+    match = _FREQUENCY_RE.match(clean)
+    if match is None or match.group(2) not in FREQUENCY_UNITS:
+        raise ValueError(f"is not understood: {clean!r}. Enter {FREQUENCY_HELP}")
+    value = Decimal(match.group(1)).scaleb(FREQUENCY_UNITS[match.group(2)])
+    if value <= 0:
+        raise ValueError(f"must be positive: {clean!r}")
+    return float(value)
+
+
+def format_frequency(hz: float) -> str:
+    """Hz as text in the largest unit that keeps the number at 1 or more (D25).
+
+    1000.0 gives '1 kHz', 12500.0 gives '12.5 kHz', 50e6 gives '50 MHz', 500.0 gives
+    '500 Hz'. parse_frequency() reads every result back to the same value.
+    """
+    value = Decimal(repr(float(hz)))
+    for unit, power in (("GHz", 9), ("MHz", 6), ("kHz", 3)):
+        if abs(value) >= Decimal(10) ** power:
+            return f"{format(value.scaleb(-power).normalize(), 'f')} {unit}"
+    return f"{format(value.normalize(), 'f')} Hz"
 
 
 def format_size(n_bytes: int) -> str:
@@ -334,7 +384,7 @@ def input_from_recording(rec: Recording) -> EntryInput:
                 channel_index=c.channel_index,
                 band=c.band or "",
                 fc_mhz=format_mhz(c.fc_hz),
-                fs_mhz=format_mhz(c.fs_hz),
+                fs_text=format_frequency(c.fs_hz),
             )
             for c in rec.channels
         ],
@@ -379,9 +429,10 @@ def state_note(location: Location | None, original: Recording | None) -> str:
         return ""
     if location.archive_state is ArchiveState.ARCHIVED:
         return (
-            "Saved with state archived. The transfer log marks it as not verified against a source."
+            "Archive state on save: archived. The transfer log will mark it as not verified "
+            "against a source."
         )
-    return "Saved with state local. Archive it to the NAS from the Move / copy tab."
+    return "Archive state on save: local. Archive it to the NAS later from the Move / copy tab."
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +453,7 @@ def _fs_hz(form: EntryInput, index: int) -> float | None:
     if inp is None:
         return None
     try:
-        return parse_mhz(inp.fs_mhz)
+        return parse_frequency(inp.fs_text)
     except ValueError:
         return None
 
@@ -542,25 +593,24 @@ def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistI
         items.append(ChecklistItem(ItemState.ERROR, "File duration must be positive"))
     if form.header_bytes < 0:
         items.append(ChecklistItem(ItemState.ERROR, "Header bytes must be 0 or more"))
-    for label in ("fc", "fs"):
+    fields = (
+        ("fc (MHz)", lambda inp: inp.fc_mhz, parse_mhz),
+        ("fs", lambda inp: inp.fs_text, parse_frequency),
+    )
+    for label, text_of, parse in fields:
         empty = []
         for index in indices:
-            inp = form.channel(index) or ChannelInput(channel_index=index)
-            text = inp.fc_mhz if label == "fc" else inp.fs_mhz
+            text = text_of(form.channel(index) or ChannelInput(channel_index=index))
             if not text.strip():
                 empty.append(index)
                 continue
             try:
-                parse_mhz(text)
+                parse(text)
             except ValueError as exc:
-                items.append(
-                    ChecklistItem(ItemState.ERROR, f"Channel {index}: {label} (MHz) {exc}")
-                )
+                items.append(ChecklistItem(ItemState.ERROR, f"Channel {index}: {label} {exc}"))
         if empty:
             items.append(
-                ChecklistItem(
-                    ItemState.TODO, f"Enter {label} (MHz) for channel {_index_list(empty)}"
-                )
+                ChecklistItem(ItemState.TODO, f"Enter {label} for channel {_index_list(empty)}")
             )
     if not items:
         return [ChecklistItem(ItemState.OK, "Required fields filled")]
@@ -642,11 +692,13 @@ def _fs_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
     filled: dict[tuple[str, int | None], list[int]] = {}
     for ch in scan.channels:
         inp = form.channel(ch.channel_index)
-        if inp is not None and inp.fs_inferred and inp.fs_mhz.strip():
-            filled.setdefault((inp.fs_mhz.strip(), typical_file_bytes(ch)), []).append(
-                ch.channel_index
-            )
-        elif (inp is None or not inp.fs_mhz.strip()) and ch.files:
+        if inp is not None and inp.fs_inferred and inp.fs_text.strip():
+            try:
+                fs_text = format_frequency(parse_frequency(inp.fs_text))
+            except ValueError:
+                fs_text = inp.fs_text.strip()
+            filled.setdefault((fs_text, typical_file_bytes(ch)), []).append(ch.channel_index)
+        elif (inp is None or not inp.fs_text.strip()) and ch.files:
             result = infer_fs(
                 ch,
                 dtype=form.dtype,
@@ -668,7 +720,7 @@ def _fs_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
             ChecklistItem(
                 ItemState.INFO,
                 f"fs filled in from the file size for channel {_index_list(indices)}: "
-                f"{fs_text} MHz ({size_text}{form.file_duration_s:g} s file, {form.dtype}, "
+                f"{fs_text} ({size_text}{form.file_duration_s:g} s file, {form.dtype}, "
                 f"{_header_text(form.header_bytes)}). Check it against the recording plan.",
             ),
         )
@@ -684,7 +736,7 @@ def _gap_items(scan: ScanResult) -> list[ChecklistItem]:
                 ChecklistItem(
                     ItemState.INFO,
                     f"Channel {ch.channel_index} has {missing_text(missing)} in "
-                    f"{_plural(len(ch.gaps), 'gap')}. Gaps are information only.",
+                    f"{_plural(len(ch.gaps), 'gap')}. Ignore this if the gaps are expected.",
                 )
             )
     return items
@@ -804,7 +856,7 @@ def _channel_from_scan(ch: ChannelScan, form: EntryInput) -> Channel:
         sub_path=ch.sub_path,
         band=inp.band.strip() or None,
         fc_hz=parse_mhz(inp.fc_mhz),
-        fs_hz=parse_mhz(inp.fs_mhz),
+        fs_hz=parse_frequency(inp.fs_text),
         start_unix=ch.start_unix,
         end_unix=ch.end_unix,
         n_files=ch.n_files,
@@ -818,7 +870,7 @@ def _channel_from_stored(ch: Channel, form: EntryInput) -> Channel:
         ch,
         band=inp.band.strip() or None,
         fc_hz=parse_mhz(inp.fc_mhz),
-        fs_hz=parse_mhz(inp.fs_mhz),
+        fs_hz=parse_frequency(inp.fs_text),
     )
 
 

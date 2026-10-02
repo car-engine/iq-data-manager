@@ -52,7 +52,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O1 | Display time zone. The Viewer shows "start (UTC+8)", CLAUDE.md forbids local time, the Move / copy tab takes UTC input. The Log tab shows UTC (D17). | 4, 6 | Store UTC. Config key `display_utc_offset_hours = 8`. Every displayed time shows its offset. Input fields stay UTC. | M0 review 9 |
+| O1 | Time input in the Move / copy tab. Displayed times follow `display_utc_offset_hours` (D24, default 8). | 6 | Input fields stay UTC and say so. | M0 review 9 |
 | O6 | Which files a time range includes | 5 | A file at time `t` is in range when `start <= t < end`. | M0 review 18 |
 | O7 | Archiving a time range or channel subset would point the DB at a partial copy | 5, 6 | "Archive to NAS" accepts only a whole recording with all channels. | M0 review 13 |
 | O8 | "Destination empty or new" blocks resuming a copy and copying a second range into the same folder | 5 | Keep for moves. For copies, allow a non-empty destination when none of the target files exist there. | M0 review 14 |

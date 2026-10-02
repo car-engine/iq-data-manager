@@ -131,3 +131,20 @@ def test_default_path_needs_appdata():
 )
 def test_is_unc_path(text, expected):
     assert is_unc_path(text) is expected
+
+
+def test_display_offset_defaults_to_8_hours(tmp_path):
+    assert load_config(tmp_path / "absent.toml").display_utc_offset_hours == 8.0
+
+
+@pytest.mark.parametrize(("text", "hours"), [("0", 0.0), ("5.5", 5.5), ("-3.75", -3.75)])
+def test_display_offset_is_read(tmp_path, text, hours):
+    path = write(tmp_path, f"display_utc_offset_hours = {text}")
+    assert load_config(path).display_utc_offset_hours == hours
+
+
+@pytest.mark.parametrize("text", ["15", "-13", "8.1", "'8'"])
+def test_display_offset_must_be_a_real_offset(tmp_path, text):
+    path = write(tmp_path, f"display_utc_offset_hours = {text}")
+    with pytest.raises(ConfigError, match="display_utc_offset_hours"):
+        load_config(path)

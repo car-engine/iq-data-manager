@@ -39,7 +39,7 @@ from iqdm.scan.scanner import ChannelScan, DataFile, ScanResult, scan_recording
 from make_fixtures import ChannelSpec
 
 T0 = 1790733600  # 2026-09-30T02:00:00Z
-FS_MHZ = "0.001"  # make_fixtures default: 1 kS/s, int16, 4000 bytes per 1 s file
+FS_TEXT = "1k"  # make_fixtures default: 1 kS/s, int16, 4000 bytes per 1 s file
 NAS = r"\\nas\recordings"
 NOW = "2026-10-02T09:00:00Z"
 
@@ -63,7 +63,7 @@ def form_for(scan, site_id: int | None, **kw) -> EntryInput:
         "logged_by": "userA",
         "site_id": site_id,
         "channels": [
-            ChannelInput(channel_index=c.channel_index, band="VHF", fc_mhz="145.8", fs_mhz=FS_MHZ)
+            ChannelInput(channel_index=c.channel_index, band="VHF", fc_mhz="145.8", fs_text=FS_TEXT)
             for c in scan.channels
         ],
     }
@@ -272,7 +272,7 @@ def test_wrong_fs_is_a_size_error(make_recording):
     info = make_recording()
     scan = scan_of(info)
     form = form_for(scan, 1)
-    form.channels[0].fs_mhz = "0.002"
+    form.channels[0].fs_text = "2k"
     items = ready_items(form, scan, local_location(info))
     assert any(
         "differ from the expected size of 8000 bytes" in t for t in texts(items, ItemState.ERROR)
@@ -299,7 +299,7 @@ def test_fs_times_duration_not_whole_is_an_error(make_recording):
     info = make_recording()
     scan = scan_of(info)
     form = form_for(scan, 1)
-    form.channels[0].fs_mhz = "0.0010005"
+    form.channels[0].fs_text = "1000.5"
     items = ready_items(form, scan, local_location(info))
     assert any("whole number of samples" in t for t in texts(items, ItemState.ERROR))
 
@@ -319,7 +319,7 @@ def test_different_fs_per_channel_gives_a_general_size_line(tmp_path):
         unrecognised=(),
     )
     form = form_for(scan, 1)
-    form.channels[1].fs_mhz = "0.002"
+    form.channels[1].fs_text = "2k"
     items = ready_items(form, scan, split_location(str(tmp_path / "rec")))
     assert can_save(items)
     assert f"File sizes match fs {TIMES} 4 bytes in every channel" in texts(items, ItemState.OK)
@@ -330,8 +330,9 @@ def test_gaps_are_information(make_recording):
     scan = scan_of(info)
     items = ready_items(form_for(scan, 1), scan, local_location(info))
     assert can_save(items)
-    assert "Channel 1 has 3 missing seconds in 1 gap. Gaps are information only." in texts(
-        items, ItemState.INFO
+    assert (
+        "Channel 1 has 3 missing seconds in 1 gap. Ignore this if the gaps are expected."
+        in texts(items, ItemState.INFO)
     )
 
 
@@ -369,10 +370,15 @@ def test_missing_required_field(make_recording, change, state, message):
     ("field", "text", "state", "message"),
     [
         ("fc_mhz", "", ItemState.TODO, "Enter fc (MHz) for channel 0"),
-        ("fs_mhz", " ", ItemState.TODO, "Enter fs (MHz) for channel 0"),
+        ("fs_text", " ", ItemState.TODO, "Enter fs for channel 0"),
         ("fc_mhz", "-1", ItemState.ERROR, "Channel 0: fc (MHz) must be positive: '-1'"),
-        ("fs_mhz", "x", ItemState.ERROR, "Channel 0: fs (MHz) is not a number: 'x'"),
-        ("fs_mhz", "0", ItemState.ERROR, "Channel 0: fs (MHz) must be positive: '0'"),
+        (
+            "fs_text",
+            "x",
+            ItemState.ERROR,
+            f"Channel 0: fs is not understood: 'x'. Enter {entry.FREQUENCY_HELP}",
+        ),
+        ("fs_text", "0", ItemState.ERROR, "Channel 0: fs must be positive: '0'"),
     ],
 )
 def test_channel_frequencies_are_required_and_positive(make_recording, field, text, state, message):
@@ -396,7 +402,7 @@ def test_empty_fields_are_grouped_into_one_to_do_line_each(make_recording):
     assert texts(items, ItemState.TODO) == [
         "Choose a site",
         "Enter fc (MHz) for channel 0, 1, 2, 3",
-        "Enter fs (MHz) for channel 0, 1, 2, 3",
+        "Enter fs for channel 0, 1, 2, 3",
     ]
     assert texts(items, ItemState.ERROR) == []
 
@@ -628,7 +634,7 @@ def test_input_from_recording_round_trip(db_path, site_id, make_recording):
     )
     form = entry.input_from_recording(original)
     assert form.channels[0] == ChannelInput(
-        channel_index=0, band="VHF", fc_mhz="145.8", fs_mhz="0.001"
+        channel_index=0, band="VHF", fc_mhz="145.8", fs_text="1 kHz"
     )
     assert form.params == [
         ParamInput(param="SDR", value="X310", unit="", channel_index=None),
@@ -683,7 +689,7 @@ def test_edit_without_rescan_saves_metadata(db_path, site_id, make_recording):
 @pytest.mark.parametrize(
     "change",
     [
-        lambda f: setattr(f.channels[0], "fs_mhz", "0.002"),
+        lambda f: setattr(f.channels[0], "fs_text", "2k"),
         lambda f: setattr(f, "dtype", SampleType.INT8),
         lambda f: setattr(f, "header_bytes", 16),
         lambda f: setattr(f, "file_duration_s", 2.0),
@@ -778,7 +784,7 @@ def test_rescan_that_adds_a_channel_needs_its_frequencies(db_path, site_id, make
     form = entry.input_from_recording(original)
     items = checklist(form, scan=two, original=original)
     assert "The rescan adds channel 1." in texts(items, ItemState.INFO)
-    assert "Enter fs (MHz) for channel 1" in texts(items, ItemState.TODO)
+    assert "Enter fs for channel 1" in texts(items, ItemState.TODO)
 
 
 def test_save_edit_needs_an_id(make_recording, db_path):
@@ -792,8 +798,8 @@ def test_save_edit_needs_an_id(make_recording, db_path):
 def test_state_note():
     local = Location(storage_root="E:\\", rel_path="r", archive_state=ArchiveState.LOCAL)
     nas = Location(storage_root=NAS, rel_path="r", archive_state=ArchiveState.ARCHIVED)
-    assert entry.state_note(local, None).startswith("Saved with state local.")
-    assert entry.state_note(nas, None).startswith("Saved with state archived.")
+    assert entry.state_note(local, None).startswith("Archive state on save: local.")
+    assert entry.state_note(nas, None).startswith("Archive state on save: archived.")
     assert entry.state_note(None, None) == ""
 
 
@@ -939,7 +945,7 @@ def test_duration_that_disagrees_with_the_file_names_is_an_error(make_recording)
     info = make_recording(file_duration_s=0.5, n_slots=40)
     scan = scan_of(info)  # the form keeps the default file duration of 1.0 s
     form = form_for(scan, 1)
-    form.channels[0].fs_mhz = "0.0005"  # 2000-byte files at 1.0 s and int16
+    form.channels[0].fs_text = "500"  # 2000-byte files at 1.0 s and int16
     items = ready_items(form, scan, local_location(info))
     errors = texts(items, ItemState.ERROR)
     assert (
@@ -958,7 +964,7 @@ def test_folder_07_case_is_caught_without_inference(make_recording):
     info = make_recording(file_duration_s=0.5, n_slots=40)
     scan = scan_of(info)
     form = form_for(scan, 1)
-    form.channels[0].fs_mhz = "0.0005"
+    form.channels[0].fs_text = "500"
     assert not can_save(ready_items(form, scan, local_location(info)))
     fixed = with_file_duration(scan, 0.5)
     form = form_for(fixed, 1, file_duration_s=0.5, file_duration_inferred=True)
@@ -995,7 +1001,7 @@ def test_inferred_fs_is_reported_with_its_basis(make_recording):
         c.fs_inferred = True
     items = ready_items(form, scan, local_location(info))
     assert (
-        "fs filled in from the file size for channel 0, 1: 0.001 MHz (4.0 kB per 1 s file, "
+        "fs filled in from the file size for channel 0, 1: 1 kHz (4.0 kB per 1 s file, "
         "int16, no header). Check it against the recording plan." in texts(items, ItemState.INFO)
     )
     assert can_save(items)
@@ -1005,7 +1011,7 @@ def test_fs_that_cannot_be_filled_in_says_why(make_recording):
     info = make_recording(header_bytes=2)  # 4002-byte files: not whole int16 samples
     scan = scan_of(info)
     form = form_for(scan, 1)
-    form.channels[0].fs_mhz = ""
+    form.channels[0].fs_text = ""
     items = ready_items(form, scan, local_location(info))
     assert any(
         t.startswith(
@@ -1014,7 +1020,7 @@ def test_fs_that_cannot_be_filled_in_says_why(make_recording):
         )
         for t in texts(items, ItemState.INFO)
     )
-    assert "Enter fs (MHz) for channel 0" in texts(items, ItemState.TODO)
+    assert "Enter fs for channel 0" in texts(items, ItemState.TODO)
 
 
 def test_scan_problems_are_an_error():
@@ -1033,3 +1039,77 @@ def test_empty_channel_is_an_error_before_fs_is_entered(make_recording):
     form.channels.pop()  # no input row for channel 2, so no fs either
     items = ready_items(form, scan, local_location(info))
     assert "channel 2 (folder 2) has no data files" in texts(items, ItemState.ERROR)
+
+
+# ---------------------------------------------------------------------------
+# fs with units (DECISIONS.md D25)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "hz"),
+    [
+        ("1000", 1000.0),
+        ("1000 Hz", 1000.0),
+        ("100k", 100_000.0),
+        ("100 k", 100_000.0),
+        ("12.5kHz", 12_500.0),
+        ("12.5 kHz", 12_500.0),
+        ("1.5M", 1_500_000.0),
+        ("10 MHz", 10_000_000.0),
+        ("2G", 2e9),
+        ("2.4 GHz", 2.4e9),
+        ("0.5", 0.5),
+        ("1.", 1.0),
+        (".5k", 500.0),
+        ("1e3k", 1e6),
+        ("  30.72M  ", 30_720_000.0),
+    ],
+)
+def test_parse_frequency(text, hz):
+    assert entry.parse_frequency(text) == hz
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("", "is empty"),
+        ("10m", "is not understood"),
+        ("10 mhz", "is not understood"),
+        ("10 K", "is not understood"),
+        ("10 kHz2", "is not understood"),
+        ("10 Hz Hz", "is not understood"),
+        ("1,5M", "is not understood"),
+        ("-1k", "is not understood"),
+        ("abc", "is not understood"),
+        ("M", "is not understood"),
+        ("0", "must be positive"),
+        ("0 k", "must be positive"),
+    ],
+)
+def test_parse_frequency_rejects(text, reason):
+    with pytest.raises(ValueError, match=reason):
+        entry.parse_frequency(text)
+
+
+@pytest.mark.parametrize(
+    ("hz", "text"),
+    [
+        (500.0, "500 Hz"),
+        (0.5, "0.5 Hz"),
+        (1000.0, "1 kHz"),
+        (12_500.0, "12.5 kHz"),
+        (1_920_000.0, "1.92 MHz"),
+        (50e6, "50 MHz"),
+        (2.4e9, "2.4 GHz"),
+        (2_457_600.0, "2.4576 MHz"),
+    ],
+)
+def test_format_frequency_reads_back(hz, text):
+    assert entry.format_frequency(hz) == text
+    assert entry.parse_frequency(text) == hz
+
+
+def test_stored_fs_appears_with_a_unit_in_edit_mode(db_path, site_id, make_recording):
+    original = saved(db_path, site_id, make_recording())
+    assert entry.input_from_recording(original).channels[0].fs_text == "1 kHz"

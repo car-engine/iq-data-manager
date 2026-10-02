@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 from iqdm import entry
@@ -15,7 +16,7 @@ from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, open_db
 from iqdm.entry import ItemState
-from iqdm.gui.log_tab import LogTab, scan_summary, utc_text
+from iqdm.gui.log_tab import LogTab, scan_summary, time_text
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
 from iqdm.models import ArchiveState, Operation, SampleType
@@ -23,6 +24,19 @@ from iqdm.scan.scanner import ScanCancelled, scan_recording
 from make_fixtures import ChannelSpec
 
 NAS = r"\\nas\recordings"
+
+
+@pytest.fixture(autouse=True)
+def popups(monkeypatch) -> list[tuple[str, str]]:
+    """Record QMessageBox.information calls. A real modal box would block the test."""
+    shown: list[tuple[str, str]] = []
+
+    def information(parent, title, text, *args):
+        shown.append((title, text))
+        return QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(QMessageBox, "information", information)
+    return shown
 
 
 def wait_idle(qtbot, tab: LogTab) -> None:
@@ -57,12 +71,12 @@ def scan_folder(qtbot, tab: LogTab, folder: str) -> None:
     wait_idle(qtbot, tab)
 
 
-def fill_channels(tab: LogTab, fs_mhz: str = "0.001", fc_mhz: str = "145.8") -> None:
+def fill_channels(tab: LogTab, fs_text: str = "1k", fc_mhz: str = "145.8") -> None:
     for c in tab.current_input().channels:
         band, fc, fs = tab.channel_widgets(c.channel_index)
         band.setCurrentText("VHF")
         fc.setText(fc_mhz)
-        fs.setText(fs_mhz)
+        fs.setText(fs_text)
 
 
 def choose_site(tab: LogTab, site_id: int) -> None:
@@ -108,7 +122,7 @@ def test_loads_sites_parameter_names_and_bands(make_tab, db_path, site_id, make_
     form = entry.EntryInput(
         logged_by="u",
         site_id=site_id,
-        channels=[entry.ChannelInput(channel_index=0, band="UHF", fc_mhz="400", fs_mhz="0.001")],
+        channels=[entry.ChannelInput(channel_index=0, band="UHF", fc_mhz="400", fs_text="1k")],
         params=[entry.ParamInput(param="SDR", value="X310")],
     )
     location = split_location(info.root)
@@ -159,7 +173,7 @@ def test_folder_under_a_mapped_nas_drive_is_archived(make_tab, make_recording, d
     tab.folder_edit.setText(info.root)
     assert tab.storage_root_edit.text() == NAS
     assert tab.state_edit.text() == "archived"
-    assert tab.state_note.text().startswith("Saved with state archived.")
+    assert tab.state_note.text().startswith("Archive state on save: archived.")
 
 
 def test_drive_root_cannot_be_logged(make_tab, tmp_path):
@@ -183,17 +197,17 @@ def test_scan_fills_channel_table_and_times(qtbot, make_tab, make_recording):
     assert tab.channel_table.rowCount() == 2
     assert [tab.channel_table.item(r, 0).text() for r in range(2)] == ["0", "1"]
     assert tab.channel_table.item(0, 1).text() == "0"
-    assert tab.channel_table.item(0, 5).text() == "2026-09-30 02:00:00"
-    assert tab.channel_table.item(0, 6).text() == "2026-09-30 02:00:10"
+    assert tab.channel_table.item(0, 5).text() == "2026-09-30 10:00:00"
+    assert tab.channel_table.item(0, 6).text() == "2026-09-30 10:00:10"
     assert tab.channel_table.item(0, 7).text() == "10"
     assert tab.channel_table.item(0, 8).text() == "100.0%"
     assert tab.channel_table.item(1, 7).text() == "9"
     assert tab.channel_table.item(1, 8).text() == "90.0%"
-    assert tab.start_edit.text() == "2026-09-30 02:00:00"
-    assert tab.end_edit.text() == "2026-09-30 02:00:10"
+    assert tab.start_edit.text() == "2026-09-30 10:00:00"
+    assert tab.end_edit.text() == "2026-09-30 10:00:10"
     summary = tab.scan_summary.text()
     assert summary.startswith("Found channel folders 0 and 1 · 19 files")
-    assert "2026-09-30 02:00:00 to 2026-09-30 02:00:10 UTC" in summary
+    assert "2026-09-30 10:00:00 to 2026-09-30 10:00:10 UTC+8" in summary
     assert "ch 1 has 1 missing second" in summary
     assert "Folder not already in the database" in checklist_texts(tab, ItemState.OK)
 
@@ -259,7 +273,7 @@ def test_duration_change_updates_times_without_a_rescan(qtbot, make_tab, make_re
     scan_folder(qtbot, tab, info.root)
     tab.duration_spin.setValue(2.0)
     assert tab.scan.file_duration_s == 2.0
-    assert tab.end_edit.text() == "2026-09-30 02:00:11"
+    assert tab.end_edit.text() == "2026-09-30 10:00:11"
     fill_channels(tab)
     errors = checklist_texts(tab, ItemState.ERROR)
     assert any("expected size of 8000 bytes" in t for t in errors)
@@ -448,7 +462,7 @@ def test_edit_of_fs_needs_a_rescan(qtbot, make_tab, make_recording, site_id):
     save_and_wait(qtbot, tab)
     tab.load_recording(1)
     wait_idle(qtbot, tab)
-    tab.channel_widgets(0)[2].setText("0.002")
+    tab.channel_widgets(0)[2].setText("2k")
     assert any("scan the folder again" in t for t in checklist_texts(tab, ItemState.ERROR))
     assert not tab.save_button.isEnabled()
 
@@ -511,9 +525,10 @@ def test_rescan_that_removes_a_channel_asks_first(
 # ---------------------------------------------------------------------------
 
 
-def test_utc_text():
-    assert utc_text(1790733600.0) == "2026-09-30 02:00:00"
-    assert utc_text(None) == ""
+def test_time_text_uses_the_display_offset():
+    assert time_text(1790733600.0, 8.0) == "2026-09-30 10:00:00"
+    assert time_text(1790733600.0, 0.0) == "2026-09-30 02:00:00"
+    assert time_text(None, 8.0) == ""
 
 
 def test_scan_summary_for_a_flat_folder(make_recording):
@@ -582,7 +597,7 @@ def test_scan_fills_in_fs_and_leaves_fc_and_site_to_do(qtbot, make_tab, make_rec
     scan_folder(qtbot, tab, info.root)
     for index in range(4):
         fs = fs_widget(tab, index)
-        assert fs.text() == "0.001"
+        assert fs.text() == "1 kHz"
         assert "italic" in fs.styleSheet()
         assert fs.toolTip().startswith("Filled in from the file size")
     assert checklist_texts(tab, ItemState.TODO) == [
@@ -591,7 +606,7 @@ def test_scan_fills_in_fs_and_leaves_fc_and_site_to_do(qtbot, make_tab, make_rec
     ]
     assert checklist_texts(tab, ItemState.ERROR) == []
     assert any(
-        t.startswith("fs filled in from the file size for channel 0, 1, 2, 3: 0.001 MHz")
+        t.startswith("fs filled in from the file size for channel 0, 1, 2, 3: 1 kHz")
         for t in checklist_texts(tab, ItemState.INFO)
     )
     assert not tab.save_button.isEnabled()
@@ -602,9 +617,9 @@ def test_filled_in_fs_follows_sample_type_and_header(qtbot, make_tab, make_recor
     tab = make_tab()
     scan_folder(qtbot, tab, info.root)
     tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
-    assert fs_widget(tab).text() == "0.002"
+    assert fs_widget(tab).text() == "2 kHz"
     tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.FLOAT32))
-    assert fs_widget(tab).text() == "0.0005"
+    assert fs_widget(tab).text() == "500 Hz"
     tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT16))
     tab.header_spin.setValue(3)  # 3997 bytes: not whole int16 samples
     assert fs_widget(tab).text() == ""
@@ -613,7 +628,7 @@ def test_filled_in_fs_follows_sample_type_and_header(qtbot, make_tab, make_recor
         for t in checklist_texts(tab, ItemState.INFO)
     )
     tab.header_spin.setValue(0)
-    assert fs_widget(tab).text() == "0.001"
+    assert fs_widget(tab).text() == "1 kHz"
 
 
 def test_typed_fs_stays(qtbot, make_tab, make_recording):
@@ -622,10 +637,10 @@ def test_typed_fs_stays(qtbot, make_tab, make_recording):
     scan_folder(qtbot, tab, info.root)
     fs = fs_widget(tab)
     fs.clear()
-    qtbot.keyClicks(fs, "0.004")
+    qtbot.keyClicks(fs, "4k")
     assert fs.styleSheet() == ""
     tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
-    assert fs.text() == "0.004"
+    assert fs.text() == "4k"
     assert any("differ from the expected size" in t for t in checklist_texts(tab, ItemState.ERROR))
 
 
@@ -634,7 +649,7 @@ def test_duration_comes_from_the_file_names(qtbot, make_tab, make_recording, sit
     tab = make_tab()
     logged_ready(qtbot, tab, info, site_id)
     assert tab.duration_spin.value() == 0.5
-    assert fs_widget(tab).text() == "0.001"
+    assert fs_widget(tab).text() == "1k"  # typed by logged_ready()
     assert "File duration set to 0.5 s from the spacing of the file names." in checklist_texts(
         tab, ItemState.INFO
     )
@@ -673,7 +688,7 @@ def test_edit_mode_keeps_stored_fs_and_fills_a_new_channel(
     tab = make_tab()
     logged_ready(qtbot, tab, info, site_id)
     fs_widget(tab).clear()
-    qtbot.keyClicks(fs_widget(tab), "0.001")  # typed by the user
+    qtbot.keyClicks(fs_widget(tab), "1k")  # typed by the user
     save_and_wait(qtbot, tab)
     tab.load_recording(1)
     wait_idle(qtbot, tab)
@@ -682,6 +697,115 @@ def test_edit_mode_keeps_stored_fs_and_fills_a_new_channel(
     tab.start_scan()
     wait_idle(qtbot, tab)
     assert fs_widget(tab, 0).styleSheet() == ""
-    assert fs_widget(tab, 1).text() == "0.001"
+    assert fs_widget(tab, 1).text() == "1 kHz"
     assert "italic" in fs_widget(tab, 1).styleSheet()
     assert tab.duration_spin.value() == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Feedback after the first manual test (2026-10-02)
+# ---------------------------------------------------------------------------
+
+
+def test_save_shows_a_popup(qtbot, make_tab, make_recording, site_id, popups):
+    info = make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    save_and_wait(qtbot, tab)
+    ((title, text),) = popups
+    assert title == "Recording saved"
+    assert text.startswith("Saved as recording 1.")
+    assert "Archive state: local" in text
+    assert Path(text.split("Folder: ")[1].splitlines()[0]) == Path(info.root)
+
+
+def test_saving_an_edit_shows_a_popup(qtbot, make_tab, make_recording, site_id, popups):
+    info = make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    tab.remarks_edit.setPlainText("edited")
+    save_and_wait(qtbot, tab)
+    assert popups[-1] == ("Recording saved", "Saved changes to recording 1.")
+
+
+def test_messages_clear_for_a_new_folder(qtbot, make_tab, make_recording, site_id):
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, first, site_id)
+    save_and_wait(qtbot, tab)
+    assert tab.message_label.text() == "Saved as recording 1."
+    tab.folder_edit.setText(second.root)
+    assert tab.message_label.text() == ""
+    tab.show_message("old")
+    tab.start_scan()
+    assert tab.message_label.text() == ""
+    wait_idle(qtbot, tab)
+    assert tab.state_note.text().startswith("Archive state on save: local.")
+
+
+def test_times_use_the_configured_offset(qtbot, make_tab, make_recording, db_path):
+    info = make_recording(n_slots=10)
+    tab = make_tab(Config(db_path=str(db_path), display_utc_offset_hours=0.0))
+    scan_folder(qtbot, tab, info.root)
+    header = tab.channel_table.horizontalHeaderItem
+    assert (header(5).text(), header(6).text()) == ("Start (UTC)", "End (UTC)")
+    assert tab.start_edit.text() == "2026-09-30 02:00:00"
+    assert "2026-09-30 02:00:00 to 2026-09-30 02:00:10 UTC" in tab.scan_summary.text()
+
+
+def test_default_offset_labels_say_utc_plus_8(make_tab):
+    tab = make_tab()
+    header = tab.channel_table.horizontalHeaderItem
+    assert (header(5).text(), header(6).text()) == ("Start (UTC+8)", "End (UTC+8)")
+    assert header(4).text() == "fs"
+
+
+def test_read_only_fields_look_read_only(make_tab):
+    tab = make_tab()
+    editable = tab.logged_by_edit.palette().color(QPalette.ColorRole.Base)
+    for field in (tab.start_edit, tab.end_edit, tab.storage_root_edit, tab.rel_path_edit):
+        assert field.isReadOnly()
+        assert field.palette().color(QPalette.ColorRole.Base) != editable
+        assert field.toolTip() == "Filled in by the app. You cannot edit this field."
+    assert not tab.folder_edit.isReadOnly()
+    assert tab.folder_edit.palette().color(QPalette.ColorRole.Base) == editable
+
+
+def test_folder_looks_read_only_in_edit_mode(qtbot, make_tab, make_recording, site_id):
+    info = make_recording()
+    tab = make_tab()
+    editable = tab.logged_by_edit.palette().color(QPalette.ColorRole.Base)
+    logged_ready(qtbot, tab, info, site_id)
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.folder_edit.palette().color(QPalette.ColorRole.Base) != editable
+    tab.clear_form()
+    assert tab.folder_edit.palette().color(QPalette.ColorRole.Base) == editable
+
+
+@pytest.mark.parametrize(("typed", "hz"), [("10M", 10e6), ("12.5 kHz", 12_500.0), ("500", 500.0)])
+def test_fs_accepts_units(qtbot, make_tab, make_recording, typed, hz):
+    info = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    fs = fs_widget(tab)
+    fs.clear()
+    qtbot.keyClicks(fs, typed)
+    assert entry.parse_frequency(tab.current_input().channels[0].fs_text) == hz
+
+
+def test_fs_with_an_unknown_unit_is_an_error(qtbot, make_tab, make_recording):
+    info = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    fs = fs_widget(tab)
+    fs.clear()
+    qtbot.keyClicks(fs, "1 mhz")
+    assert any(
+        t.startswith("Channel 0: fs is not understood: '1 mhz'")
+        for t in checklist_texts(tab, ItemState.ERROR)
+    )

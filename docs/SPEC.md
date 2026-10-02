@@ -104,6 +104,7 @@ network_speed_mb_s = 110          # used for time estimates
 default_hash_mode = "sample"      # "none" | "sample" | "all"
 hash_sample_fraction = 0.05
 nas_roots = ['\\192.168.1.50\recordings']   # UNC roots; a folder under one is on the NAS (D14)
+display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 0.25 (D24)
 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
@@ -132,7 +133,8 @@ Flow: choose folder, scan, review and complete fields, validate, save.
 1. **Source folder**: browse to a recording folder (local or on the NAS; DECISIONS.md
    D18). "Scan folder" runs the scanner (section 7) in a worker thread. The tab shows
    the number of files found so far and has a Cancel button.
-2. **Recording fields**: start and end (from scan, read-only, in UTC; D17), file
+2. **Recording fields**: start and end (from scan, read-only, at the display offset,
+   UTC+8 by default; D24), file
    duration (default 1.0 s), logged by (pre-filled with the Windows login name,
    editable), site (dropdown plus "Add site"), recording plan reference, storage root
    and relative path (derived from the folder, read-only), archive state (derived:
@@ -150,7 +152,10 @@ Flow: choose folder, scan, review and complete fields, validate, save.
 4. **Channels**: one row per detected channel with folder, start, end, files and
    coverage from the scan; band, fc (MHz in the UI, Hz in the DB) and fs entered by
    the user. Band is an optional editable dropdown that lists the bands already in
-   the DB. fs is also entered in MHz. Both convert to Hz through `Decimal` (D19).
+   the DB. fc is entered in MHz (D19). fs takes a number with an optional unit:
+   none or `Hz`, `k` or `kHz`, `M` or `MHz`, `G` or `GHz`, with or without a space
+   (D25). Both convert to Hz through `Decimal`. Read-only fields have a grey
+   background.
 5. **RF chain**: editable rows of applies-to (Recording / Ch N), parameter, value,
    unit. Parameter names autocomplete from values already in the DB.
 

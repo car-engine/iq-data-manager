@@ -34,13 +34,15 @@ Rules for this file:
 | D14 | Recording folder location | 2026-10-02, Milestone 3 | Active |
 | D15 | Reading the configuration in Milestone 3 | 2026-10-02, Milestone 3 | Active |
 | D16 | Edit mode in the Log tab | 2026-10-02, Milestone 3 | Active |
-| D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Active |
+| D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Replaced by D24 |
 | D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |
-| D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active |
+| D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active; fs input replaced by D25 |
 | D20 | RF chain rows of channels removed by a rescan | 2026-10-02, Milestone 3 | Active |
 | D21 | fs from the file size | 2026-10-02, Milestone 3 | Active |
 | D22 | File duration from the file names; coverage above 100 % | 2026-10-02, Milestone 3 | Active |
 | D23 | To-do items in the checklist | 2026-10-02, Milestone 3 | Active |
+| D24 | Display offset for times | 2026-10-02, Milestone 3 | Active |
+| D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -409,3 +411,39 @@ Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
 - Saving needs no to-do item and no error.
 
 Affects: SPEC section 6, `entry.py`, `gui/widgets/checklist.py`.
+
+## D24. Display offset for times
+
+Replaces D17. Closes the display part of O1. O1 stays open for time input in the Move /
+copy tab (Milestone 6).
+
+- The user asked for start and end times at UTC+8 after the first manual test.
+- A new config key, `display_utc_offset_hours`, sets the offset for displayed times.
+  The default is 8. Allowed values run from −12 to 14 in steps of 0.25.
+- Every displayed time shows its zone, for example "Start (UTC+8)" or "UTC+5:30".
+  With an offset of 0 the label is "UTC".
+- The offset comes from the configuration, never from the PC's time zone.
+- Storage is unchanged: the database holds UTC text and Unix seconds.
+
+Affects: SPEC sections 4, 5 and 6, `config.py`, `timeutil.py`, `gui/log_tab.py`.
+
+## D25. fs input with units
+
+Replaces the fs part of D19. fc stays in MHz.
+
+- The user found that counting decimal places in MHz is error-prone at low sample
+  rates.
+- The fs field takes a number with an optional unit. No unit means Hz.
+- Accepted units: `Hz`; `k` and `kHz`; `M` and `MHz`; `G` and `GHz`. A space between
+  the number and the unit is optional, so `100 M` and `100M` are both accepted.
+- Letter case matters. `m` would read as milli, so only `M` means mega. Any other
+  unit is an error that lists the accepted forms.
+- `Hz` was not in the user's list. The agent added it because the app displays fs
+  with a unit, for example `500 Hz`, and must read its own text back.
+- The app shows a filled-in or stored fs in the largest unit that keeps the number
+  at 1 or more: `1 kHz`, `12.5 kHz`, `50 MHz`.
+- The conversion goes through `Decimal`, so `12.5k` gives exactly 12 500 Hz.
+- fc keeps MHz without a unit. A bare number in fc read as Hz would turn `145.8` into
+  145.8 Hz without an error.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.

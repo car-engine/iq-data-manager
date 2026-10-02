@@ -33,6 +33,7 @@ class Config:
     default_hash_mode: HashMode = HashMode.SAMPLE
     hash_sample_fraction: float = 0.05
     nas_roots: tuple[str, ...] = ()  # UNC roots, without a trailing separator (D14)
+    display_utc_offset_hours: float = 8.0  # displayed times only; storage stays UTC (D24)
     storage_roots: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -107,6 +108,11 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     fraction = _number(data, "hash_sample_fraction", where, Config.hash_sample_fraction)
     if not 0 < fraction <= 1:
         raise ConfigError(f"{where}: hash_sample_fraction must be above 0 and at most 1")
+    offset = _number(data, "display_utc_offset_hours", where, Config.display_utc_offset_hours)
+    if not -12 <= offset <= 14 or (offset * 4) % 1:
+        raise ConfigError(
+            f"{where}: display_utc_offset_hours must be between -12 and 14 in steps of 0.25"
+        )
     mode_text = data.get("default_hash_mode", str(Config.default_hash_mode))
     try:
         mode = HashMode(mode_text)
@@ -120,6 +126,7 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
         default_hash_mode=mode,
         hash_sample_fraction=fraction,
         nas_roots=_nas_roots(data, where),
+        display_utc_offset_hours=offset,
         storage_roots=_storage_roots(data, where),
     )
 
