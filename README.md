@@ -46,7 +46,21 @@ The tool only creates files. It refuses an output folder that exists and is not 
 ```
 python -m iqdm
 python -m iqdm --smoke-test   # builds the window, quits, exit code 0 on success
+python -m iqdm --db dev/m3.db # uses this database instead of db_path in the config
+python -m iqdm --config my.toml
 ```
+
+The app reads `%APPDATA%\IQDataManager\config.toml` and never writes it (DECISIONS.md
+D15). Without the file, the app has no database, and the Log tab cannot save. Create
+the file by hand. The keys are in `docs/SPEC.md` section 4. A minimal file:
+
+```toml
+db_path = 'D:\iq\catalog.db'
+nas_roots = ['\\nas\recordings']   # UNC roots; a folder under one is logged as archived
+```
+
+Use single quotes, so TOML keeps the backslashes. Create a development database with
+`python tools/db_check.py create dev/m3.db`.
 
 ## Build
 

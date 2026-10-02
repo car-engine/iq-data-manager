@@ -10,10 +10,14 @@ report. Last updated: 2026-10-02.
   2026-10-02). Report: [reports/M2.md](reports/M2.md).
 - 322 tests pass and 1 skips on `main` (symbolic links need a privilege this account
   lacks). `ruff check` is clean.
-- Milestone 3 (Log tab) is in progress on branch `m3-log-tab`. The user approved the
-  plan on 2026-10-02 and chose the proposed default for every open item (D14–D19).
+- Milestone 3 (Log tab) is complete on branch `m3-log-tab` and not merged. Report:
+  [reports/M3.md](reports/M3.md). On the branch, 504 tests pass and 2 skip, and
+  `ruff check` is clean.
+- Before the merge, the user decides issue 1 of the Milestone 3 report: parameter rows
+  of a removed channel block a save in edit mode.
 - The user chose to start Milestone 3 before the NAS part of O21. The local part is
   done ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
+- Next: Milestone 4 (Viewer tab), after the merge.
 
 ## Milestones
 
@@ -24,7 +28,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
-| 3. Log tab | In progress | `m3-log-tab` | | |
+| 3. Log tab | Done, not merged | `m3-log-tab` | `0569068`–`61012e4`, plus the commit that adds the report | [M3](reports/M3.md) |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
@@ -96,6 +100,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
 - `dev/test.db` is the user's scratch database for O21. Move it out of the repository
   before the NAS test.
+- After the Milestone 3 manual run: `dev/m3.db` and `fixtures_out/m3-demo/`.
+- Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
+  folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
 
 ## Notes for agents
@@ -107,8 +114,17 @@ These come from the safety configuration and from experience in this repository.
   that must outlast a session in `docs/`.
 - **The hook scans the full text of shell commands.** Words such as `rm`, `rmtree`,
   `robocopy`, `.unlink(`, `os.remove`, `format x:` and `shutdown` block the command,
-  even inside a commit message or a heredoc. Write such text with the file tools
-  instead.
+  even inside a commit message or a heredoc. A backslash pair followed by a name and
+  a backslash looks like a UNC path and also blocks the command. That includes
+  escaped backslashes in Python text.
+- **Write and change file content only with the Write and Edit tools.** Do not use
+  heredocs, `cat >>` or `python -` scripts for file content. The hook checks the
+  target path of Write and Edit and does not read their content, so docs, code and
+  tests can hold example UNC strings.
+- **GUI tests share one `QApplication`.** A test that runs the event loop and quits it
+  must not leave a quit behind: see the `smoke_app` fixture in
+  `tests/test_app_smoke.py`. Wait for a `TaskRunner` with
+  `qtbot.waitUntil(lambda: not runner.busy)`.
 - **Agents may not edit `.claude/`.** The `PowerShell` tool is denied; use the Bash
   tool (Git Bash).
 - **Install packages with the literal command `pip install --no-cache-dir ...`.** The
