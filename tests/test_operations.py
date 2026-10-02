@@ -66,9 +66,14 @@ class Env:
             **kw,
         )
 
-    def preview(self, request):
+    def preview(self, request, resolve_drive=None):
         return preview_transfer(
-            self.db, request, self.config, resolve_drive=None, disk_usage=plenty, long_paths=True
+            self.db,
+            request,
+            self.config,
+            resolve_drive=resolve_drive,
+            disk_usage=plenty,
+            long_paths=True,
         )
 
     def run(self, preview, **kw):
@@ -76,7 +81,6 @@ class Env:
             "performed_by": "userA",
             "manifests_dir": self.manifests,
             "now": self.now,
-            "resolve_drive": None,
         } | kw
         return run_transfer(self.db, preview, **values)
 
@@ -117,7 +121,8 @@ def test_copy_of_the_whole_recording(env):
     assert row.verification is Verification.PASS
     assert (row.n_files, row.total_bytes) == (10, 40_000)
     assert row.hash_mode is HashMode.ALL
-    assert row.manifest_path == str(env.manifests / f"transfer-{row.id}.json")
+    stamp = row.finished_at.replace("-", "").replace(":", "")
+    assert row.manifest_path == str(env.manifests / f"transfer-{row.id}-{stamp}.json")
     manifest = read_manifest(Path(row.manifest_path), row.manifest_sha256)
     assert len(manifest.files) == 10
     assert all(f.sha256 for f in manifest.files)
@@ -277,6 +282,21 @@ def test_delete_after_a_passed_move(env):
     rows = viewer.transfer_rows(env.transfers(), 8.0)
     assert [r.operation for r in rows] == ["Move", "Delete laptop copy"]
     assert rows[1].result.endswith("deleted")
+
+
+def test_a_move_typed_with_a_mapped_drive_uses_the_nas_location(env):
+    """The log row, the manifest and the recording name one folder, so delete works."""
+    request = env.request(dest=f"Z:\\2026\\{env.source.name}")
+    preview = env.preview(request, resolve_drive=lambda d: str(env.nas) if d == "Z:" else None)
+    assert preview.ok, preview.errors
+    nas_folder = str(env.nas / "2026" / env.source.name)
+    assert preview.destination == nas_folder
+    move_id = env.run(preview).transfer_id
+    (row,) = env.transfers()
+    assert row.destination == nas_folder
+    assert read_manifest(Path(row.manifest_path)).destination == nas_folder
+    out = delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+    assert out.result.complete
 
 
 def test_delete_keeps_files_whose_nas_copy_changed(env):

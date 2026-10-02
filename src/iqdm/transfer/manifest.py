@@ -1,7 +1,7 @@
 """Per-file manifest of a copy or a move (DECISIONS.md D52, SPEC section 8).
 
 The manifest lists every file a transfer copied, with its size and its SHA-256 where
-one was computed. It is a JSON file named transfer-<id>.json in the manifests folder
+one was computed. It is a JSON file named transfer-<id>-<time>.json in the manifests folder
 next to the configuration file. write_manifest() creates it and never replaces an
 existing file. transfer_log.manifest_sha256 holds the SHA-256 of its bytes, and
 read_manifest() refuses a file that no longer matches it.
@@ -60,8 +60,14 @@ def manifests_dir(config_path: Path) -> Path:
     return config_path.parent / MANIFESTS_DIR_NAME
 
 
-def manifest_name(transfer_id: int) -> str:
-    return f"transfer-{transfer_id}.json"
+def manifest_name(transfer_id: int, created_at: str) -> str:
+    """'transfer-7-20261003T080000Z.json'.
+
+    The time keeps names apart when two databases on one PC reuse a transfer id, for
+    example a test catalogue and the real one.
+    """
+    stamp = "".join(c for c in created_at if c.isalnum())
+    return f"transfer-{transfer_id}-{stamp}.json"
 
 
 def safe_rel_path(text: str) -> str:
@@ -109,7 +115,7 @@ def write_manifest(manifest: Manifest, folder: Path) -> tuple[Path, str]:
     for f in manifest.files:
         safe_rel_path(f.path)
     data = to_bytes(manifest)
-    path = folder / manifest_name(manifest.transfer_id)
+    path = folder / manifest_name(manifest.transfer_id, manifest.created_at)
     try:
         folder.mkdir(parents=True, exist_ok=True)
         with path.open("xb") as out:

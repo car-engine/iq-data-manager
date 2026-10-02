@@ -423,11 +423,14 @@ from the database entry.
 
 ### Manifest
 
-After each copy or move, the app writes a manifest (D52): a JSON file in the
-`manifests` folder next to the configuration file, named `transfer-<id>.json`. It
-lists each file's relative path (`/`-separated), size and SHA-256 where one was
+After each copy or move that passes verification, the app writes a manifest (D52): a
+JSON file in the `manifests` folder next to the configuration file, named
+`transfer-<id>-<finish time>.json`, for example `transfer-7-20261003T080000Z.json`.
+It lists each file's relative path (`/`-separated), size and SHA-256 where one was
 computed, with the transfer's source, destination, range and channels. It is written
-only to a new file. `transfer_log.manifest_path` holds its path and
+only to a new file. A move's destination is stored as its NAS location, with a mapped
+drive letter replaced by the UNC path (D14), so the log row, the manifest and the
+recording name the same folder. `transfer_log.manifest_path` holds its path and
 `transfer_log.manifest_sha256` the SHA-256 of its bytes.
 
 ### Transfer safety

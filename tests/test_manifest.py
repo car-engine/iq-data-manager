@@ -48,7 +48,7 @@ def manifest(**kw) -> Manifest:
 def test_write_and_read_round_trip(tmp_path):
     m = manifest(range_start_unix=1790733600.5, range_end_unix=1790733700.0, channels=(0, 1))
     path, digest = write_manifest(m, tmp_path / "manifests")
-    assert path == tmp_path / "manifests" / "transfer-7.json"
+    assert path == tmp_path / "manifests" / "transfer-7-20261003T080000Z.json"
     assert digest == sha256_hex(path.read_bytes())
     assert read_manifest(path, digest) == m
     assert m.total_bytes == 11999
@@ -65,8 +65,15 @@ def test_an_existing_manifest_is_never_replaced(tmp_path):
     path, _ = write_manifest(manifest(), tmp_path)
     before = path.read_bytes()
     with pytest.raises(ManifestError, match="already exists"):
-        write_manifest(manifest(created_at="2026-10-04T00:00:00Z"), tmp_path)
+        write_manifest(manifest(source=r"C:\other"), tmp_path)
     assert path.read_bytes() == before
+
+
+def test_the_same_transfer_id_at_another_time_gets_its_own_file(tmp_path):
+    first, _ = write_manifest(manifest(), tmp_path)
+    second, _ = write_manifest(manifest(created_at="2026-11-01T00:00:00Z"), tmp_path)
+    assert first != second
+    assert len(list(tmp_path.iterdir())) == 2
 
 
 def test_a_changed_manifest_is_refused(tmp_path):
@@ -150,7 +157,7 @@ def test_parse_refuses_text_that_is_not_json():
 
 
 def test_names_and_folder():
-    assert manifest_name(12) == "transfer-12.json"
+    assert manifest_name(12, "2026-10-03T08:15:00Z") == "transfer-12-20261003T081500Z.json"
     assert manifests_dir(Path("C:/app/IQDataManager/config.toml")) == Path(
         "C:/app/IQDataManager/manifests"
     )

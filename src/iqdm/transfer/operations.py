@@ -22,7 +22,13 @@ from pathlib import Path
 from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import Connection, open_db, write_transaction
-from iqdm.location import DriveResolver, LocationError, mapped_drive_unc, split_location
+from iqdm.location import (
+    DriveResolver,
+    Location,
+    LocationError,
+    mapped_drive_unc,
+    split_location,
+)
 from iqdm.models import (
     ArchiveState,
     HashMode,
@@ -79,17 +85,24 @@ class TransferRequest:
 
 @dataclass(frozen=True, kw_only=True)
 class Preview:
-    """Everything shown before a transfer runs. ok is True when it may run."""
+    """Everything shown before a transfer runs. ok is True when it may run.
+
+    destination is the folder the transfer writes to. For a move it is the NAS
+    location (D14): a mapped drive letter is replaced by its UNC path, so the log
+    row, the manifest and the recording name the same folder. location is that
+    split for a move, and None for a copy.
+    """
 
     request: TransferRequest
     recording: Recording
     selection: Selection
+    destination: str
+    location: Location | None
     check: DestinationCheck
     estimate: Estimate
     hashed_files: int
     errors: tuple[str, ...]  # the operation's own rules, then the destination's
     sample_fraction: float
-    nas_roots: tuple[str, ...]
 
     @property
     def ok(self) -> bool:
@@ -138,13 +151,22 @@ def _load_recording(db_path: Path | str, recording_id: int) -> Recording:
         return repository.get_recording(conn, recording_id)
 
 
+def _archive_location(
+    destination: str, nas_roots: tuple[str, ...], resolve_drive: DriveResolver | None
+) -> Location | None:
+    """The NAS location of a move's destination, or None if it is not under a NAS root.
+
+    check_destination() names the problem in the second case.
+    """
+    try:
+        location = split_location(destination, nas_roots, resolve_drive)
+    except LocationError:
+        return None
+    return location if location.archive_state is ArchiveState.ARCHIVED else None
+
+
 def _move_errors(
-    db_path: Path | str,
-    rec: Recording,
-    selection: Selection,
-    destination: str,
-    nas_roots: tuple[str, ...],
-    resolve_drive: DriveResolver | None,
+    db_path: Path | str, rec: Recording, selection: Selection, location: Location | None
 ) -> list[str]:
     """The rules for "Archive to NAS" (D50)."""
     errors = []
@@ -157,10 +179,8 @@ def _move_errors(
             "The folder differs from the database entry. Scan it again in the Log tab "
             "and save the entry first. " + " ".join(selection.differences)
         )
-    try:
-        location = split_location(destination, nas_roots, resolve_drive)
-    except LocationError:
-        return errors  # check_destination() names the problem
+    if location is None:
+        return errors
     with open_db(db_path, readonly=True) as conn:
         other = repository.find_recording_by_location(
             conn, location.storage_root, location.rel_path
@@ -197,14 +217,17 @@ def preview_transfer(
         cancelled=cancelled,
     )
     errors = []
+    location = None
+    destination = request.destination
     if request.operation is Operation.MOVE:
-        errors += _move_errors(
-            db_path, rec, selection, request.destination, config.nas_roots, resolve_drive
-        )
+        location = _archive_location(request.destination, config.nas_roots, resolve_drive)
+        if location is not None:
+            destination = location.full_path
+        errors += _move_errors(db_path, rec, selection, location)
     extra = {} if disk_usage is None else {"disk_usage": disk_usage}
     check = check_destination(
         selection,
-        request.destination,
+        destination,
         operation=request.operation,
         margin_bytes=round(config.free_space_margin_gb * GB),
         nas_roots=config.nas_roots,
@@ -225,12 +248,13 @@ def preview_transfer(
         request=request,
         recording=rec,
         selection=selection,
+        destination=destination,
+        location=location,
         check=check,
         estimate=est,
         hashed_files=len(targets),
         errors=tuple(errors),
         sample_fraction=config.hash_sample_fraction,
-        nas_roots=config.nas_roots,
     )
 
 
@@ -266,18 +290,20 @@ def run_transfer(
     copy_progress: Callable[[CopyProgress], None] | None = None,
     verify_progress: Callable[[VerifyProgress], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
-    resolve_drive: DriveResolver | None = mapped_drive_unc,
 ) -> TransferOutcome:
     """Copy, verify, write the manifest and record the result. See the module text."""
     if not preview.ok:
         raise TransferError("The transfer has problems: " + " ".join(preview.errors))
     request, selection = preview.request, preview.selection
-    source, destination = selection.source, Path(request.destination)
+    location = preview.location
+    if request.operation is Operation.MOVE and location is None:
+        raise TransferError("A move needs a destination under a NAS location.")
+    source, destination = selection.source, Path(preview.destination)
     entry = TransferEntry(
         recording_id=request.recording_id,
         operation=request.operation,
         source=str(source),
-        destination=request.destination,
+        destination=preview.destination,
         range_start_unix=selection.range_start_unix,
         range_end_unix=selection.range_end_unix,
         channels=selection.channel_indices,
@@ -348,7 +374,7 @@ def run_transfer(
         recording_id=request.recording_id,
         operation=request.operation,
         source=str(source),
-        destination=request.destination,
+        destination=preview.destination,
         range_start_unix=selection.range_start_unix,
         range_end_unix=selection.range_end_unix,
         channels=selection.channel_indices,
@@ -358,8 +384,7 @@ def run_transfer(
     )
     path, digest = write_manifest(manifest, manifests_dir)
     n_files, total_bytes = len(items), selection.total_bytes
-    if request.operation is Operation.MOVE:
-        location = split_location(request.destination, preview.nas_roots, resolve_drive)
+    if location is not None:
 
         def finish(conn: Connection) -> None:
             repository.finish_move(

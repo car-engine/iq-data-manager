@@ -944,12 +944,17 @@ Closes O9 and the deferred part of D5. The user chose this on 2026-10-03.
   exactly for delete rows.
 - A delete row's `verification` is `'pass'` when every listed file was deleted and
   `'fail'` when any remained. `notes` names what remained.
-- After each copy or move, the app writes a manifest: a JSON file in a `manifests`
-  folder next to the configuration file, normally
-  `%APPDATA%\IQDataManager\manifests\transfer-<id>.json`. It lists each file's
-  relative path, size and SHA-256 where one was computed. The app writes it only to
-  a new file. `manifest_path` holds its path, and `manifest_sha256` the SHA-256 of
-  its bytes.
+- After each copy or move that passes verification, the app writes a manifest: a
+  JSON file in a `manifests` folder next to the configuration file, normally
+  `%APPDATA%\IQDataManager\manifests\transfer-<id>-<time>.json`, for example
+  `transfer-7-20261003T080000Z.json`. The time is the finish time. It keeps two
+  manifests apart when two databases on one PC reuse a transfer id, for example a
+  test catalogue and the real one. The manifest lists each file's relative path,
+  size and SHA-256 where one was computed. The app writes it only to a new file.
+  `manifest_path` holds its path, and `manifest_sha256` the SHA-256 of its bytes.
+- A move's destination is stored as its NAS location (D14), with a mapped drive
+  letter replaced by the UNC path. The log row, the manifest and the recording
+  therefore name the same folder.
 - `transfer/delete.py` deletes source files only when all of these hold:
   - the move row has `verification = 'pass'` and a manifest;
   - the manifest's SHA-256 matches `manifest_sha256`;
