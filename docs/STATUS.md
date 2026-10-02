@@ -92,8 +92,6 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `build/smoke-1-build.log`, `build/smoke-2-build.log`
 - `build/spec-removed-sections.md`
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
-- `fixtures_out_mut_conftest.py` in the repository root (empty; created by mistake in
-  Milestone 2). It is untracked but not gitignored, so `git status` lists it.
 - `dev/test.db` is the user's scratch database for O21. Move it out of the repository
   before the NAS test.
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
