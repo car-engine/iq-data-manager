@@ -48,6 +48,13 @@ Rules for this file:
 | D28 | RF chain repeats, overrides and conflicts | 2026-10-03, Milestone 3 | Active |
 | D29 | Settings tab before the Viewer | 2026-10-03, after Milestone 3 | Active; scope narrowed by D30 |
 | D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-03, after Milestone 3 | Active |
+| D31 | Writing config.toml with tomli-w | 2026-10-02, Milestone 3a | Active |
+| D32 | Name of the Settings milestone | 2026-10-02, Milestone 3a | Active |
+| D33 | Applying settings without a restart | 2026-10-02, Milestone 3a | Active |
+| D34 | Keys in the Settings tab | 2026-10-02, Milestone 3a | Active |
+| D35 | Backup of config.toml | 2026-10-02, Milestone 3a | Active |
+| D36 | A wrong value in a key the Settings tab does not show | 2026-10-02, Milestone 3a | Active |
+| D37 | Status line for an older database | 2026-10-02, Milestone 3a | Active |
 
 ## D1. Sample types
 
@@ -554,3 +561,103 @@ questions about the first scope.
   need the real file names.
 
 Affects: SPEC sections 4, 7, 8 and 12.
+
+## D31. Writing config.toml with tomli-w
+
+Closes O18. The user chose the proposed default on 2026-10-02.
+
+- `config.save_config()` writes the file with `tomli-w`, a pure-Python package with no
+  dependencies. It is pinned as `tomli-w==1.2.0` in `requirements.txt`.
+- `tomli-w` writes every value that `tomllib` reads, so keys the tab does not show
+  survive a Save, including nested tables and dates.
+- It writes paths as basic strings with escaped backslashes, for example
+  `"\\\\nas\\recordings"`. A hand-edited file may use literal strings
+  (`'\\nas\recordings'`). Both read back the same.
+- Before anything is written, the data is checked with `parse_config()`, and the
+  TOML text is read back and compared.
+- The text goes to `config.toml.new` in the same folder. The old file is copied to
+  `config.toml.bak` (D35). `config.toml.new` then replaces `config.toml`. A failure
+  before that last step leaves `config.toml` unchanged.
+- Comments in the file are lost. The Settings tab says so.
+
+Affects: SPEC section 4, `config.py`, `requirements.txt`, `pyproject.toml`.
+
+## D32. Name of the Settings milestone
+
+Closes O27. The user chose the proposed default on 2026-10-02.
+
+- The Settings milestone is "Milestone 3a". Later milestones keep their numbers, so
+  references such as "the Viewer in Milestone 4" stay true.
+
+Affects: SPEC section 12, `docs/STATUS.md`.
+
+## D33. Applying settings without a restart
+
+Closes O28. The user chose the proposed default on 2026-10-02, with the refinement
+below.
+
+- Changes apply on Save. The app needs no restart.
+- A new display offset redraws the times and column labels in the Log tab. The form
+  keeps its input.
+- A new `db_path` or new NAS roots clear the Log tab form and reload its lists. The
+  folder location, the duplicate check and edit mode all depend on these two keys.
+- Before such a Save, the app asks whether to clear the form if the form holds input
+  that is not saved. Answering No writes nothing.
+- "Input" means edit mode, or text in the folder, the plan reference, the remarks or
+  an RF chain row.
+- While the Log tab saves a recording, the Settings tab does not save. A message asks
+  the user to save the settings when the recording is saved.
+- With `--db`, the `--db` path stays in force after a Save. A change of `db_path` in
+  the file then clears nothing.
+
+Affects: SPEC section 4, `app.py`, `gui/log_tab.py`, `gui/settings_tab.py`.
+
+## D34. Keys in the Settings tab
+
+Closes O30. The user chose the proposed default on 2026-10-02.
+
+- Milestone 3a shows the keys in use now: `db_path`, `nas_roots` and
+  `display_utc_offset_hours` (`config.SETTINGS_KEYS`).
+- Each later milestone adds its own keys to the tab: the coverage threshold
+  (Milestone 4, O15); `default_local_copy_root`, `network_speed_mb_s`,
+  `default_hash_mode`, `hash_sample_fraction` and a free-space margin (Milestones 5
+  and 6).
+
+Affects: SPEC section 4, `config.py`, `gui/settings_tab.py`.
+
+## D35. Backup of config.toml
+
+Closes O31. The user chose the proposed default on 2026-10-02.
+
+- Each Save copies the existing file to `config.toml.bak` next to it. The copy
+  replaces the backup of the Save before.
+- The first Save, when no file exists, writes no backup.
+- A file that cannot be read is also copied, so its text stays available.
+
+Affects: SPEC section 4, `config.py`.
+
+## D36. A wrong value in a key the Settings tab does not show
+
+Found while planning Milestone 3a. The user chose the proposed rule on 2026-10-02.
+
+- When a key that the tab does not show holds a wrong value, for example
+  `network_speed_mb_s = -1`, Save stays disabled.
+- The tab names the key and its rule. The user corrects the key in the file by hand
+  ("Open folder"), then clicks "Reload from file".
+- Reason: the app would otherwise write a file that it cannot read back.
+- A wrong value in a key the tab shows is marked at its field and can be corrected
+  there. A file that is not valid TOML can be replaced by Save (D35 keeps the old
+  text).
+
+Affects: SPEC section 4, `config.hidden_key_error()`, `gui/settings_tab.py`.
+
+## D37. Status line for an older database
+
+Found while planning Milestone 3a. The user chose the proposed text on 2026-10-02.
+
+- SPEC section 4 said that the status line for `needs upgrade` names writes only. D6
+  and `connection.connect()` refuse reads of an older database as well.
+- The status line now reads "This version of the app cannot read or write this
+  database."
+
+Affects: SPEC section 4, `gui/settings_tab.py`.

@@ -96,11 +96,12 @@ Key semantics:
 ## 4. Configuration
 
 Per-machine TOML file at `%APPDATA%\IQDataManager\config.toml`, read with `tomllib`.
-The Settings tab writes it (see "Settings tab" below; DECISIONS.md D29).
+The Settings tab writes it with `tomli-w` (see "Settings tab" below; DECISIONS.md D29,
+D31).
 
-Until Milestone 3a the app only reads the file (DECISIONS.md D15). The user writes it
-by hand. A missing file gives the defaults, which have no `db_path`. Unknown keys are
-ignored. `--config PATH` reads another file, and `--db PATH` overrides `db_path`.
+A missing file gives the defaults, which have no `db_path`. Unknown keys are ignored
+when the file is read, and kept when the Settings tab writes it (DECISIONS.md D15).
+`--config PATH` reads and writes another file, and `--db PATH` overrides `db_path`.
 
 ```toml
 db_path = '\\192.168.1.50\recordings\iq_catalog.db'
@@ -118,21 +119,27 @@ display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 
 ### Settings tab (Milestone 3a)
 
 A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29, D30). It edits
-`config.toml` and shows the state of the database. Its open questions are O18, O27,
-O28, O30 and O31 in `docs/STATUS.md`; each has a proposed default.
+`config.toml` and shows the state of the database. Decisions D31 to D37 settle its
+details. The milestone is "Milestone 3a" (D32).
 
 | Section | Fields and actions |
 | --- | --- |
-| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version and status `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database (`connection.database_status()`); journal mode, foreign keys and busy timeout (`connection.connection_settings()`). A "Check connection" button runs the same checks on demand, on a read-only connection. |
+| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version and status `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database; journal mode, foreign keys and busy timeout (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
 | NAS roots | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule: a folder under a NAS root is logged as archived (D14, D2). |
-| Display | `display_utc_offset_hours`, from −12 to 14 in steps of 0.25 (D24), with a preview such as "2026-09-30 10:00:00 (UTC+8)". |
+| Display | `display_utc_offset_hours`, from −12 to 14 in steps of 0.25 (D24), with a preview such as "2026-09-30T02:00:00Z is shown as 2026-09-30 10:00:00 (UTC+8)." |
 | About | The path of the configuration file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
+
+The tab shows these three keys only (D34). Keys that later milestones need are added
+to the tab by those milestones: the coverage threshold (Milestone 4, O15);
+`default_local_copy_root`, `network_speed_mb_s`, `default_hash_mode`,
+`hash_sample_fraction` and a free-space margin (Milestones 5 and 6).
 
 Not in the Settings tab (D30):
 
 - **"Upgrade database".** It waits for the first real schema migration (O19). Until
   then the status line shows the schema version only. With status `needs upgrade`,
-  the line says that this version of the app cannot write to the database.
+  the line says that this version of the app cannot read or write the database
+  (D37).
 - **Data-file extensions.** They stay fixed in code as `.dat` and `.bin`
   (`scanner.DEFAULT_EXTENSIONS`, any letter case), so every PC scans a folder the same
   way. A new extension comes with a new release.
@@ -140,30 +147,31 @@ Not in the Settings tab (D30):
   (Milestone 7). An empty database comes from `tools/db_check.py create`. Milestone 7
   adds an admin command-line option, `--create-db PATH`, for packaged builds.
 
-Keys that later milestones need are added to the tab by those milestones (O30): the
-coverage threshold (Milestone 4, O15); `default_local_copy_root`,
-`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and a free-space
-margin (Milestones 5 and 6).
-
 Behaviour:
 
 - **Validation.** Every field is checked by the same rules as
   `config.parse_config()`. A wrong value is marked at its field, and Save stays
-  disabled until it is fixed.
-- **Writing.** Save writes `config.toml` with the writer chosen in O18. It creates
-  `%APPDATA%\IQDataManager` if the folder is missing. It writes a new file in the same
-  folder and then replaces the old file with it, so a failed write leaves the old
-  file intact. The previous file is kept as a backup (O31).
+  disabled until it is fixed. Save is also disabled while nothing has changed.
+- **A wrong key the tab does not show** keeps Save disabled. The tab names the key.
+  The user corrects it in the file by hand and clicks "Reload from file" (D36).
+- **Writing.** Save writes `config.toml` with `tomli-w` (D31). It creates
+  `%APPDATA%\IQDataManager` if the folder is missing. It writes `config.toml.new` in
+  the same folder and then replaces the old file with it, so a failed write leaves the
+  old file intact. The previous file is kept as `config.toml.bak`, replaced on each
+  Save (D35).
 - **Keys the tab does not show** stay in the file, for example `storage_roots` and any
   key added by hand. Comments in the file are lost on write. The tab says so.
-- **Applying.** Changes apply on Save, without a restart (O28). The Log tab takes the
-  new configuration and reloads its lists. If the Log tab holds input that is not
-  saved, the app asks before it applies the change.
+- **Applying.** Changes apply on Save, without a restart (D33). A new display offset
+  redraws the Log tab's times and keeps its form. A new `db_path` or new NAS roots
+  clear the Log tab form and reload its lists. If the form holds input that is not
+  saved, the app asks first, and No writes nothing. While the Log tab saves a
+  recording, the Settings tab does not save.
 - **Overrides.** `--config` and `--db` keep working. With `--db`, Save writes
   `db_path` to the file, and the `--db` path stays in force for the current run. The
   tab says so.
 - **Startup errors.** A configuration file that cannot be read opens the app on the
-  Settings tab with the error shown, so the user can correct it there.
+  Settings tab with the error shown, so the user can correct it there. A file that is
+  not valid TOML can be replaced by Save.
 - **Database files.** The Settings tab never creates or changes a database (D30). It
   opens the chosen file read-only.
 - **Architecture.** The writer and its validation live in `config.py` (no Qt). The tab
@@ -388,7 +396,7 @@ iq-data-manager/
   src/iqdm/
     __main__.py               # python -m iqdm
     app.py                    # QApplication, main window and its tabs, --config/--db
-    config.py                 # TOML config load (save from Milestone 3a), defaults
+    config.py                 # TOML config load and save (Settings tab, D31), defaults
     models.py                 # dataclasses: Recording, Channel, Param, Transfer...
     timeutil.py               # UTC ISO 8601 text <-> Unix seconds; display offset (D24)
     location.py               # folder -> storage_root, rel_path, archive state (D14)

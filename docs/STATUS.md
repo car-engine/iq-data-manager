@@ -2,21 +2,22 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-02.
+report. Last updated: 2026-10-02 (Milestone 3a).
 
 ## Current state
 
-- Milestone 3 (Log tab) is complete and merged into `main` (fast-forward,
-  2026-10-03, after the user's manual tests and approval). Report:
-  [reports/M3.md](reports/M3.md). Decisions D14–D28.
-- 627 tests pass and 2 skip on `main`. One skip needs the symbolic-link privilege;
-  the other runs only off Windows. `ruff check` is clean.
-- Next: **Milestone 3a, Settings tab** (D29, narrowed by D30), on a new branch
-  `m3a-settings`, before Milestone 4 (Viewer). Scope: SPEC section 4, "Settings tab".
-  Open items to raise in the plan: O18, O27, O28, O30 and O31. Start with a plan in
-  plan mode.
-- The user changed the UNC pattern in `.claude/hooks/block_destructive.py`. The
-  change is not committed; agents may not commit `.claude/`.
+- Milestone 3a (Settings tab) is complete on branch `m3a-settings` and waits for the
+  user's manual tests and merge approval. Report: [reports/M3a.md](reports/M3a.md).
+  Decisions D31–D37. The report asks whether the dates "2026-10-03" in older
+  documents should read 2026-10-02 (issue 4).
+- 728 tests pass and 2 skip on `m3a-settings`. One skip needs the symbolic-link
+  privilege; the other runs only off Windows. `ruff check` is clean.
+- Milestone 3 (Log tab) is merged into `main`. Report: [reports/M3.md](reports/M3.md).
+  Decisions D14–D28.
+- Next after the merge: **Milestone 4, Viewer tab**. Open items to raise in its plan:
+  O15, O16 and O17. Milestone 4 adds the coverage threshold to the Settings tab (D34).
+- The user's narrower UNC pattern in `.claude/hooks/block_destructive.py` is committed
+  (`77ed32c`).
 - The user chose to start Milestone 3 before the NAS part of O21. The local part is
   done ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
 
@@ -30,7 +31,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
-| 3a. Settings tab (D29) | Not started; next | | | |
+| 3a. Settings tab (D29) | Done, not merged | `m3a-settings` | `8298a97`–`a7e647f`, plus the commit that adds the report | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
@@ -61,21 +62,16 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O15 | Coverage highlight threshold of 99% | 4 | 99%, as a config key. | Former SPEC section 13 |
 | O16 | `list_recordings` loads every channel in one query; not measured beyond thousands of recordings | 4 | Revisit with the Viewer filters. | M1 review |
 | O17 | No way to delete a wrongly logged recording in the GUI (`repository.delete_recording` exists) | 4 | Out of scope for v1. | M0 review 23 |
-| O18 | Writing `config.toml`: `tomllib` only reads TOML. Later keys: coverage threshold (4), free-space margin (5). Data-file extensions are not a key (D30). | 3a | `tomli-w` as a new pinned dependency (needs the user's approval under CLAUDE.md). It escapes Windows paths correctly. A hand-written writer is the fallback. | M0 review 21; D29; D30 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then the status line shows the schema version. | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
-| O27 | Name of the Settings milestone | 3a | "Milestone 3a". Later milestones keep their numbers, so references such as "the Viewer in Milestone 4" stay true. | D29 |
-| O28 | When Settings changes apply | 3a | On Save, without a restart. The Log tab takes the new configuration and reloads its lists. If it holds input that is not saved, the app asks first. | D29 |
-| O30 | Which keys the Settings tab shows in Milestone 3a | 3a | Only keys in use now: `db_path`, `nas_roots`, `display_utc_offset_hours`. Each later milestone adds its own keys to the tab. | D29; D30 |
-| O31 | Backup of `config.toml` on Save | 3a | Keep the previous file as `config.toml.bak`, replaced on each Save. | D29 |
 | O32 | Real file names for transfers. The database does not store the file extension, and SPEC section 8 writes manifests as `<timestamp>.dat`. | 5 | Store the extension per channel when a recording is logged (a schema change while `schema.sql` is still edited in place, D4). The fallback is a rescan of the source folder before each transfer. | D30 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D30). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D37). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -88,9 +84,16 @@ Decided items are in `docs/DECISIONS.md` (D1–D30). The M0 review table in
 | O23 | Logging works on any folder, local or on the NAS | D18 (2026-10-02) |
 | O24 | A last file without IQ data | D13 (2026-10-02) |
 | O29 | Creating a new database from the Settings tab | D30 (2026-10-03) |
+| O18 | Writing `config.toml` | D31 (2026-10-02) |
+| O27 | Name of the Settings milestone | D32 (2026-10-02) |
+| O28 | When Settings changes apply | D33 (2026-10-02) |
+| O30 | Which keys the Settings tab shows | D34 (2026-10-02) |
+| O31 | Backup of `config.toml` on Save | D35 (2026-10-02) |
 
 ## Pending checks for the user
 
+- Milestone 3a: run the manual test set in [reports/M3a.md](reports/M3a.md), then
+  decide on the merge of `m3a-settings` and on the dates in issue 4.
 - O21 before the app writes to a real database on the NAS: run `tools/db_check.py`
   `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
   `write` on two PCs. Steps are in
@@ -110,6 +113,8 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `dev/test.db` is the user's scratch database for O21. Move it out of the repository
   before the NAS test.
 - After the Milestone 3 manual tests: `dev/m3.db` and `fixtures_out/m3-manual/`.
+- `dev/m3a-shots/` (Settings tab screenshots), and `dev/m3a-manual/` after the
+  Milestone 3a manual tests.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
   folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
@@ -126,8 +131,11 @@ These come from the safety configuration and from experience in this repository.
   even inside a commit message or a heredoc. A UNC path also blocks it: two
   backslashes, a name and a backslash at the start of a word, or the same with
   escaped backslashes. The user narrowed this pattern on 2026-10-03, so a backslash
-  pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. That
-  change to `.claude/hooks/block_destructive.py` was not committed at the time.
+  pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. Commit
+  `77ed32c` holds that change.
+- **Scripts that are not part of the project** (screenshots, probes) go under `dev/`,
+  which is gitignored. The hook blocks Write outside the repository, including the
+  session scratchpad.
 - **Write and change file content only with the Write and Edit tools.** Do not use
   heredocs, `cat >>` or `python -` scripts for file content. The hook checks the
   target path of Write and Edit and does not read their content, so docs, code and
