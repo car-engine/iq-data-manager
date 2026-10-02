@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QApplication,
@@ -101,6 +101,8 @@ class _ChannelRow:
 
 class LogTab(QWidget):
     """Form for logging a recording folder, and for editing a logged one."""
+
+    saved = Signal(int)  # recording id after a save, new or edited; the Viewer refreshes
 
     def __init__(
         self,
@@ -925,6 +927,7 @@ class LogTab(QWidget):
         self.show_message(f"Saved as recording {recording_id}.")
         self.reload_choices()
         self.refresh_checklist()
+        self.saved.emit(recording_id)
         details = ""
         if self._location is not None:
             details = (
@@ -940,6 +943,7 @@ class LogTab(QWidget):
         self.show_message(f"Saved changes to recording {recording_id}.")
         if recording_id is not None:
             self.load_recording(recording_id, message=self.message_label.text())
+            self.saved.emit(recording_id)
         QMessageBox.information(
             self, "Recording saved", f"Saved changes to recording {recording_id}."
         )

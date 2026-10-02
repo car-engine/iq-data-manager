@@ -6,15 +6,19 @@ from PySide6.QtWidgets import QMessageBox
 from iqdm import __version__
 from iqdm.app import (
     LOG_TAB_SAVING,
+    LOG_TAB_SAVING_EDIT,
     MainWindow,
     _parse_args,
     config_path_for,
+    drop_log_input_question,
     main,
     resolve_config,
     status_text,
 )
 from iqdm.config import Config, load_config
-from iqdm.db.connection import schema_sql
+from iqdm.db import repository as repo
+from iqdm.db.connection import schema_sql, write_transaction
+from iqdm.models import Channel, Recording
 
 
 @pytest.fixture
@@ -144,7 +148,7 @@ def make_window(qtbot, config_file, **kw) -> MainWindow:
 
 
 def wait_window(qtbot, window: MainWindow) -> None:
-    for runner in (window.log_tab.runner, window.settings_tab.runner):
+    for runner in (window.viewer_tab.runner, window.log_tab.runner, window.settings_tab.runner):
         qtbot.waitUntil(lambda r=runner: not r.busy, timeout=10_000)
 
 
@@ -258,3 +262,110 @@ def test_settings_wait_for_a_log_tab_save(qtbot, tmp_path, db_path, monkeypatch)
     window.log_tab._saving = False
     assert shown == [LOG_TAB_SAVING]
     assert not path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Viewer in the main window (Milestone 4)
+# ---------------------------------------------------------------------------
+
+T0 = 1790733600.0
+
+
+def add_recording(db_path, rel_path: str, start: float = T0) -> int:
+    def fill(conn):
+        site = repo.find_site(conn, "SiteA") or repo.add_site(conn, "SiteA")
+        ch = Channel(
+            channel_index=0, fc_hz=145.8e6, fs_hz=1e3, start_unix=start, end_unix=start + 10
+        )
+        return repo.insert_recording(
+            conn,
+            Recording(
+                logged_by="userA",
+                site_id=site.id,
+                storage_root="C:/x",
+                rel_path=rel_path,
+                channels=[ch],
+            ),
+        )
+
+    return write_transaction(db_path, fill)
+
+
+def window_with_recording(qtbot, tmp_path, db_path) -> tuple[MainWindow, int]:
+    rid = add_recording(db_path, "rec1")
+    path = tmp_path / "config.toml"
+    path.write_text(f"db_path = '{db_path}'\n", encoding="utf-8")
+    window = make_window(qtbot, path)
+    assert window.viewer_tab.select_recording(rid)
+    wait_window(qtbot, window)
+    return window, rid
+
+
+def test_viewer_gets_the_configuration(qtbot, tmp_path, db_path):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    assert window.viewer_tab.config == window.config
+    assert window.viewer_tab.selected_id == rid
+
+
+def test_edit_entry_opens_the_log_tab_in_edit_mode(qtbot, tmp_path, db_path, questions):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.viewer_tab.edit_button.click()
+    wait_window(qtbot, window)
+    assert questions == []
+    assert window.tabs.currentWidget() is window.log_tab
+    assert window.log_tab.editing is not None
+    assert window.log_tab.editing.id == rid
+
+
+def test_edit_entry_answer_no_keeps_the_log_input(qtbot, tmp_path, db_path, questions):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.viewer_tab.edit_button.click()
+    wait_window(qtbot, window)
+    assert questions == [drop_log_input_question(rid)]
+    assert window.tabs.currentWidget() is window.viewer_tab
+    assert window.log_tab.editing is None
+    assert window.log_tab.remarks_edit.toPlainText() == "not saved yet"
+
+
+def test_edit_entry_answer_yes_drops_the_log_input(qtbot, tmp_path, db_path, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.viewer_tab.edit_button.click()
+    wait_window(qtbot, window)
+    assert window.log_tab.editing is not None
+    assert window.log_tab.editing.id == rid
+    assert window.log_tab.remarks_edit.toPlainText() == ""
+
+
+def test_edit_entry_waits_for_a_log_tab_save(qtbot, tmp_path, db_path, monkeypatch):
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text, *a: shown.append(text)
+    )
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.log_tab._saving = True
+    window.viewer_tab.edit_button.click()
+    window.log_tab._saving = False
+    assert shown == [LOG_TAB_SAVING_EDIT]
+    assert window.tabs.currentWidget() is window.viewer_tab
+
+
+def test_a_log_tab_save_refreshes_the_viewer(qtbot, tmp_path, db_path):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    new_id = add_recording(db_path, "rec2", start=T0 + 100)
+    window.log_tab.saved.emit(new_id)
+    wait_window(qtbot, window)
+    model = window.viewer_tab.model
+    assert {model.summary(r).id for r in range(model.rowCount())} == {rid, new_id}
+    assert window.viewer_tab.selected_id == rid
+
+
+def test_saved_settings_reach_the_viewer(qtbot, tmp_path, db_path):
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.settings_tab.coverage_spin.setValue(90.0)
+    window.settings_tab.offset_spin.setValue(0)
+    save_settings(qtbot, window)
+    assert window.viewer_tab.config.coverage_highlight_percent == 90.0
+    assert window.viewer_tab.start_from_label.text() == "Start date from (UTC)"

@@ -25,6 +25,16 @@ CLEAR_LOG_TAB_QUESTION = (
     "that is not saved.\n\nSave the settings and clear the form?"
 )
 LOG_TAB_SAVING = "The Log tab is saving a recording. Save the settings when it has finished."
+LOG_TAB_SAVING_EDIT = (
+    "The Log tab is saving a recording. Click Edit entry again when it has finished."
+)
+
+
+def drop_log_input_question(recording_id: int) -> str:
+    return (
+        "The Log tab form holds input that is not saved.\n\n"
+        f"Open recording {recording_id} for editing and drop that input?"
+    )
 
 
 class MainWindow(QMainWindow):
@@ -51,8 +61,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(1280, 800)
 
-        self.viewer_tab = ViewerTab()
+        self.viewer_tab = ViewerTab(self.config)
         self.log_tab = LogTab(self.config)
+        self.viewer_tab.edit_requested.connect(self.edit_recording)
+        self.log_tab.saved.connect(lambda _id: self.viewer_tab.refresh())
         self.transfer_tab = TransferTab()
         self.settings_tab = SettingsTab(
             config_path,
@@ -100,7 +112,29 @@ class MainWindow(QMainWindow):
         """Use a configuration the Settings tab saved, without a restart (O28)."""
         self.config = self._effective(config)
         self.log_tab.apply_config(self.config)
+        self.viewer_tab.apply_config(self.config)
         self.statusBar().showMessage(status_text(self.config, None))
+
+    def edit_recording(self, recording_id: int) -> None:
+        """Open a recording from the Viewer in the Log tab's edit mode (D16, D45).
+
+        Input in the Log tab form that is not saved is dropped only after a Yes.
+        """
+        if self.log_tab.is_saving:
+            QMessageBox.information(self, "Recording not opened", LOG_TAB_SAVING_EDIT)
+            return
+        if self.log_tab.has_unsaved_input():
+            answer = QMessageBox.question(
+                self,
+                "Drop the Log tab input?",
+                drop_log_input_question(recording_id),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        self.tabs.setCurrentWidget(self.log_tab)
+        self.log_tab.load_recording(recording_id)
 
 
 def status_text(config: Config, config_error: str | None) -> str:
