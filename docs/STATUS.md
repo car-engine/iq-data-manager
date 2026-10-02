@@ -6,8 +6,7 @@ report. Last updated: 2026-10-02.
 
 ## Current state
 
-- Branch `m1-database`: Milestone 1 is complete and waiting for the user to approve
-  the merge into `main`.
+- Milestone 1 is complete and merged into `main` (fast-forward, 2026-10-02).
 - 202 tests pass, `ruff check` is clean.
 - Next: Milestone 2 (Scanner), on a new branch `m2-scanner`, starting with a plan in
   plan mode.
@@ -19,7 +18,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | Milestone | Status | Branch | Commits | Report |
 | --- | --- | --- | --- | --- |
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
-| 1. Database layer | Done, not merged | `m1-database` | `d2e11b3`–`f832167`, plus the handoff-documents commit | [M1](reports/M1.md) |
+| 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Not started | | | |
 | 3. Log tab | Not started | | | |
 | 4. Viewer tab | Not started | | | |
@@ -71,9 +70,9 @@ Decided items are in `docs/DECISIONS.md` (D1–D10). The M0 review table in
 
 ## Pending checks for the user
 
-- Double-click `dist/smoke-2/IQDataManager/IQDataManager.exe` and confirm the three
-  tabs appear (Milestone 1, check B).
 - O21 before Milestone 3.
+
+The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 
 ## Files for the user to remove
 
