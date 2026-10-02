@@ -11,7 +11,7 @@ report. Last updated: 2026-10-02.
 - 322 tests pass and 1 skips on `main` (symbolic links need a privilege this account
   lacks). `ruff check` is clean.
 - Milestone 3 (Log tab) is complete on branch `m3-log-tab` and not merged. Report:
-  [reports/M3.md](reports/M3.md). On the branch, 599 tests pass and 2 skip, and
+  [reports/M3.md](reports/M3.md). On the branch, 605 tests pass and 2 skip, and
   `ruff check` is clean.
 - After a first look at the tab, the user added D21 (fs from the file size), D22
   (file duration from the file names, coverage above 100 % as an error) and D23
