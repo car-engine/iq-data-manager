@@ -811,3 +811,15 @@ def test_add_site_strips_the_name(db_path):
 )
 def test_missing_text(seconds, text):
     assert entry.missing_text(seconds) == text
+
+
+def test_params_without_channels_keeps_recording_rows_and_other_channels():
+    rows = [
+        ParamInput(param="SDR", value="X310"),
+        ParamInput(param="Gain", value="30", channel_index=1),
+        ParamInput(param="LNA", value="on", channel_index=0),
+        ParamInput(param="Gain", value="20", channel_index=2),
+    ]
+    kept = entry.params_without_channels(rows, [1, 2])
+    assert [(p.param, p.channel_index) for p in kept] == [("SDR", None), ("LNA", 0)]
+    assert entry.params_without_channels(rows, []) == rows

@@ -181,6 +181,8 @@ Edit mode (DECISIONS.md D16):
 - A change to fs, sample type, header bytes or file duration needs a rescan first.
 - A rescan that removes channels asks for confirmation on save. The dialog names the
   channels and the number of their parameters.
+- The rescan removes the RF chain rows of those channels from the form at once
+  (D20). Rows for the whole recording and for other channels stay.
 
 ## 7. Scanner
 

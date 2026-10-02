@@ -37,6 +37,7 @@ Rules for this file:
 | D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Active |
 | D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |
 | D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active |
+| D20 | RF chain rows of channels removed by a rescan | 2026-10-02, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -331,3 +332,17 @@ Affects: SPEC section 6.
   exactly 145 800 000 Hz.
 
 Affects: SPEC section 6, `entry.py`, `db/repository.py`.
+
+## D20. RF chain rows of channels removed by a rescan
+
+Closes issue 1 of the Milestone 3 report. Adds to D16.
+
+- In the first build of edit mode, the RF chain rows of a removed channel stayed in
+  the form. The checklist reported each row as an error, so the user had to remove
+  the rows by hand before the D16 dialog appeared.
+- Now a rescan in edit mode removes those rows from the form at once and says so in
+  the tab's message line. Rows for the whole recording and for other channels stay.
+- The D16 dialog on save stays the only confirmation. "No" writes nothing, and the
+  stored rows come back when the user opens the entry again.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.

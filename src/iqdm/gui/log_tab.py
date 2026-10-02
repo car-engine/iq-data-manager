@@ -622,7 +622,30 @@ class LogTab(QWidget):
         self._show_scan()
         if outcome.db_error is not None:
             self.show_message(f"Cannot check the database for this folder: {outcome.db_error}")
+        if self._original is not None:
+            self._drop_rows_of_removed_channels(self._original, outcome.scan)
         self.refresh_checklist()
+
+    def _drop_rows_of_removed_channels(self, original: Recording, scan: ScanResult) -> None:
+        """Remove RF chain rows of channels the rescan no longer finds (DECISIONS.md D20).
+
+        The save still asks before it removes the channels from the database (D16).
+        """
+        removed = entry.channel_set_change(original, scan).removed
+        rows = self.param_table.rows()
+        kept = entry.params_without_channels(rows, removed)
+        if len(kept) == len(rows):
+            return
+        self.param_table.set_rows(kept)
+        n = len(rows) - len(kept)
+        channels = ", ".join(str(i) for i in removed)
+        self.show_message(
+            f"The rescan no longer finds channel {channels}. "
+            f"{n} RF chain row{'' if n == 1 else 's'} of "
+            f"{'that channel' if len(removed) == 1 else 'those channels'} "
+            f"{'was' if n == 1 else 'were'} removed from the form. Saving asks for "
+            "confirmation."
+        )
 
     def _scan_failed(self, exc: Exception) -> None:
         self._scan_task = None
@@ -669,7 +692,10 @@ class LogTab(QWidget):
             removed = entry.channel_set_change(original, self._scan).removed
             if removed:
                 if not self._confirm_removal(original, removed):
-                    self.show_message("Nothing saved. The channels stay in the database.")
+                    self.show_message(
+                        "Nothing saved. The channels and their RF chain rows stay in the "
+                        "database. Open the entry again to see the stored rows."
+                    )
                     return
                 allow_removal = True
         self._start_save(

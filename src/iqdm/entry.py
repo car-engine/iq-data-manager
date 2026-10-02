@@ -253,6 +253,14 @@ def params_on_channels(rec: Recording, indices: Iterable[int]) -> int:
     return sum(1 for p in rec.params if p.channel_index in wanted)
 
 
+def params_without_channels(
+    params: Sequence[ParamInput], indices: Iterable[int]
+) -> list[ParamInput]:
+    """The RF chain rows that do not belong to these channels (DECISIONS.md D20)."""
+    dropped = set(indices)
+    return [p for p in params if p.channel_index not in dropped]
+
+
 def state_note(location: Location | None, original: Recording | None) -> str:
     """The line under the checklist that says which archive state a save writes."""
     if original is not None:

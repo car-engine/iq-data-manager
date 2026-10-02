@@ -467,12 +467,14 @@ def test_rescan_that_removes_a_channel_asks_first(
     assert tab.channel_table.rowCount() == 1
     infos = checklist_texts(tab, ItemState.INFO)
     assert "The rescan removes channel 1 and 1 parameter. Saving asks for confirmation." in infos
-    # The Gain row on channel 1 is still in the form, so the checklist blocks the save
-    # until the user removes the row.
-    assert "RF chain row 1 (Gain): channel 1 is not in this recording" in checklist_texts(
-        tab, ItemState.ERROR
+    # D20: the Gain row on channel 1 left the form with the rescan.
+    assert tab.param_table.rows() == []
+    assert tab.message_label.text() == (
+        "The rescan no longer finds channel 1. 1 RF chain row of that channel was removed "
+        "from the form. Saving asks for confirmation."
     )
-    tab.param_table.remove_row(0)
+    assert checklist_texts(tab, ItemState.ERROR) == []
+    assert tab.save_button.isEnabled()
 
     questions: list[str] = []
 
@@ -487,7 +489,10 @@ def test_rescan_that_removes_a_channel_asks_first(
     assert "with 1 RF chain parameter." in questions[0]
     rec = entry.load_recording(db_path, 1)
     if answer == QMessageBox.StandardButton.No:
-        assert tab.message_label.text() == "Nothing saved. The channels stay in the database."
+        assert tab.message_label.text() == (
+            "Nothing saved. The channels and their RF chain rows stay in the database. "
+            "Open the entry again to see the stored rows."
+        )
         assert [c.channel_index for c in rec.channels] == [0, 1]
         assert len(rec.params) == 1
     else:
@@ -520,3 +525,38 @@ def test_task_runner_delivers_results_and_errors(qtbot):
     qtbot.waitUntil(lambda: not runner.busy, timeout=5000)
     assert 42 in results
     assert any(isinstance(r, ZeroDivisionError) for r in results)
+
+
+def test_rescan_keeps_rows_of_the_recording_and_other_channels(
+    qtbot, make_tab, make_recording, site_id
+):
+    info = make_recording(n_channels=2)
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    for p in (
+        entry.ParamInput(param="SDR", value="X310"),
+        entry.ParamInput(param="Gain", value="30", channel_index=1),
+        entry.ParamInput(param="LNA", value="on", channel_index=0),
+    ):
+        tab.param_table.add_row(p)
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    remove_channel_folder_by_moving(info)
+    tab.start_scan()
+    wait_idle(qtbot, tab)
+    assert [(p.param, p.channel_index) for p in tab.param_table.rows()] == [
+        ("SDR", None),
+        ("LNA", 0),
+    ]
+
+
+def test_rescan_without_a_removed_channel_keeps_every_row(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(n_channels=2)
+    tab = saved_tab(qtbot, make_tab, info, site_id)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    tab.start_scan()
+    wait_idle(qtbot, tab)
+    assert [p.param for p in tab.param_table.rows()] == ["Gain"]
+    assert tab.message_label.text() == ""
