@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
 
         self.viewer_tab = ViewerTab()
-        self.log_tab = LogTab()
+        self.log_tab = LogTab(self.config)
         self.transfer_tab = TransferTab()
 
         self.tabs = QTabWidget()
