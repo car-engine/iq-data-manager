@@ -6,22 +6,14 @@ report. Last updated: 2026-10-02.
 
 ## Current state
 
-- Milestone 2 (Scanner) is complete and merged into `main` (fast-forward,
-  2026-10-02). Report: [reports/M2.md](reports/M2.md).
-- 322 tests pass and 1 skips on `main` (symbolic links need a privilege this account
-  lacks). `ruff check` is clean.
-- Milestone 3 (Log tab) is complete on branch `m3-log-tab` and not merged. Report:
-  [reports/M3.md](reports/M3.md). On the branch, 627 tests pass and 2 skip, and
-  `ruff check` is clean.
-- After a first look at the tab, the user added D21 (fs from the file size), D22
-  (file duration from the file names, coverage above 100 % as an error) and D23
-  (to-do items in the checklist). Issue 1 of the report is closed by D20.
-- After the first manual test, the user added D24 (times at UTC+8 by default,
-  replaces D17) and D25 (fs with units, Hz by default), plus a save pop-up and grey
-  read-only fields. D26: a new folder resets the file duration, the format fields,
-  the channel rows and the RF chain rows.
-- Before the merge, the user runs the manual test set in `fixtures_out/m3-manual/`
-  with `dev/m3.db`. The steps are in the Milestone 3 report.
+- Milestone 3 (Log tab) is complete and merged into `main` (fast-forward,
+  2026-10-03, after the user's manual tests and approval). Report:
+  [reports/M3.md](reports/M3.md). Decisions D14–D28.
+- 627 tests pass and 2 skip on `main`. One skip needs the symbolic-link privilege;
+  the other runs only off Windows. `ruff check` is clean.
+- Next: **Milestone 3a, Settings tab** (D29), on a new branch `m3a-settings`, before
+  Milestone 4 (Viewer). Scope: SPEC section 4, "Settings tab". Open items to raise
+  in the plan: O18, O19 and O27–O31. Start with a plan in plan mode.
 - The user changed the UNC pattern in `.claude/hooks/block_destructive.py`. The
   change is not committed; agents may not commit `.claude/`.
 - The user chose to start Milestone 3 before the NAS part of O21. The local part is
@@ -37,7 +29,8 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
-| 3. Log tab | Done, not merged | `m3-log-tab` | `0569068`–`eed75f0`, plus the commit that brings the report up to date | [M3](reports/M3.md) |
+| 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
+| 3a. Settings tab (D29) | Not started; next | | | |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
