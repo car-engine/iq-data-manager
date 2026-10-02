@@ -62,22 +62,21 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before Milestone 3 | The agent writes a script that takes the path as an argument. The user runs it. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O23 | Logging works on any folder, local or on the NAS; scanning NAS folders is slower | 3 | Keep. | Former SPEC section 13 |
-| O24 | A 0-byte last file counts as a short last file and gives an info finding (D3). It could also mean a failed write. | 3 | Keep as information. | M2 review 2 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D12). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D13). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
 | --- | --- | --- |
 | O4 | Scanner edge cases | D11 (2026-10-02) |
 | O5 | Gap tolerance with fractional timestamps | D12 (2026-10-02) |
+| O24 | A last file without IQ data | D13 (2026-10-02) |
 
 ## Pending checks for the user
 
 - O21 before Milestone 3.
-- Merge approval for `m2-scanner`, and O24.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 

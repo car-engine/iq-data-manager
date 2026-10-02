@@ -30,6 +30,7 @@ Rules for this file:
 | D10 | Architecture tests read the package source | 2026-10-02, Milestone 0 | Active |
 | D11 | Scanner folder rules | 2026-10-02, Milestone 2 | Active |
 | D12 | Gap rule | 2026-10-02, Milestone 2 | Active |
+| D13 | Last file without IQ data | 2026-10-02, Milestone 2 | Active |
 
 ## D1. Sample types
 
@@ -212,3 +213,17 @@ Closes O5 (M0 review 17).
   user to check the file duration.
 
 Affects: SPEC section 7, `scan/scanner.py`.
+
+## D13. Last file without IQ data
+
+Closes O24 (Milestone 2 report, issue 2). Narrows D3.
+
+- A last file whose size is `header_bytes` or less holds no IQ data. The channel check
+  reports it as an error, together with the other wrong-size files.
+- The user asked for an error when the size is below the header size. The rule uses
+  "or less" because a file of exactly `header_bytes` bytes also holds no IQ data, and
+  with no header a 0-byte file would otherwise pass.
+- A last file larger than `header_bytes` and smaller than expected stays information
+  (D3).
+
+Affects: SPEC sections 6 and 7, `scan/scanner.py`.

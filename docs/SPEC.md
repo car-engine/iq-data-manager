@@ -148,7 +148,8 @@ Validation before save (shown as a checklist):
 - File sizes consistent with fs: expected bytes per file =
   `header_bytes + fs_hz * file_duration_s * 2 * bytes_per_sample`. A channel's last
   file may be shorter than expected; that is reported as information (DECISIONS.md
-  D3). Any other mismatch, including a last file larger than expected, is an error
+  D3). A last file of `header_bytes` bytes or fewer holds no IQ data and is an error
+  (D13). Any other mismatch, including a last file larger than expected, is an error
   that names the channel and the expected and actual sizes.
 - Required fields present; fc and fs positive.
 - Gaps are reported as information, not errors.
@@ -181,7 +182,7 @@ list of unrecognised entries.
   files (D12).
 - Channel check: given fs, sample type and header size, reports the size errors and
   information in section 6, a channel with no files, and files closer together than
-  half the file duration (D11, D12).
+  half the file duration (D11, D12, D13).
 - Uses `os.scandir` for speed and takes file sizes from the directory entries; must
   handle tens of thousands of files per channel. Reports progress and can be
   cancelled.

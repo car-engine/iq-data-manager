@@ -368,7 +368,9 @@ def expected_file_bytes(
     return header_bytes + n * 2 * BYTES_PER_SAMPLE[SampleType(dtype)]
 
 
-def _size_findings(channel: ChannelScan, label: str, expected: int) -> list[Finding]:
+def _size_findings(
+    channel: ChannelScan, label: str, expected: int, header_bytes: int
+) -> list[Finding]:
     files = channel.files
     last = len(files) - 1
     wrong: list[DataFile] = []
@@ -376,7 +378,8 @@ def _size_findings(channel: ChannelScan, label: str, expected: int) -> list[Find
     for i, f in enumerate(files):
         if f.size == expected:
             continue
-        if i == last and i > 0 and f.size < expected:
+        # A short last file is information (D3) only if it holds IQ data (D13).
+        if i == last and i > 0 and header_bytes < f.size < expected:
             findings.append(
                 Finding(
                     severity=Severity.INFO,
@@ -434,6 +437,7 @@ def check_channel(
     the wrong size, except a short last file; files closer together than half the
     file duration. Information: a short last file (DECISIONS.md D3). A channel with
     one file has no last file in this sense, so a short single file is an error (D11).
+    A last file of header_bytes bytes or fewer holds no IQ data and is an error (D13).
     """
     label = _channel_label(channel.channel_index, channel.sub_path)
     if not channel.files:
@@ -456,6 +460,6 @@ def check_channel(
             )
         )
     else:
-        findings += _size_findings(channel, label, expected)
+        findings += _size_findings(channel, label, expected, header_bytes)
     findings += _spacing_findings(channel, label)
     return findings

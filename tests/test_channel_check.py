@@ -170,13 +170,31 @@ def test_flat_channel_label(make_recording):
     assert finding.message.startswith("channel 0 (recording folder): ")
 
 
-def test_empty_files_are_wrong_except_the_last(make_recording):
-    # The last file is shorter than expected, which D3 allows.
+def test_empty_files_are_all_wrong(make_recording):
     info = make_recording(content="empty")
     (ch,) = scanned(info)
-    error, info_finding = check(ch, info)
-    assert "9 files differ" in error.message
-    assert info_finding.severity == Severity.INFO
+    (finding,) = check(ch, info)
+    assert "10 files differ" in finding.message
+
+
+@pytest.mark.parametrize(
+    ("header_bytes", "last_size", "severity"),
+    [
+        (0, 0, Severity.ERROR),
+        (0, 1, Severity.INFO),
+        (64, 0, Severity.ERROR),
+        (64, 63, Severity.ERROR),
+        (64, 64, Severity.ERROR),
+        (64, 65, Severity.INFO),
+    ],
+)
+def test_last_file_without_iq_data_is_an_error(make_recording, header_bytes, last_size, severity):
+    info = make_recording(header_bytes=header_bytes, wrong_size={9: last_size})
+    (ch,) = scanned(info)
+    (finding,) = check(ch, info)
+    assert finding.severity == severity
+    assert "1790733609.dat" in finding.message
+    assert f"{last_size} bytes" in finding.message
 
 
 def test_fs_that_is_not_whole_samples_is_an_error(make_recording):
