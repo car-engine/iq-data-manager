@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 from iqdm import entry
@@ -17,6 +17,7 @@ from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, open_db
 from iqdm.entry import ItemState
 from iqdm.gui.log_tab import LogTab, scan_summary, time_text
+from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
 from iqdm.models import ArchiveState, Endianness, IqLayout, Operation, SampleType
@@ -843,3 +844,100 @@ def test_new_folder_resets_format_channels_and_rf_chain(qtbot, make_tab, make_re
     assert tab.site_combo.currentData() == site_id
     assert tab.logged_by_edit.text() == "userB"
     assert tab.plan_edit.text() == "plan-9"
+
+
+# ---------------------------------------------------------------------------
+# Light and dark themes (second manual test, 2026-10-03)
+# ---------------------------------------------------------------------------
+
+
+def luminance(colour: QColor) -> float:
+    """Relative luminance as defined for WCAG contrast."""
+
+    def channel(value: float) -> float:
+        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+    return (
+        0.2126 * channel(colour.redF())
+        + 0.7152 * channel(colour.greenF())
+        + 0.0722 * channel(colour.blueF())
+    )
+
+
+def contrast(a: QColor, b: QColor) -> float:
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def themed_palette(base: str, text: str, window: str) -> QPalette:
+    palette = QPalette()
+    for role, colour in (
+        (QPalette.ColorRole.Base, base),
+        (QPalette.ColorRole.Text, text),
+        (QPalette.ColorRole.Window, window),
+        (QPalette.ColorRole.WindowText, text),
+    ):
+        palette.setColor(role, QColor(colour))
+    return palette
+
+
+DARK = themed_palette("#2d2d2d", "#ffffff", "#202020")  # Windows 11 dark, approximately
+LIGHT = themed_palette("#ffffff", "#000000", "#f0f0f0")
+
+
+@pytest.fixture
+def app_palette(qapp):
+    """Set the application palette in a test and restore it afterwards."""
+    before = qapp.palette()
+    yield qapp.setPalette
+    qapp.setPalette(before)
+
+
+def field_colours(edit) -> tuple[QColor, QColor]:
+    palette = edit.palette()
+    return palette.color(QPalette.ColorRole.Base), palette.color(QPalette.ColorRole.Text)
+
+
+@pytest.mark.parametrize("theme", [DARK, LIGHT], ids=["dark", "light"])
+def test_fields_are_readable_in_both_themes(make_tab, app_palette, theme):
+    app_palette(theme)
+    tab = make_tab()
+    base, text = field_colours(tab.folder_edit)
+    assert base == theme.color(QPalette.ColorRole.Base)
+    assert text == theme.color(QPalette.ColorRole.Text)
+    for field in (tab.start_edit, tab.storage_root_edit, tab.rel_path_edit, tab.state_edit):
+        ro_base, ro_text = field_colours(field)
+        assert contrast(ro_text, ro_base) >= 4.5
+        assert ro_base != base
+
+
+def test_fields_follow_a_theme_switch(make_tab, app_palette, qapp):
+    app_palette(LIGHT)
+    tab = make_tab()
+    light_ro = field_colours(tab.start_edit)
+    app_palette(DARK)
+    qapp.processEvents()
+    dark_ro = field_colours(tab.start_edit)
+    assert dark_ro != light_ro
+    assert dark_ro[0].lightnessF() < 0.5
+    assert contrast(dark_ro[1], dark_ro[0]) >= 4.5
+    assert field_colours(tab.folder_edit) == (QColor("#2d2d2d"), QColor("#ffffff"))
+
+
+@pytest.mark.parametrize(
+    ("colours", "background"),
+    [(LIGHT_COLOURS, "#ffffff"), (DARK_COLOURS, "#2d2d2d")],
+    ids=["light", "dark"],
+)
+def test_checklist_colours_have_enough_contrast(colours, background):
+    for state, colour in colours.items():
+        assert contrast(colour, QColor(background)) >= 4.5, state
+
+
+def test_checklist_switches_colours_with_the_theme(make_tab, app_palette, qapp):
+    app_palette(LIGHT)
+    tab = make_tab()
+    assert tab.checklist.item(0).foreground().color() == LIGHT_COLOURS[ItemState.TODO]
+    app_palette(DARK)
+    qapp.processEvents()
+    assert tab.checklist.item(0).foreground().color() == DARK_COLOURS[ItemState.TODO]

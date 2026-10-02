@@ -10,9 +10,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -56,6 +57,7 @@ FS_FILLED_TOOLTIP = (
 NO_DATABASE = "No database configured. Set db_path in the configuration file, or start with --db."
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
+READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
 
 
 def channel_headers(zone: str) -> tuple[str, ...]:
@@ -319,6 +321,16 @@ class LogTab(QWidget):
     def scan(self) -> ScanResult | None:
         """The current scan at the current file duration, or None."""
         return self._scan
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802  (Qt override)
+        """Follow a switch between the light and dark theme."""
+        if event.type() in (
+            QEvent.Type.PaletteChange,
+            QEvent.Type.ApplicationPaletteChange,
+            QEvent.Type.StyleChange,
+        ):
+            _restyle_fields(self)
+        super().changeEvent(event)
 
     def show_message(self, text: str) -> None:
         self.message_label.setText(text)
@@ -950,15 +962,47 @@ def _read_only() -> QLineEdit:
     return edit
 
 
+def _mix(a: QColor, b: QColor, share_of_b: float) -> QColor:
+    """a moved share_of_b of the way toward b."""
+    keep = 1 - share_of_b
+    return QColor.fromRgbF(
+        a.redF() * keep + b.redF() * share_of_b,
+        a.greenF() * keep + b.greenF() * share_of_b,
+        a.blueF() * keep + b.blueF() * share_of_b,
+    )
+
+
+def field_palette(edit: QLineEdit, read_only: bool) -> QPalette:
+    """The palette for a line edit under the current light or dark theme.
+
+    Starts from the application's palette for line edits, so it follows the theme.
+    A read-only field moves its background 15 % toward the text colour and its text
+    20 % toward the background: still readable, and different from an editable
+    field in both themes.
+    """
+    palette = QApplication.palette(edit)
+    if read_only:
+        base = palette.color(QPalette.ColorRole.Base)
+        text = palette.color(QPalette.ColorRole.Text)
+        palette.setColor(QPalette.ColorRole.Base, _mix(base, text, 0.15))
+        palette.setColor(QPalette.ColorRole.Text, _mix(text, base, 0.2))
+    return palette
+
+
 def _set_read_only(edit: QLineEdit, read_only: bool) -> None:
-    """Read-only fields take the window colour as background, so they look inactive."""
+    """Make a line edit read-only or editable, with colours to match."""
     edit.setReadOnly(read_only)
-    palette = edit.palette()
-    base = edit.style().standardPalette().color(QPalette.ColorRole.Base)
-    window = edit.style().standardPalette().color(QPalette.ColorRole.Window)
-    palette.setColor(QPalette.ColorRole.Base, window if read_only else base)
-    edit.setPalette(palette)
+    edit.setProperty(READ_ONLY_PROPERTY, read_only)
+    edit.setPalette(field_palette(edit, read_only))
     edit.setToolTip(READ_ONLY_TOOLTIP if read_only else "")
+
+
+def _restyle_fields(root: QWidget) -> None:
+    """Apply field colours again after the theme changes."""
+    for edit in root.findChildren(QLineEdit):
+        read_only = edit.property(READ_ONLY_PROPERTY)
+        if read_only is not None:
+            edit.setPalette(field_palette(edit, bool(read_only)))
 
 
 def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness]) -> QComboBox:
