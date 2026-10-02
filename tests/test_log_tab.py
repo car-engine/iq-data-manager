@@ -19,7 +19,7 @@ from iqdm.entry import ItemState
 from iqdm.gui.log_tab import LogTab, scan_summary, time_text
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
-from iqdm.models import ArchiveState, Operation, SampleType
+from iqdm.models import ArchiveState, Endianness, IqLayout, Operation, SampleType
 from iqdm.scan.scanner import ScanCancelled, scan_recording
 from make_fixtures import ChannelSpec
 
@@ -660,9 +660,10 @@ def test_duration_comes_from_the_file_names(qtbot, make_tab, make_recording, sit
 def test_duration_set_by_the_user_stays(qtbot, make_tab, make_recording):
     info = make_recording(file_duration_s=0.5, n_slots=40)
     tab = make_tab()
-    tab.duration_spin.setValue(1.0)
-    tab.duration_spin.setValue(2.0)  # the user's choice
-    scan_folder(qtbot, tab, info.root)
+    tab.folder_edit.setText(info.root)
+    tab.duration_spin.setValue(2.0)  # the user's choice, after choosing the folder
+    tab.start_scan()
+    wait_idle(qtbot, tab)
     assert tab.duration_spin.value() == 2.0
     errors = checklist_texts(tab, ItemState.ERROR)
     assert any(t.startswith("The file names are 0.5 s apart") for t in errors)
@@ -809,3 +810,36 @@ def test_fs_with_an_unknown_unit_is_an_error(qtbot, make_tab, make_recording):
         t.startswith("Channel 0: fs is not understood: '1 mhz'")
         for t in checklist_texts(tab, ItemState.ERROR)
     )
+
+
+def test_new_folder_resets_format_channels_and_rf_chain(qtbot, make_tab, make_recording, site_id):
+    """DECISIONS.md D26."""
+    first = make_recording(n_channels=2, dtype="int8", header_bytes=64)
+    second = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, first.root)
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
+    tab.layout_combo.setCurrentIndex(tab.layout_combo.findData(IqLayout.PLANAR_IQ))
+    tab.endian_combo.setCurrentIndex(tab.endian_combo.findData(Endianness.BIG))
+    tab.header_spin.setValue(64)
+    tab.duration_spin.setValue(2.0)
+    fill_channels(tab)
+    tab.param_table.add_row(entry.ParamInput(param="SDR", value="X310"))
+    choose_site(tab, site_id)
+    tab.logged_by_edit.setText("userB")
+    tab.plan_edit.setText("plan-9")
+
+    scan_folder(qtbot, tab, second.root)
+    assert tab.dtype_combo.currentData() == SampleType.INT16
+    assert tab.layout_combo.currentData() == IqLayout.INTERLEAVED_IQ
+    assert tab.endian_combo.currentData() == Endianness.LITTLE
+    assert tab.header_spin.value() == 0
+    assert tab.duration_spin.value() == 1.0
+    assert tab.param_table.rows() == []
+    band, fc, fs = tab.channel_widgets(0)
+    assert (band.currentText(), fc.text()) == ("", "")
+    assert fs.text() == "1 kHz"  # filled in again for int16
+    # Fields that describe the session stay.
+    assert tab.site_combo.currentData() == site_id
+    assert tab.logged_by_edit.text() == "userB"
+    assert tab.plan_edit.text() == "plan-9"

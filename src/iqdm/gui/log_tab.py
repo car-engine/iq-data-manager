@@ -364,22 +364,30 @@ class LogTab(QWidget):
         self.folder_edit.clear()
         self.folder_edit.blockSignals(False)
         self._set_location(None, None)
-        self._set_duration(DEFAULT_FILE_DURATION_S)
-        self._duration_set_by_user = False
-        self._duration_from_names = False
         self.logged_by_edit.setText(entry.default_logged_by())
         self.site_combo.setCurrentIndex(-1)
         self.plan_edit.clear()
         self.remarks_edit.clear()
+        self._reset_folder_fields()
+        self.mode_label.setText("New entry")
+        self.show_message("" if self.config.db_path else NO_DATABASE)
+        self.refresh_checklist()
+
+    def _reset_folder_fields(self) -> None:
+        """Defaults for everything that belongs to one folder (DECISIONS.md D26).
+
+        File duration, sample type, IQ layout, endianness, header bytes, the channel
+        rows and the RF chain rows. Logged by, site, plan reference and remarks stay.
+        """
+        self._set_duration(DEFAULT_FILE_DURATION_S)
+        self._duration_set_by_user = False
+        self._duration_from_names = False
         self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(SampleType.INT16))
         self.layout_combo.setCurrentIndex(self.layout_combo.findData(IqLayout.INTERLEAVED_IQ))
         self.endian_combo.setCurrentIndex(self.endian_combo.findData(Endianness.LITTLE))
         self.header_spin.setValue(0)
         self._set_channel_rows([], {})
         self.param_table.set_rows([])
-        self.mode_label.setText("New entry")
-        self.show_message("" if self.config.db_path else NO_DATABASE)
-        self.refresh_checklist()
 
     def _clear_scan(self) -> None:
         self._raw_scan = None
@@ -405,7 +413,7 @@ class LogTab(QWidget):
         self.cancel_scan()
         self._clear_scan()
         self._clear_message()
-        self._set_channel_rows([], self._inputs_by_index())
+        self._reset_folder_fields()
         if not text.strip():
             self._set_location(None, None)
         else:

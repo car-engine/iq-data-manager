@@ -187,6 +187,10 @@ Values filled in after a scan:
 - **File duration**, from the median step between file timestamps (D22), until the
   user changes the field. Edit mode keeps the stored duration.
 
+Choosing another folder for a new entry resets the file duration, the file format,
+the channel rows and the RF chain rows to their defaults (D26). Logged by, site,
+plan reference and remarks stay.
+
 Save writes the recording, channels and params in one transaction. Edit mode loads an
 existing recording into the same form and updates it.
 

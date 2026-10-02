@@ -43,6 +43,7 @@ Rules for this file:
 | D23 | To-do items in the checklist | 2026-10-02, Milestone 3 | Active |
 | D24 | Display offset for times | 2026-10-02, Milestone 3 | Active |
 | D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
+| D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -447,3 +448,20 @@ Replaces the fs part of D19. fc stays in MHz.
   145.8 Hz without an error.
 
 Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D26. Folder fields reset for a new folder
+
+Closes issue 14 of the Milestone 3 report.
+
+- In the first build, the format fields kept their values when the user chose
+  another folder. After `int8` was set for one folder, the next folder started on
+  `int8`, and D21 filled in its fs for `int8`.
+- When the folder of a new entry changes, these fields return to their defaults:
+  file duration (1 s, then set from the file names again), sample type (`int16`),
+  IQ layout (`interleaved_iq`), endianness (`little`), header bytes (0), the channel
+  rows and the RF chain rows.
+- Logged by, site, recording plan reference and remarks stay. The user decided the
+  reset for the format, channel and RF chain sections only.
+- Edit mode is unchanged: its folder cannot change (D16).
+
+Affects: SPEC section 6, `gui/log_tab.py`.
