@@ -111,6 +111,7 @@ default_hash_mode = "sample"      # "none" | "sample" | "all"
 hash_sample_fraction = 0.05
 nas_roots = ['\\192.168.1.50\recordings']   # UNC roots; a folder under one is on the NAS (D14)
 display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 0.25 (D24)
+coverage_highlight_percent = 99   # the Viewer marks coverage below this; above 0, at most 100 (D39)
 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
@@ -127,13 +128,14 @@ text": no key names, decision numbers or database internals on screen (D38).
 | --- | --- |
 | Database | "Database file" (`db_path`), with Browse for an existing `.db` file. A status line in green, amber or red with a mark (D38): ready to use; no path, checking, or a newer database the app can only read; missing, a folder, unreadable, not an IQ Data Manager database, or an older database. The tooltip holds the schema version and connection settings (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
 | NAS locations | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule in plain words: folders under these locations count as already archived on the NAS (D14, D2). |
-| Display | "Show times at UTC offset" (`display_utc_offset_hours`), from −12 to 14 in steps of 0.25 (D24), with an example such as "2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8)." |
+| Display | "Show times at UTC offset" (`display_utc_offset_hours`), from −12 to 14 in steps of 0.25 (D24), with an example such as "2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8)." "Highlight coverage below" (`coverage_highlight_percent`), from 0.0 to 100.0 % with one decimal place; 0 is an error (Milestone 4, D39). |
 | About | The path of the settings file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
 
-The tab shows these three keys only (D34). Keys that later milestones need are added
-to the tab by those milestones: the coverage threshold (Milestone 4, O15);
-`default_local_copy_root`, `network_speed_mb_s`, `default_hash_mode`,
-`hash_sample_fraction` and a free-space margin (Milestones 5 and 6).
+The tab shows these four keys only (D34). Milestone 3a added the first three, and
+Milestone 4 added the coverage threshold (D39). Keys that later milestones need are
+added to the tab by those milestones: `default_local_copy_root`,
+`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and a free-space
+margin (Milestones 5 and 6).
 
 Not in the Settings tab (D30):
 
@@ -183,19 +185,49 @@ Behaviour:
 
 ## 5. Tab: Viewer
 
-- Filters: start date range, site, band, centre frequency range, archive state, text
-  search in RF chain values, text search in remarks.
-- Recordings table: ID, start (UTC+8), site, channel count, centre frequencies, span,
-  coverage (minimum across channels, highlighted below a threshold such as 99%),
-  total size, archive state, logged by. Sortable columns.
+Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
+`gui/viewer_tab.py`. Its text follows CLAUDE.md, "User-facing text" (D38).
+
+- **Filters** (D43): start date from and to (`YYYY-MM-DD` at the display offset; the
+  "to" date includes its whole day), site, band, centre frequency range in MHz (band
+  and range match on the same channel), archive state, "RF chain contains" (a
+  parameter's name, value or unit) and "Remarks contain". Filters apply on Apply or
+  Enter, and Clear removes them. A wrong value is marked under the filters and runs
+  no query. The filter runs in SQL (D40).
+- **Recordings table**: ID, start at the display offset, site, channel count, centre
+  frequencies in MHz ("433.92 × 2" when all channels share one), span, coverage
+  (minimum across channels), total size, archive state, logged by. Every column
+  sorts, numbers as numbers. The model sorts its own rows (D40).
+- **Marks**: coverage below `coverage_highlight_percent` is amber with the ⓘ mark
+  (D39). An archived recording logged in place on the NAS shows "archived, not
+  verified" in amber (D2, D44). A coverage or size that the database does not hold
+  shows "unknown".
 - Selecting a recording shows its channels table (index, band, fc, fs, start, end,
-  files, coverage) and a coverage timeline per channel if gap data is available
-  (see section 7, "Gap detail").
-- Selecting a channel shows the details panel: RF chain parameters (recording-wide
-  and that channel's), full path, format, plan reference, remarks, transfer history.
-- Actions on the selected recording: Refresh, Open folder (Explorer), Edit entry
-  (opens Log tab in edit mode), Copy / move (opens Move / copy tab pre-selected).
-- Read-only. Refresh re-queries; no live connection.
+  files, coverage) and the details panel for the recording. Selecting a channel
+  narrows the details to that channel.
+- **Details panel**: the RF chain that applies (Recording rows, with a channel's own
+  rows replacing Recording rows of the same name and naming the replaced value; D28),
+  full path of the recording or channel, format, plan reference, remarks, who logged
+  it and when, the "not verified" note, and the transfer history.
+- **Gap detail** (section 7): "Scan for gaps" reads the recording folder in a worker
+  with the stored file duration, with progress and Cancel. It shows a coverage
+  timeline per channel, the gaps per channel at the display offset (the first 10,
+  then a count), and where the folder differs from the database: a channel missing on
+  either side, a different file count or a different total size. The scan writes
+  nothing.
+- **Actions** on the selected recording: Refresh (keeps the filter, the sort order
+  and the selection), Open folder (the recording folder, or the channel folder when a
+  channel is selected), Edit entry (D45: opens the Log tab in edit mode, and asks
+  first when the Log tab form holds input that is not saved). Copy / move comes with
+  the Move / copy tab in Milestone 6 (D42). The GUI does not delete recordings (D41).
+- **Database states**: no database path gives a line that points to the Settings
+  tab. A database from a newer app version is shown with an amber line (D6). A file
+  that is missing, older or not an IQ Data Manager database gives a red line with the
+  technical text in its tooltip.
+- **Configuration**: a saved new display offset, threshold or database path applies
+  at once (D33). A new database path clears the tab and loads the new list.
+- Read-only. Every query uses a read-only connection. Refresh queries again; the tab
+  holds no connection open. The Viewer also refreshes after a Log tab save (D46).
 
 ## 6. Tab: Log recording
 
@@ -401,6 +433,7 @@ iq-data-manager/
     timeutil.py               # UTC ISO 8601 text <-> Unix seconds; display offset (D24)
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
+    viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
     db/
       schema.sql
       version.py              # LATEST_VERSION and schema_status(), shared by the two below
@@ -426,7 +459,7 @@ iq-data-manager/
       transfer_tab.py
       settings_tab.py         # Settings tab (section 4, D29)
       workers.py              # QThread/QRunnable wrappers
-      widgets/                # timeline, checklist, param table, etc.
+      widgets/                # timeline, checklist, param table, recordings table model
   tools/
     make_fixtures.py          # synthetic IQ recordings for tests and manual testing
     db_check.py               # create, write and locking checks on a scratch database (O21)
@@ -495,7 +528,8 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 5. **Transfer core**: selection, path checks, manifest, script generators, estimates,
    verification, delete module. No GUI. Heavily tested.
 6. **Move / copy tab**: GUI over the core, dry run, run with progress and cancel,
-   transfer logging, archive state update, post-verification delete flow.
+   transfer logging, archive state update, post-verification delete flow. The
+   Viewer's Copy / move button comes with this tab (D42).
 7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
    it runs without Python), an admin option `--create-db PATH` for an empty database,
    short user guide (D30). The settings dialog and the config writer moved to
@@ -504,7 +538,8 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 ## 13. Scope
 
 Out of scope for v1: Linux build, rsync generator, file-level gap storage in the DB,
-user accounts, editing RF chain templates.
+user accounts, editing RF chain templates, deleting catalogue entries from the GUI
+(D41).
 
 Open questions and assumptions that may still change are listed in `docs/STATUS.md`.
 Resolved decisions are in `docs/DECISIONS.md`.

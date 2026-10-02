@@ -56,6 +56,14 @@ Rules for this file:
 | D36 | A wrong value in a key the Settings tab does not show | 2026-10-02, Milestone 3a | Active |
 | D37 | Status line for an older database | 2026-10-02, Milestone 3a | Replaced by D38 |
 | D38 | Plain text for users; coloured database status | 2026-10-03, Milestone 3a | Active |
+| D39 | Coverage highlight threshold | 2026-10-03, Milestone 4 | Active |
+| D40 | Recordings list at the size of the catalogue | 2026-10-03, Milestone 4 | Active |
+| D41 | No deletion of recordings in the GUI | 2026-10-03, Milestone 4 | Active |
+| D42 | No Copy / move button in the Viewer before Milestone 6 | 2026-10-03, Milestone 4 | Active |
+| D43 | Viewer filters | 2026-10-03, Milestone 4 | Active |
+| D44 | The "not verified" mark in the Viewer | 2026-10-03, Milestone 4 | Active |
+| D45 | Edit entry with unsaved input in the Log tab | 2026-10-03, Milestone 4 | Active |
+| D46 | The Viewer refreshes after a Log tab save | 2026-10-03, Milestone 4 | Active |
 
 ## D1. Sample types
 
@@ -695,3 +703,116 @@ the Settings tab.
 
 Affects: CLAUDE.md, SPEC section 4, `gui/settings_tab.py`, `db/connection.py`,
 `tests/test_user_text.py`.
+
+## D39. Coverage highlight threshold
+
+Closes O15. The user chose the proposed default on 2026-10-03.
+
+- A new config key, `coverage_highlight_percent`, sets the threshold. The default is
+  99. A value must be above 0 and at most 100.
+- The Settings tab shows it in the Display group as "Highlight coverage below", from
+  0.0 to 100.0 % with one decimal place. A value of 0 is marked as an error and
+  blocks Save.
+- The Viewer compares the coverage as shown, at one decimal place. A recording at
+  98.95 % is shown as 99.0 % and is not marked at a threshold of 99.
+- Coverage below the threshold is shown in amber with the ⓘ mark, in the recordings
+  list and in the channels table. The tooltip names the threshold.
+- Unknown coverage (no file count in the database) is shown as "unknown" and is not
+  marked.
+
+Affects: SPEC sections 4 and 5, `config.py`, `gui/settings_tab.py`, `viewer.py`,
+`gui/widgets/recording_model.py`, `gui/viewer_tab.py`.
+
+## D40. Recordings list at the size of the catalogue
+
+Closes O16. The user expects fewer than 5,000 recordings in the catalogue for the next
+few years (2026-10-03).
+
+- `repository.list_recordings()` takes a `RecordingFilter` and filters in SQL.
+  Channels are read only for the recordings that match.
+- The recordings table is a `QTableView` over a model that sorts its own rows with
+  `list.sort()`. A `QSortFilterProxyModel` called the model from Python for every
+  comparison and blocked the main thread for about 0.5 s at 5,000 rows.
+- Measured on a local disk with a synthetic catalogue (`dev/m4-bench/bench.py`):
+  `list_recordings` took 53 ms for 5,000 recordings and 568 ms for 50,000. Showing
+  5,000 rows took 41 ms, and sorting them 8 ms.
+- No paging and no row limit. A catalogue far above 5,000 recordings would need them.
+
+Affects: SPEC section 5, `db/repository.py`, `models.py`,
+`gui/widgets/recording_model.py`.
+
+## D41. No deletion of recordings in the GUI
+
+Closes O17. The user chose the proposed default on 2026-10-03.
+
+- The GUI has no action that deletes a recording from the catalogue in v1.
+- A wrongly logged entry is corrected with "Edit entry". Removing an entry stays a
+  manual database job. `repository.delete_recording()` exists and refuses a recording
+  with transfer history.
+
+Affects: SPEC sections 5 and 13.
+
+## D42. No Copy / move button in the Viewer before Milestone 6
+
+Found while planning Milestone 4. The user chose this on 2026-10-03.
+
+- SPEC section 5 lists a "Copy / move" action that opens the Move / copy tab with the
+  recording selected. That tab is a placeholder until Milestone 6.
+- The Viewer has no Copy / move button until then. Milestone 6 adds the button
+  together with the tab it opens.
+
+Affects: SPEC sections 5 and 12.
+
+## D43. Viewer filters
+
+Found while planning Milestone 4. Part of the approved plan of 2026-10-03.
+
+- The start date filters take `YYYY-MM-DD` and read the date at the display offset
+  (D24). Their labels name the zone, for example "Start date from (UTC+8)". The "to"
+  date includes its whole day. O1 covers time input in the Move / copy tab only.
+- Band and the centre frequency range must match on the same channel. The range is
+  in MHz and includes both ends.
+- Text filters match a part of the text. "RF chain contains" matches a parameter's
+  name, value or unit. `%` and `_` match literally. Letter case is ignored for ASCII
+  letters only, as SQLite's `LIKE` does.
+- Filters apply on Apply or Enter. A wrong value is marked under the filters, and no
+  query runs.
+
+Affects: SPEC section 5, `viewer.py`, `db/repository.py`, `gui/viewer_tab.py`.
+
+## D44. The "not verified" mark in the Viewer
+
+Found while planning Milestone 4. Part of the approved plan of 2026-10-03. Builds on
+D2.
+
+- An archived recording with the D2 row in `transfer_log` (`operation = 'check'`,
+  `verification = 'skipped'`, `notes` = the in-place text) is shown as
+  "archived, not verified" in amber. The details panel explains the mark.
+- The mark stays while that row exists. How a later verification clears it is
+  decided with O11 in Milestone 6.
+- The in-place text moved from `entry.py` to `models.IN_PLACE_NOTE`, so the
+  repository can use it.
+
+Affects: SPEC section 5, `models.py`, `db/repository.py`, `viewer.py`.
+
+## D45. Edit entry with unsaved input in the Log tab
+
+Found while planning Milestone 4. Part of the approved plan of 2026-10-03.
+
+- "Edit entry" in the Viewer switches to the Log tab and opens the recording in edit
+  mode (D16).
+- If the Log tab form holds input that is not saved (as in D33), the app asks first.
+  "No" changes nothing and stays in the Viewer.
+- While the Log tab saves a recording, the app shows a message and opens nothing.
+
+Affects: SPEC section 5, `app.py`.
+
+## D46. The Viewer refreshes after a Log tab save
+
+Found while planning Milestone 4. Part of the approved plan of 2026-10-03.
+
+- The Log tab emits `saved` with the recording id after a new or an edited entry is
+  saved. The Viewer then queries the database again, with its filter and selection.
+- Other changes to the database, for example from another PC, appear on Refresh.
+
+Affects: SPEC section 5, `gui/log_tab.py`, `app.py`.
