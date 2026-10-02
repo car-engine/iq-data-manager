@@ -94,7 +94,7 @@ def _number(data: Mapping[str, Any], key: str, where: str, default: float) -> fl
 def nas_root_error(text: str) -> str | None:
     """Why `text` cannot be a nas_roots entry, or None if it can (D14)."""
     if not is_unc_path(text):
-        return f"nas_roots entry {text!r} is not a UNC path"
+        return f"nas_roots entry '{text}' is not a UNC path"  # no repr: it doubles backslashes
     return None
 
 

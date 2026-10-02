@@ -284,7 +284,7 @@ def test_a_wrong_root_is_marked_and_blocks_save(make_tab, config_file, replies):
     assert "not a UNC path" in item.toolTip()
     assert item.foreground().color() == colours_for(tab.palette())[ItemState.ERROR]
     assert tab.roots_error.isVisibleTo(tab)
-    assert "not a UNC path" in tab.roots_error.text()
+    assert tab.roots_error.text() == r"nas_roots entry 'D:\data' is not a UNC path"
     assert not tab.save_button.isEnabled()
 
     replies.append((NAS, True))
