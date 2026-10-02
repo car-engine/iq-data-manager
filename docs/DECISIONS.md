@@ -64,6 +64,7 @@ Rules for this file:
 | D44 | The "not verified" mark in the Viewer | 2026-10-03, Milestone 4 | Active |
 | D45 | Edit entry with unsaved input in the Log tab | 2026-10-03, Milestone 4 | Active |
 | D46 | The Viewer refreshes after a Log tab save | 2026-10-03, Milestone 4 | Active |
+| D47 | When a recording last changed | 2026-10-03, Milestone 4 | Active |
 
 ## D1. Sample types
 
@@ -816,3 +817,23 @@ Found while planning Milestone 4. Part of the approved plan of 2026-10-03.
 - Other changes to the database, for example from another PC, appear on Refresh.
 
 Affects: SPEC section 5, `gui/log_tab.py`, `app.py`.
+
+## D47. When a recording last changed
+
+The user asked after the Milestone 4 manual tests whether edits should be tracked, and
+chose the smallest option on 2026-10-03.
+
+- The schema already stores `recordings.updated_at`. A trigger sets it on every
+  update of the row. The Viewer did not show it.
+- The Viewer's details panel now reads, for example, "by userA on 2026-10-01 08:00;
+  last changed on 2026-10-02 11:30". The last change is left out when `updated_at`
+  equals `created_at`.
+- A Save in edit mode whose values equal the stored ones writes nothing, and the Log
+  tab says "No changes to save." Before this, such a Save rewrote the row and moved
+  `updated_at`. Parameters compare as a set, as `update_recording()` stores them (D7).
+- The time means "last changed". From Milestone 6, archiving to the NAS also changes
+  the row and moves the time.
+- Who made the change is not recorded. The user decided against an `updated_by`
+  column and against an edit history.
+
+Affects: SPEC sections 5 and 6, `entry.py`, `gui/log_tab.py`, `gui/viewer_tab.py`.

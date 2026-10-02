@@ -7,9 +7,9 @@ report. Last updated: 2026-10-03 (Milestone 4 done on its branch, not merged).
 ## Current state
 
 - Milestone 4 (Viewer tab) is done on branch `m4-viewer`, not merged. Report:
-  [reports/M4.md](reports/M4.md). Decisions D39–D46. It waits for the user's manual
-  tests (`dev/m4-manual/`) and the decision to merge.
-- 909 tests pass and 2 skip on `m4-viewer`. One skip needs the symbolic-link
+  [reports/M4.md](reports/M4.md). Decisions D39–D47. The user ran the manual tests
+  on 2026-10-03, and they passed. D47 followed. It waits for the decision to merge.
+- 918 tests pass and 2 skip on `m4-viewer`. One skip needs the symbolic-link
   privilege; the other runs only off Windows. `ruff check` is clean. `main` has 736.
 - Milestone 3a (Settings tab) is merged into `main`. Report:
   [reports/M3a.md](reports/M3a.md).
@@ -31,7 +31,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
-| 4. Viewer tab | Done, not merged | `m4-viewer` | `1f17daa`–`8b8bcce`, plus the commit with the report | [M4](reports/M4.md) |
+| 4. Viewer tab | Done, not merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), plus the commit that records D47 | [M4](reports/M4.md) |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
@@ -69,7 +69,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D46). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D47). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |

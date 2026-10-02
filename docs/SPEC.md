@@ -208,7 +208,8 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
 - **Details panel**: the RF chain that applies (Recording rows, with a channel's own
   rows replacing Recording rows of the same name and naming the replaced value; D28),
   full path of the recording or channel, format, plan reference, remarks, who logged
-  it and when, the "not verified" note, and the transfer history.
+  it and when, when it last changed (`updated_at`, shown when it differs from the
+  logging time; D47), the "not verified" note, and the transfer history.
 - **Gap detail** (section 7): "Scan for gaps" reads the recording folder in a worker
   with the stored file duration, with progress and Cancel. It shows a coverage
   timeline per channel, the gaps per channel at the display offset (the first 10,
@@ -311,7 +312,8 @@ Edit mode (DECISIONS.md D16):
 - It opens from the "Edit existing entry" button, shown when a scanned folder is
   already logged, and from the Viewer in Milestone 4 (`LogTab.load_recording()`).
 - The folder, storage root, relative path, archive state and `archived_at` stay as
-  stored. A save in edit mode writes no `transfer_log` row.
+  stored. A save in edit mode writes no `transfer_log` row. A save that changes no
+  value writes nothing and says "No changes to save." (D47).
 - Logged by, site, plan reference, remarks, IQ layout, endianness, band, fc and the
   RF chain save without a rescan.
 - A change to fs, sample type, header bytes or file duration needs a rescan first.
