@@ -18,6 +18,7 @@ from iqdm.db.version import SchemaStatus, schema_status
 from iqdm.entry import format_mhz, format_size, missing_text, parse_mhz
 from iqdm.location import join_location
 from iqdm.models import (
+    IN_PLACE_NOTE,
     ArchiveState,
     Channel,
     Operation,
@@ -180,6 +181,19 @@ def state_text(state: ArchiveState, unverified: bool) -> str:
     return str(state)
 
 
+def is_unverified(rec: Recording, transfers: Iterable[TransferEntry]) -> bool:
+    """True for an archived recording with the logged-in-place row (D2, D44).
+
+    The same rule as RecordingSummary.unverified in repository.list_recordings().
+    """
+    return rec.archive_state is ArchiveState.ARCHIVED and any(
+        t.operation is Operation.CHECK
+        and t.verification is Verification.SKIPPED
+        and t.notes == IN_PLACE_NOTE
+        for t in transfers
+    )
+
+
 NOT_VERIFIED_NOTE = (
     "Logged where it lies on the NAS. Its files were never compared with the "
     "recording laptop's copy."
@@ -282,7 +296,11 @@ _RESULTS = {
 }
 
 
-def _iso_display(text: str, offset_hours: float) -> str:
+def iso_display(text: str, offset_hours: float) -> str:
+    """Stored ISO 8601 UTC text as 'YYYY-MM-DD HH:MM' at the display offset (D24).
+
+    Text in another form is returned unchanged.
+    """
     try:
         return display_time(iso_to_unix(text), offset_hours)[:16]
     except ValueError:
@@ -314,7 +332,7 @@ def transfer_rows(entries: Iterable[TransferEntry], offset_hours: float) -> list
         parts.append(_RESULTS[e.verification] if e.finished_at is not None else "not finished")
         rows.append(
             TransferRow(
-                when=_iso_display(e.started_at, offset_hours),
+                when=iso_display(e.started_at, offset_hours),
                 operation=_OPERATIONS[e.operation],
                 scope=scope,
                 result=DOT.join(parts),

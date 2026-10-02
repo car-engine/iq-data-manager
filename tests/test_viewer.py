@@ -157,6 +157,33 @@ def test_coverage_is_low_follows_the_shown_value(coverage, threshold, low):
     assert viewer.coverage_is_low(coverage, threshold) is low
 
 
+def test_is_unverified_needs_archived_and_the_in_place_row():
+    archived = Recording(
+        logged_by="u",
+        site_id=1,
+        storage_root="r",
+        rel_path="p",
+        channels=[],
+        archive_state=ArchiveState.ARCHIVED,
+        archived_at="2026-09-18T05:00:00Z",
+    )
+    in_place = TransferEntry(
+        recording_id=1,
+        operation=Operation.CHECK,
+        source="r",
+        started_at="2026-09-18T05:00:00Z",
+        performed_by="u",
+        verification=Verification.SKIPPED,
+        notes=IN_PLACE_NOTE,
+    )
+    assert viewer.is_unverified(archived, [in_place]) is True
+    assert viewer.is_unverified(archived, []) is False
+    other = TransferEntry(**{**in_place.__dict__, "notes": "other"})
+    assert viewer.is_unverified(archived, [other]) is False
+    local = Recording(**{**archived.__dict__, "archive_state": ArchiveState.LOCAL})
+    assert viewer.is_unverified(local, [in_place]) is False
+
+
 def test_size_and_state_text():
     assert viewer.size_text(None) == "unknown"
     assert viewer.size_text(57_600_000_000) == "57.6 GB"
