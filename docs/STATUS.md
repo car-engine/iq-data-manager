@@ -6,12 +6,12 @@ report. Last updated: 2026-10-02.
 
 ## Current state
 
-- Milestone 2 (Scanner) is complete on branch `m2-scanner` and waits for the user's
-  merge approval. Report: [reports/M2.md](reports/M2.md).
-- 301 tests pass and 1 skips (symbolic links need a privilege this account lacks).
+- Milestone 2 (Scanner) is complete and merged into `main` (fast-forward,
+  2026-10-02). Report: [reports/M2.md](reports/M2.md).
+- 307 tests pass and 1 skips (symbolic links need a privilege this account lacks).
   `ruff check` is clean.
-- Next: merge `m2-scanner`, then Milestone 3 (Log tab). O21 is due before
-  Milestone 3.
+- Next: Milestone 3 (Log tab), on a new branch `m3-log-tab`, starting with a plan in
+  plan mode. O21 is due before Milestone 3.
 
 ## Milestones
 
@@ -21,7 +21,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | --- | --- | --- | --- | --- |
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
-| 2. Scanner | Done, not merged | `m2-scanner` | `fa39b82`–`6402af7`, plus the commit that adds the report | [M2](reports/M2.md) |
+| 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
 | 3. Log tab | Not started | | | |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
