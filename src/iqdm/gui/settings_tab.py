@@ -4,14 +4,19 @@ SPEC section 4, "Settings tab" (DECISIONS.md D29, D30). The file is read and wri
 through iqdm.config, which has no Qt. Database checks run in a TaskRunner, because a
 database on the NAS can take seconds to answer. The tab never creates or changes a
 database: inspect_database() opens the file read-only.
+
+Text in the tab is for the people who log recordings: no config key names, decision
+numbers or database internals (CLAUDE.md, "User-facing text"; D38). Technical detail
+of the database check goes in the status line's tooltip.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QEvent, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
@@ -46,65 +51,126 @@ from iqdm.config import (
     settings_errors,
     settings_from_data,
 )
-from iqdm.db.connection import DatabaseInfo, inspect_database
+from iqdm.db.connection import DatabaseInfo, DatabaseProblem, inspect_database
 from iqdm.db.version import SchemaStatus
 from iqdm.entry import ItemState
-from iqdm.gui.widgets.checklist import colours_for
+from iqdm.gui.widgets.checklist import MARKS, colours_for
 from iqdm.gui.workers import TaskRunner
 from iqdm.timeutil import display_time, iso_to_unix, offset_label
 
 PREVIEW_ISO = "2026-09-30T02:00:00Z"  # a fixed instant for the offset preview
-NO_DB_PATH = "No database path. The Log tab cannot save until one is set."
 DB_FILE_FILTER = "SQLite database (*.db);;All files (*)"
 FILE_NOTE = (
-    "Save rewrites the configuration file. Keys that this tab does not show stay in "
-    "the file. Comments in the file are lost. The previous file is kept as "
-    "config.toml.bak."
+    "Save keeps the previous settings in config.toml.bak. Comments typed into the "
+    "file by hand are not kept."
 )
 ROOTS_RULE = (
-    "A folder under a NAS root is logged as archived, with a log entry that marks it "
-    "as not verified (DECISIONS.md D14, D2). Each root is a UNC path, for example "
-    "\\\\server\\share."
+    "Folders under these network locations count as already archived on the NAS. "
+    "Enter each location as \\\\server\\share."
 )
 NO_CONFIG_PATH = (
-    "The app has no configuration file, because the APPDATA environment variable is "
-    "not set. Start the app with --config PATH."
+    "The app has no settings file, because the APPDATA environment variable is not "
+    "set. Start the app with --config PATH."
+)
+WAITING_MARK = "\N{WHITE CIRCLE}"  # no answer yet: no path, or a check in progress
+
+
+@dataclass(frozen=True)
+class DatabaseStatus:
+    """The status line: a colour state (OK, INFO or ERROR), its text and a tooltip."""
+
+    state: ItemState
+    text: str
+    details: str = ""  # technical detail for the tooltip (D38)
+    mark: str = ""  # defaults to the checklist mark of `state`
+
+    @property
+    def line(self) -> str:
+        return f"{self.mark or MARKS[self.state]} {self.text}"
+
+
+NO_DB_PATH = DatabaseStatus(
+    ItemState.INFO,
+    "No database chosen. Recordings cannot be saved until you choose one.",
+    mark=WAITING_MARK,
 )
 
 
-def database_status_text(info: DatabaseInfo) -> str:
-    """The status line for a database file (SPEC section 4; D6, D30)."""
+def checking_status(path: str) -> DatabaseStatus:
+    return DatabaseStatus(ItemState.INFO, "Checking the database...", path, WAITING_MARK)
+
+
+def database_status(info: DatabaseInfo) -> DatabaseStatus:
+    """The status line for a database file, in words for the person logging (D38).
+
+    Green when the app can read and write the database, amber when it can only read
+    it, red when it cannot use it. Schema version and connection settings go in the
+    tooltip.
+    """
+    details = info.path
     if info.error is not None:
-        return info.error
-    found, latest = info.user_version, info.latest_version
+        details = f"{info.path}\n{info.error}"
+    elif info.settings is not None:
+        s = info.settings
+        details = (
+            f"{info.path}\nSchema version {info.user_version} "
+            f"(this app expects {info.latest_version}). Journal mode {s.get('journal_mode')}, "
+            f"foreign keys {'on' if s.get('foreign_keys') else 'off'}, "
+            f"busy timeout {s.get('busy_timeout')} ms."
+        )
+    match info.problem:
+        case DatabaseProblem.NOT_FOUND:
+            return DatabaseStatus(
+                ItemState.ERROR,
+                "Database file not found. Check the path and the network connection.",
+                details,
+            )
+        case DatabaseProblem.FOLDER:
+            return DatabaseStatus(
+                ItemState.ERROR, "This path is a folder. Choose the database file.", details
+            )
+        case DatabaseProblem.CANNOT_OPEN:
+            return DatabaseStatus(ItemState.ERROR, "Cannot open the database file.", details)
+        case DatabaseProblem.NOT_SQLITE:
+            return DatabaseStatus(
+                ItemState.ERROR, "This file is not an IQ Data Manager database.", details
+            )
     match info.status:
         case SchemaStatus.CURRENT:
-            state = f"Schema version {found}, current."
-        case SchemaStatus.NEEDS_UPGRADE:
-            state = (
-                f"Schema version {found}, needs an upgrade to version {latest}. "
-                "This version of the app cannot read or write this database."
-            )
+            return DatabaseStatus(ItemState.OK, "Connected. The database is ready to use.", details)
         case SchemaStatus.TOO_NEW:
-            state = (
-                f"Schema version {found}, too new: this app expects version {latest}. "
-                "The app can read this database but cannot write to it."
+            return DatabaseStatus(
+                ItemState.INFO,
+                "This database comes from a newer version of IQ Data Manager. You can "
+                "view recordings but cannot save them. Install the newer version.",
+                details,
+            )
+        case SchemaStatus.NEEDS_UPGRADE:
+            return DatabaseStatus(
+                ItemState.ERROR,
+                "This database comes from an older version of IQ Data Manager. This "
+                "version cannot open it.",
+                details,
             )
         case _:
-            state = f"Not an IQ Data Manager database (schema version {found})."
-    settings = info.settings or {}
-    keys = "on" if settings.get("foreign_keys") else "off"
-    pragmas = (
-        f"Journal mode {settings.get('journal_mode')}, foreign keys {keys}, "
-        f"busy timeout {settings.get('busy_timeout')} ms."
-    )
-    return f"File found. {state} {pragmas}"
+            return DatabaseStatus(
+                ItemState.ERROR, "This file is not an IQ Data Manager database.", details
+            )
+
+
+def nas_root_message(text: str) -> str:
+    """The error line for a NAS root that is not a network location."""
+    return f"{text} is not a network location. Use the form \\\\server\\share."
+
+
+OFFSET_MESSAGE = "Use whole or quarter hours, for example 5.5 or 5.75."
 
 
 def offset_preview(hours: float) -> str:
-    """'2026-09-30T02:00:00Z is shown as 2026-09-30 10:00:00 (UTC+8).'"""
-    shown = display_time(iso_to_unix(PREVIEW_ISO), hours)
-    return f"{PREVIEW_ISO} is shown as {shown} ({offset_label(hours)})."
+    """'2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8).'"""
+    instant = iso_to_unix(PREVIEW_ISO)
+    shown = display_time(instant, hours)
+    return f"{display_time(instant, 0)} UTC is shown as {shown} ({offset_label(hours)})."
 
 
 def _open_in_explorer(folder: Path) -> None:
@@ -142,6 +208,7 @@ class SettingsTab(QWidget):
         self._hidden_error: str | None = None  # a wrong key that the tab does not show
         self._check_id = 0
         self._checked_path: str | None = None
+        self._db_state = NO_DB_PATH
 
         self._build()
         self.reload()
@@ -206,14 +273,14 @@ class SettingsTab(QWidget):
         row.addWidget(self.db_browse_button)
         row.addWidget(self.check_button)
         layout = QVBoxLayout(box)
-        layout.addWidget(QLabel("Database file (db_path)"))
+        layout.addWidget(QLabel("Database file"))
         layout.addLayout(row)
         layout.addWidget(self.db_status)
         layout.addWidget(self.db_override_note)
         return box
 
     def _build_nas_roots(self) -> QGroupBox:
-        box = QGroupBox("NAS roots")
+        box = QGroupBox("NAS locations")
         self.roots_list = QListWidget()
         self.roots_list.setMaximumHeight(120)
         self.roots_list.currentRowChanged.connect(self._update_root_buttons)
@@ -254,17 +321,11 @@ class SettingsTab(QWidget):
         self.offset_preview = QLabel()
         self.offset_error = QLabel()
         self.offset_error.setWordWrap(True)
-        note = QLabel(
-            "Displayed times only. The database stores UTC (DECISIONS.md D24). "
-            "Allowed values: -12 to 14 hours in steps of 0.25."
-        )
-        note.setWordWrap(True)
 
         layout = QFormLayout(box)
-        layout.addRow("Offset from UTC (display_utc_offset_hours)", self.offset_spin)
-        layout.addRow("Preview", self.offset_preview)
+        layout.addRow("Show times at UTC offset", self.offset_spin)
+        layout.addRow("Example", self.offset_preview)
         layout.addRow(self.offset_error)
-        layout.addRow(note)
         return box
 
     def _build_about(self) -> QGroupBox:
@@ -281,7 +342,7 @@ class SettingsTab(QWidget):
         row.addWidget(self.config_path_label, 1)
         row.addWidget(self.open_folder_button)
         layout = QVBoxLayout(box)
-        layout.addWidget(QLabel("Configuration file"))
+        layout.addWidget(QLabel("Settings file"))
         layout.addLayout(row)
         layout.addWidget(self.override_note)
         layout.addWidget(self.version_label)
@@ -368,53 +429,71 @@ class SettingsTab(QWidget):
             )
         self.db_override_note.setVisible(self.db_override is not None)
 
-    def _problem_text(self) -> str:
+    def _problem(self) -> tuple[str, str]:
+        """The line about the settings file, and its technical detail for the tooltip.
+
+        A wrong key the tab does not show is named, because the user corrects it in
+        the file by hand (D36).
+        """
         if self.config_path is None:
-            return NO_CONFIG_PATH
+            return NO_CONFIG_PATH, ""
         if self._read_error is not None:
             return (
-                f"The file cannot be read: {self._read_error}. Save replaces it with the "
-                "values shown here. The old file is kept as config.toml.bak."
+                "The settings file cannot be read. Save replaces it with the values shown "
+                "here and keeps the old file as config.toml.bak.",
+                self._read_error,
             )
         if self._hidden_error is not None:
             return (
-                f"{self._hidden_error}. This tab does not show that key. Correct it in "
-                "the file by hand, then click Reload from file."
+                f"The settings file has a wrong value that this tab does not show: "
+                f"{self._hidden_error}. Correct it in the file (Open folder), then click "
+                "Reload from file.",
+                self._hidden_error,
             )
         if self._file_error is not None:
-            return f"{self._file_error}. Correct the value here and save."
-        return ""
+            return (
+                "The settings file has a wrong value. Correct the field marked in red and save.",
+                self._file_error,
+            )
+        return "", ""
 
     def _validate(self, *_: object) -> None:
         """Mark wrong fields, update the preview and enable Save when it can run."""
         settings = self.current_settings()
         errors = settings_errors(settings)
-        error_colour = colours_for(self.palette())[ItemState.ERROR]
+        colours = colours_for(self.palette())
+        error_colour = colours[ItemState.ERROR]
         error_style = f"color: {error_colour.name()};"
         text_brush = self.roots_list.palette().text()
+        bad_roots = []
         for i in range(self.roots_list.count()):
             item = self.roots_list.item(i)
-            problem = nas_root_error(item.text().strip())
-            if problem is None:
+            text = item.text().strip()
+            if nas_root_error(text) is None:
                 item.setForeground(text_brush)
+                item.setToolTip("")
             else:
                 item.setForeground(error_colour)
-            item.setToolTip(problem or "")
-        self.roots_error.setText(errors.get("nas_roots", ""))
+                item.setToolTip(nas_root_message(text))
+                bad_roots.append(text)
+        self.roots_error.setText(nas_root_message(bad_roots[0]) if bad_roots else "")
         self.roots_error.setStyleSheet(error_style)
-        self.roots_error.setVisible("nas_roots" in errors)
+        self.roots_error.setVisible(bool(bad_roots))
 
-        offset_problem = errors.get("display_utc_offset_hours")
-        self.offset_error.setText(offset_problem or "")
+        offset_bad = "display_utc_offset_hours" in errors
+        self.offset_error.setText(OFFSET_MESSAGE if offset_bad else "")
         self.offset_error.setStyleSheet(error_style)
-        self.offset_error.setVisible(offset_problem is not None)
+        self.offset_error.setVisible(offset_bad)
         hours = settings.display_utc_offset_hours
-        self.offset_preview.setText("" if offset_problem else offset_preview(hours))
+        self.offset_preview.setText("" if offset_bad else offset_preview(hours))
 
-        problem = self._problem_text()
+        problem, detail = self._problem()
         self.problem_label.setText(problem)
+        self.problem_label.setToolTip(detail)
         self.problem_label.setStyleSheet(error_style)
         self.problem_label.setVisible(bool(problem))
+
+        self._show_db_status(colours)
 
         self.save_button.setEnabled(
             self.config_path is not None
@@ -446,18 +525,37 @@ class SettingsTab(QWidget):
         check_id = self._check_id
         self._checked_path = path
         if not path:
-            self.db_status.setText(NO_DB_PATH)
+            self._set_db_status(NO_DB_PATH)
             return
-        self.db_status.setText(f"Checking {path}...")
+        self._set_db_status(checking_status(path))
         self.runner.start(
             lambda task: inspect_database(path),
-            on_success=lambda info: self._checked(check_id, database_status_text(info)),
-            on_failure=lambda exc: self._checked(check_id, f"Cannot check the file: {exc}"),
+            on_success=lambda info: self._checked(check_id, database_status(info)),
+            on_failure=lambda exc: self._checked(
+                check_id,
+                DatabaseStatus(ItemState.ERROR, "Cannot check the database file.", str(exc)),
+            ),
         )
 
-    def _checked(self, check_id: int, text: str) -> None:
+    def _checked(self, check_id: int, status: DatabaseStatus) -> None:
         if check_id == self._check_id:  # a later check replaces this one
-            self.db_status.setText(text)
+            self._set_db_status(status)
+
+    @property
+    def db_state(self) -> DatabaseStatus:
+        """The status line as shown now."""
+        return self._db_state
+
+    def _set_db_status(self, status: DatabaseStatus) -> None:
+        self._db_state = status
+        self._show_db_status(colours_for(self.palette()))
+
+    def _show_db_status(self, colours: dict[ItemState, QColor]) -> None:
+        """Green, amber or red text with a mark, so the state does not rest on colour."""
+        status = self._db_state
+        self.db_status.setText(status.line)
+        self.db_status.setToolTip(status.details)
+        self.db_status.setStyleSheet(f"color: {colours[status.state].name()};")
 
     # =====================================================================
     # NAS roots
@@ -470,7 +568,7 @@ class SettingsTab(QWidget):
 
     def add_root(self) -> None:
         text, ok = QInputDialog.getText(
-            self, "Add NAS root", "UNC path of the NAS root, for example \\\\server\\share:"
+            self, "Add NAS location", "Network location, for example \\\\server\\share:"
         )
         if ok and text.strip():
             self.roots_list.addItem(QListWidgetItem(text.strip()))
@@ -483,8 +581,8 @@ class SettingsTab(QWidget):
             return
         text, ok = QInputDialog.getText(
             self,
-            "Edit NAS root",
-            "UNC path of the NAS root:",
+            "Edit NAS location",
+            "Network location, for example \\\\server\\share:",
             QLineEdit.EchoMode.Normal,
             item.text(),
         )

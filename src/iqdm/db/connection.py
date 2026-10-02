@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import StrEnum
 from importlib import resources
 from pathlib import Path
 from urllib.parse import quote
@@ -157,12 +158,21 @@ def database_status(path: Path | str) -> SchemaStatus:
         conn.close()
 
 
+class DatabaseProblem(StrEnum):
+    """Why inspect_database() could not read a schema version."""
+
+    NOT_FOUND = "not_found"
+    FOLDER = "folder"
+    CANNOT_OPEN = "cannot_open"
+    NOT_SQLITE = "not_sqlite"
+
+
 @dataclass(frozen=True, kw_only=True)
 class DatabaseInfo:
     """What the Settings tab shows about a database file (SPEC section 4).
 
-    `error` is set when the file was not found or could not be read. The other
-    fields are then None.
+    `problem` and `error` are set when the file was not found or could not be read.
+    `error` is the technical text. The other fields are then None.
     """
 
     path: str
@@ -171,6 +181,7 @@ class DatabaseInfo:
     user_version: int | None = None
     status: SchemaStatus | None = None
     settings: Mapping[str, str | int] | None = None
+    problem: DatabaseProblem | None = None
     error: str | None = None
 
 
@@ -183,15 +194,23 @@ def inspect_database(path: Path | str) -> DatabaseInfo:
     p = Path(path)
     latest = version.LATEST_VERSION
     if not p.is_file():
-        reason = "is a folder" if p.is_dir() else "was not found"
+        folder = p.is_dir()
         return DatabaseInfo(
-            path=str(p), found=False, latest_version=latest, error=f"The file {reason}."
+            path=str(p),
+            found=False,
+            latest_version=latest,
+            problem=DatabaseProblem.FOLDER if folder else DatabaseProblem.NOT_FOUND,
+            error="The file is a folder." if folder else "The file was not found.",
         )
     try:
         conn = open_unchecked(p, readonly=True)
     except (sqlite3.Error, OSError) as exc:
         return DatabaseInfo(
-            path=str(p), found=True, latest_version=latest, error=f"Cannot open the file: {exc}"
+            path=str(p),
+            found=True,
+            latest_version=latest,
+            problem=DatabaseProblem.CANNOT_OPEN,
+            error=f"Cannot open the file: {exc}",
         )
     try:
         user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
@@ -202,6 +221,7 @@ def inspect_database(path: Path | str) -> DatabaseInfo:
             path=str(p),
             found=True,
             latest_version=latest,
+            problem=DatabaseProblem.NOT_SQLITE,
             error=f"Cannot read the file as an SQLite database: {exc}",
         )
     finally:

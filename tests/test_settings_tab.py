@@ -18,8 +18,10 @@ from iqdm.entry import ItemState
 from iqdm.gui.settings_tab import (
     NO_CONFIG_PATH,
     NO_DB_PATH,
+    OFFSET_MESSAGE,
+    DatabaseStatus,
     SettingsTab,
-    database_status_text,
+    database_status,
     offset_preview,
 )
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, colours_for
@@ -93,43 +95,67 @@ def save_and_get_config(qtbot, tab: SettingsTab) -> Config:
 # ---------------------------------------------------------------------------
 
 
-def test_status_text_for_a_current_database(db_path):
-    text = database_status_text(inspect_database(db_path))
-    assert text == (
-        "File found. Schema version 1, current. "
-        "Journal mode delete, foreign keys on, busy timeout 5000 ms."
-    )
+TECHNICAL = ("schema", "journal", "busy timeout", "foreign keys", "user_version")
 
 
-def test_status_text_for_an_older_database(db_path, monkeypatch):
+def plain(status: DatabaseStatus) -> bool:
+    """The visible line holds no database internals (D38)."""
+    return not any(word in status.line.lower() for word in TECHNICAL)
+
+
+def test_status_for_a_current_database_is_green(db_path):
+    status = database_status(inspect_database(db_path))
+    assert status.state is ItemState.OK
+    assert status.line == "\N{CHECK MARK} Connected. The database is ready to use."
+    assert "Schema version 1 (this app expects 1)" in status.details
+    assert "Journal mode delete, foreign keys on, busy timeout 5000 ms." in status.details
+    assert str(db_path) in status.details
+
+
+def test_status_for_an_older_database_is_red(db_path, monkeypatch):
     monkeypatch.setattr(version, "LATEST_VERSION", 2)
-    text = database_status_text(inspect_database(db_path))
-    assert "Schema version 1, needs an upgrade to version 2." in text
-    assert "cannot read or write this database" in text
+    status = database_status(inspect_database(db_path))
+    assert status.state is ItemState.ERROR
+    assert "older version of IQ Data Manager. This version cannot open it." in status.text
+    assert "Schema version 1 (this app expects 2)" in status.details
+    assert plain(status)
 
 
-def test_status_text_for_a_newer_database(db_path):
+def test_status_for_a_newer_database_is_amber(db_path):
     set_user_version(db_path, 3)
-    text = database_status_text(inspect_database(db_path))
-    assert "Schema version 3, too new: this app expects version 1." in text
-    assert "can read this database but cannot write to it" in text
+    status = database_status(inspect_database(db_path))
+    assert status.state is ItemState.INFO
+    assert "You can view recordings but cannot save them." in status.text
+    assert "Schema version 3 (this app expects 1)" in status.details
+    assert plain(status)
 
 
-def test_status_text_for_other_files(tmp_path):
+def test_status_for_files_the_app_cannot_use_is_red(tmp_path):
     other = tmp_path / "other.db"
     raw = sqlite3.connect(other, autocommit=True)
     raw.execute("CREATE TABLE legacy (date TEXT)")
     raw.close()
-    assert "Not an IQ Data Manager database (schema version 0)." in database_status_text(
-        inspect_database(other)
-    )
-    assert database_status_text(inspect_database(tmp_path / "absent.db")) == (
-        "The file was not found."
-    )
     junk = tmp_path / "junk.db"
     junk.write_bytes(b"not a database" * 200)
-    assert "Cannot read the file as an SQLite database" in database_status_text(
-        inspect_database(junk)
+    expected = {
+        other: "This file is not an IQ Data Manager database.",
+        junk: "This file is not an IQ Data Manager database.",
+        tmp_path
+        / "absent.db": "Database file not found. Check the path and the network connection.",
+        tmp_path: "This path is a folder. Choose the database file.",
+    }
+    for path, text in expected.items():
+        status = database_status(inspect_database(path))
+        assert (status.state, status.text) == (ItemState.ERROR, text), path
+        assert status.line.startswith("\N{BALLOT X} ")
+        assert plain(status)
+    assert "file is not a database" in database_status(inspect_database(junk)).details
+
+
+def test_status_without_a_path_is_amber():
+    assert NO_DB_PATH.state is ItemState.INFO
+    assert NO_DB_PATH.line == (
+        "\N{WHITE CIRCLE} No database chosen. Recordings cannot be saved until you choose one."
     )
 
 
@@ -143,7 +169,7 @@ def test_status_text_for_other_files(tmp_path):
     ],
 )
 def test_offset_preview(hours, shown):
-    assert offset_preview(hours) == f"2026-09-30T02:00:00Z is shown as {shown}."
+    assert offset_preview(hours) == f"2026-09-30 02:00:00 UTC is shown as {shown}."
 
 
 # ---------------------------------------------------------------------------
@@ -162,16 +188,18 @@ def test_fields_show_the_file(make_tab, config_file, db_path):
     assert roots(tab) == [NAS, r"\\nas2\iq"]
     assert tab.offset_spin.value() == 5.5
     assert tab.offset_preview.text() == offset_preview(5.5)
-    assert tab.db_status.text().startswith("File found. Schema version 1, current.")
+    assert tab.db_status.text() == "\N{CHECK MARK} Connected. The database is ready to use."
+    assert "Schema version 1" in tab.db_status.toolTip()
     assert not tab.save_button.isEnabled()
     assert tab.problem_label.isHidden()
-    assert "Comments in the file are lost" in tab.file_note.text()
+    assert "Comments typed into the file by hand are not kept" in tab.file_note.text()
 
 
 def test_missing_file_shows_the_defaults(make_tab, config_file):
     tab = make_tab(config_file)
     assert (tab.db_edit.text(), roots(tab), tab.offset_spin.value()) == ("", [], 8.0)
-    assert tab.db_status.text() == NO_DB_PATH
+    assert tab.db_state == NO_DB_PATH
+    assert tab.db_status.text() == NO_DB_PATH.line
     assert not tab.save_button.isEnabled()
     assert not tab.open_folder_button.isEnabled()  # the folder does not exist yet
     assert tab.config_path_label.text() == str(config_file)
@@ -205,11 +233,12 @@ def test_tab_never_changes_the_database(qtbot, make_tab, config_file, db_path):
 def test_check_connection_runs_the_check_again(qtbot, make_tab, config_file, db_path):
     write(config_file, f"db_path = '{db_path}'")
     tab = make_tab(config_file)
-    assert "current" in tab.db_status.text()
+    assert tab.db_state.state is ItemState.OK
     set_user_version(db_path, 3)
     tab.check_button.click()
     wait_idle(qtbot, tab)
-    assert "too new" in tab.db_status.text()
+    assert tab.db_state.state is ItemState.INFO
+    assert "newer version" in tab.db_status.text()
 
 
 def test_a_typed_path_is_checked_when_editing_finishes(qtbot, make_tab, config_file, db_path):
@@ -217,11 +246,22 @@ def test_a_typed_path_is_checked_when_editing_finishes(qtbot, make_tab, config_f
     tab.db_edit.setText(str(db_path))
     tab.db_edit.editingFinished.emit()
     wait_idle(qtbot, tab)
-    assert "current" in tab.db_status.text()
+    assert tab.db_state.state is ItemState.OK
     tab.db_edit.setText(str(db_path.parent / "absent.db"))
     tab.db_edit.editingFinished.emit()
     wait_idle(qtbot, tab)
-    assert tab.db_status.text() == "The file was not found."
+    assert tab.db_state.state is ItemState.ERROR
+    assert "Database file not found" in tab.db_status.text()
+
+
+def test_a_check_in_progress_is_amber(qtbot, make_tab, config_file, db_path):
+    tab = make_tab(config_file)
+    tab.db_edit.setText(str(db_path))
+    tab.check_button.click()
+    assert tab.db_status.text() == "\N{WHITE CIRCLE} Checking the database..."
+    assert tab.db_state.state is ItemState.INFO
+    wait_idle(qtbot, tab)
+    assert tab.db_state.state is ItemState.OK
 
 
 def test_browse_sets_the_path_and_checks_it(qtbot, make_tab, config_file, db_path, monkeypatch):
@@ -232,7 +272,7 @@ def test_browse_sets_the_path_and_checks_it(qtbot, make_tab, config_file, db_pat
     tab.db_browse_button.click()
     wait_idle(qtbot, tab)
     assert tab.db_edit.text() == str(db_path)
-    assert "current" in tab.db_status.text()
+    assert tab.db_state.state is ItemState.OK
     assert tab.save_button.isEnabled()
 
 
@@ -241,13 +281,13 @@ def test_cancelled_browse_changes_nothing(make_tab, config_file, monkeypatch):
     tab = make_tab(config_file)
     tab.db_browse_button.click()
     assert tab.db_edit.text() == ""
-    assert tab.db_status.text() == NO_DB_PATH
+    assert tab.db_state == NO_DB_PATH
 
 
 def test_a_late_result_of_an_earlier_check_is_dropped(make_tab, config_file):
     tab = make_tab(config_file)
-    tab._checked(tab._check_id - 1, "an old result")
-    assert tab.db_status.text() == NO_DB_PATH
+    tab._checked(tab._check_id - 1, DatabaseStatus(ItemState.OK, "an old result"))
+    assert tab.db_state == NO_DB_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -281,10 +321,11 @@ def test_a_wrong_root_is_marked_and_blocks_save(make_tab, config_file, replies):
     replies.append((r"D:\data", True))
     tab.add_root_button.click()
     item = tab.roots_list.item(0)
-    assert "not a UNC path" in item.toolTip()
+    message = r"D:\data is not a network location. Use the form \\server\share."
+    assert item.toolTip() == message
     assert item.foreground().color() == colours_for(tab.palette())[ItemState.ERROR]
     assert tab.roots_error.isVisibleTo(tab)
-    assert tab.roots_error.text() == r"nas_roots entry 'D:\data' is not a UNC path"
+    assert tab.roots_error.text() == message
     assert not tab.save_button.isEnabled()
 
     replies.append((NAS, True))
@@ -298,7 +339,9 @@ def test_a_wrong_root_in_the_file_can_be_corrected(make_tab, config_file, replie
     write(config_file, r"nas_roots = ['D:\data']")
     tab = make_tab(config_file)
     assert roots(tab) == [r"D:\data"]
-    assert "not a UNC path" in tab.problem_label.text()
+    assert "Correct the field marked in red" in tab.problem_label.text()
+    assert "not a UNC path" in tab.problem_label.toolTip()  # the technical text
+    assert "network location" in tab.roots_error.text()
     assert not tab.save_button.isEnabled()
     replies.append((NAS, True))
     tab.roots_list.setCurrentRow(0)
@@ -322,7 +365,7 @@ def test_offset_off_the_quarter_hour_is_marked(make_tab, config_file):
     tab = make_tab(config_file)
     tab.offset_spin.setValue(5.1)
     assert tab.offset_error.isVisibleTo(tab)
-    assert "steps of 0.25" in tab.offset_error.text()
+    assert tab.offset_error.text() == OFFSET_MESSAGE
     assert tab.offset_preview.text() == ""
     assert not tab.save_button.isEnabled()
 
@@ -409,8 +452,8 @@ def test_a_wrong_hidden_key_blocks_save(make_tab, config_file):
     write(config_file, "network_speed_mb_s = -1\n")
     tab = make_tab(config_file)
     tab.db_edit.setText("new.db")
-    assert "network_speed_mb_s" in tab.problem_label.text()
-    assert "by hand" in tab.problem_label.text()
+    assert "network_speed_mb_s" in tab.problem_label.text()  # named, to fix by hand (D36)
+    assert "Correct it in the file (Open folder)" in tab.problem_label.text()
     assert not tab.save_button.isEnabled()
 
     write(config_file, "network_speed_mb_s = 50\n")
@@ -422,7 +465,8 @@ def test_a_wrong_hidden_key_blocks_save(make_tab, config_file):
 def test_an_unreadable_file_can_be_replaced(qtbot, make_tab, config_file):
     write(config_file, "db_path = ")
     tab = make_tab(config_file)
-    assert "cannot be read" in tab.problem_label.text()
+    assert "The settings file cannot be read" in tab.problem_label.text()
+    assert "not valid TOML" in tab.problem_label.toolTip()
     assert tab.save_button.isEnabled()  # without a change
     config = save_and_get_config(qtbot, tab)
     assert config == Config()
@@ -527,3 +571,23 @@ def test_error_marks_follow_the_theme(qapp, make_tab, config_file, replies, app_
     dark = DARK_COLOURS[ItemState.ERROR]
     assert tab.roots_list.item(0).foreground().color() == dark
     assert dark.name() in tab.roots_error.styleSheet()
+
+
+@pytest.mark.parametrize(
+    ("setup", "state"),
+    [("current", ItemState.OK), ("newer", ItemState.INFO), ("absent", ItemState.ERROR)],
+)
+def test_database_status_is_green_amber_or_red_in_both_themes(
+    qapp, qtbot, make_tab, config_file, db_path, app_palette, setup, state
+):
+    if setup == "newer":
+        set_user_version(db_path, 3)
+    path = db_path if setup != "absent" else db_path.parent / "absent.db"
+    write(config_file, f"db_path = '{path}'")
+    app_palette(LIGHT)
+    tab = make_tab(config_file)
+    assert tab.db_state.state is state
+    assert LIGHT_COLOURS[state].name() in tab.db_status.styleSheet()
+    app_palette(DARK)
+    qapp.processEvents()
+    assert DARK_COLOURS[state].name() in tab.db_status.styleSheet()
