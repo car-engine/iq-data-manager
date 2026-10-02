@@ -413,7 +413,15 @@ def run_transfer(
                 manifest_sha256=digest,
             )
 
-    write_transaction(db_path, finish)
+    try:
+        write_transaction(db_path, finish)
+    except repository.AlreadyArchivedError:
+        notes = (
+            "Someone else archived this recording while this copy ran. "
+            "The recording keeps the other archive copy."
+        )
+        _finish(db_path, tid, now, Verification.FAIL, notes)
+        return outcome(Verification.FAIL, notes, copy, result, path)
     return outcome(Verification.PASS, None, copy, result, path)
 
 

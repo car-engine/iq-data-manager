@@ -220,6 +220,21 @@ def test_move_outside_the_nas_is_refused(env):
     )
 
 
+def test_two_moves_at_once_keep_the_first_archive(env):
+    """Two people archive one recording to two folders; the second finish is refused."""
+    first = env.preview(env.request(dest=env.nas / "first"))
+    second = env.preview(env.request(dest=env.nas / "second"))
+    assert first.ok and second.ok
+    assert env.run(first).passed
+    out = env.run(second)
+    assert out.verification is Verification.FAIL
+    assert out.notes.startswith("Someone else archived this recording")
+    assert env.recording().rel_path == "first"
+    rows = env.transfers()
+    assert [r.verification for r in rows] == [Verification.PASS, Verification.FAIL]
+    assert rows[1].finished_at is not None
+
+
 def test_a_failed_check_leaves_the_recording_local(env):
     preview = env.preview(env.request())
     dest = Path(preview.request.destination)

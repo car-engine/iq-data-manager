@@ -723,6 +723,24 @@ def test_finish_move_refuses_another_operation(conn, site_id):
     assert repo.get_recording(conn, rid).archive_state is ArchiveState.LOCAL
 
 
+def test_finish_move_refuses_a_recording_archived_meanwhile(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    first, second = start_move(conn, rid), start_move(conn, rid)
+    values = {
+        "finished_at": "2026-10-02T01:30:00Z",
+        "n_files": 20,
+        "total_bytes": 80000,
+        "manifest_path": "m.json",
+        "manifest_sha256": "cd" * 32,
+        "storage_root": "//nas/recordings",
+    }
+    repo.finish_move(conn, first, rel_path="first", **values)
+    with pytest.raises(repo.AlreadyArchivedError):
+        repo.finish_move(conn, second, rel_path="second", **values)
+    assert repo.get_recording(conn, rid).rel_path == "first"
+    assert repo.get_transfer(conn, second).finished_at is None
+
+
 def test_finish_move_is_atomic(db_path):
     with open_db(db_path) as c:
         site = repo.add_site(c, "SiteA").id

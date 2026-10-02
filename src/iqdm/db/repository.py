@@ -58,6 +58,10 @@ class HasTransferHistoryError(RepositoryError):
     """The recording has transfer_log rows, so it cannot be deleted."""
 
 
+class AlreadyArchivedError(RepositoryError):
+    """A move finished for a recording that another move archived first."""
+
+
 class ChannelRemovalError(RepositoryError):
     """An update would remove channels without allow_channel_removal=True."""
 
@@ -679,11 +683,18 @@ def finish_move(
     """Finish a passed move and point its recording at the new copy (SPEC section 8).
 
     Both writes happen in the caller's transaction, so the log row and the archive
-    state change together. archived_at is the finish time.
+    state change together. archived_at is the finish time. Raises AlreadyArchivedError
+    when the recording is no longer local, for example after a second move of the
+    same recording finished first.
     """
     entry = get_transfer(conn, transfer_id)
     if entry.operation is not Operation.MOVE:
         raise RepositoryError(f"transfer {transfer_id} is a {entry.operation}, not a move")
+    row = _one(conn, "SELECT archive_state FROM recordings WHERE id = ?", (entry.recording_id,))
+    if row is None:
+        raise NotFoundError(f"no recording with id {entry.recording_id}")
+    if row["archive_state"] != str(ArchiveState.LOCAL):
+        raise AlreadyArchivedError(f"recording {entry.recording_id} is already archived")
     finish_transfer(
         conn,
         transfer_id,

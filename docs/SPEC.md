@@ -374,6 +374,8 @@ builds the tab over it.
   verify, then on success update `storage_root`, `rel_path`,
   `archive_state = 'archived'` and `archived_at` in the same transaction that
   finishes the `transfer_log` row. A failed verification leaves the recording `local`.
+  If another move archived the recording while this one ran, this move is logged as
+  failed, and the recording keeps the first archive copy.
 - **Delete the laptop copy**: a separate, explicit, user-confirmed action, offered
   only after a move passed verification. It is logged as a `transfer_log` row with
   `operation = 'delete'` and the move in `parent_id` (D52).
