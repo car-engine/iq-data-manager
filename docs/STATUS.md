@@ -8,8 +8,8 @@ report. Last updated: 2026-10-02 (Milestone 3a).
 
 - Milestone 3a (Settings tab) is complete on branch `m3a-settings` and waits for the
   user's manual tests and merge approval. Report: [reports/M3a.md](reports/M3a.md).
-  Decisions D31–D37. The report asks whether the dates "2026-10-03" in older
-  documents should read 2026-10-02 (issue 4).
+  Decisions D31–D37. The dates "2026-10-03" in older documents are corrected to
+  2026-10-02, the date of their commits (issue 4).
 - 728 tests pass and 2 skip on `m3a-settings`. One skip needs the symbolic-link
   privilege; the other runs only off Windows. `ruff check` is clean.
 - Milestone 3 (Log tab) is merged into `main`. Report: [reports/M3.md](reports/M3.md).
@@ -83,7 +83,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D37). The M0 review table in
 | O14 | Edit mode: confirming a rescan that changes the channel set | D16 (2026-10-02) |
 | O23 | Logging works on any folder, local or on the NAS | D18 (2026-10-02) |
 | O24 | A last file without IQ data | D13 (2026-10-02) |
-| O29 | Creating a new database from the Settings tab | D30 (2026-10-03) |
+| O29 | Creating a new database from the Settings tab | D30 (2026-10-02) |
 | O18 | Writing `config.toml` | D31 (2026-10-02) |
 | O27 | Name of the Settings milestone | D32 (2026-10-02) |
 | O28 | When Settings changes apply | D33 (2026-10-02) |
@@ -93,7 +93,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D37). The M0 review table in
 ## Pending checks for the user
 
 - Milestone 3a: run the manual test set in [reports/M3a.md](reports/M3a.md), then
-  decide on the merge of `m3a-settings` and on the dates in issue 4.
+  decide on the merge of `m3a-settings`.
 - O21 before the app writes to a real database on the NAS: run `tools/db_check.py`
   `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
   `write` on two PCs. Steps are in
@@ -130,7 +130,7 @@ These come from the safety configuration and from experience in this repository.
   `robocopy`, `.unlink(`, `os.remove`, `format x:` and `shutdown` block the command,
   even inside a commit message or a heredoc. A UNC path also blocks it: two
   backslashes, a name and a backslash at the start of a word, or the same with
-  escaped backslashes. The user narrowed this pattern on 2026-10-03, so a backslash
+  escaped backslashes. The user narrowed this pattern on 2026-10-02, so a backslash
   pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. Commit
   `77ed32c` holds that change.
 - **Scripts that are not part of the project** (screenshots, probes) go under `dev/`,

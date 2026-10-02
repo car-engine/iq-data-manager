@@ -44,10 +44,10 @@ Rules for this file:
 | D24 | Display offset for times | 2026-10-02, Milestone 3 | Active |
 | D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
 | D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
-| D27 | Warning for a folder named like a channel folder | 2026-10-03, Milestone 3 | Active |
-| D28 | RF chain repeats, overrides and conflicts | 2026-10-03, Milestone 3 | Active |
-| D29 | Settings tab before the Viewer | 2026-10-03, after Milestone 3 | Active; scope narrowed by D30 |
-| D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-03, after Milestone 3 | Active |
+| D27 | Warning for a folder named like a channel folder | 2026-10-02, Milestone 3 | Active |
+| D28 | RF chain repeats, overrides and conflicts | 2026-10-02, Milestone 3 | Active |
+| D29 | Settings tab before the Viewer | 2026-10-02, after Milestone 3 | Active; scope narrowed by D30 |
+| D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-02, after Milestone 3 | Active |
 | D31 | Writing config.toml with tomli-w | 2026-10-02, Milestone 3a | Active |
 | D32 | Name of the Settings milestone | 2026-10-02, Milestone 3a | Active |
 | D33 | Applying settings without a restart | 2026-10-02, Milestone 3a | Active |
@@ -520,7 +520,7 @@ Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
 
 ## D29. Settings tab before the Viewer
 
-- The user decided on 2026-10-03 to build the settings as a fourth tab, "Settings",
+- The user decided on 2026-10-02 to build the settings as a fourth tab, "Settings",
   in place of the settings dialog that SPEC section 4 described for Milestone 7.
 - The Settings tab is the next milestone, before Milestone 4 (Viewer).
 - Reasons, from the Milestone 3 manual tests:
@@ -537,7 +537,7 @@ Affects: SPEC sections 1, 4, 9 and 12.
 
 ## D30. Settings scope: no upgrade button, fixed extensions, no database creation
 
-Narrows D29. Closes O29. The user decided all three points on 2026-10-03 after
+Narrows D29. Closes O29. The user decided all three points on 2026-10-02 after
 questions about the first scope.
 
 - **No "Upgrade database" button in Milestone 3a.** No migration exists yet: the

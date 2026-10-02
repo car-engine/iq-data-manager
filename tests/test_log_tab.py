@@ -848,7 +848,7 @@ def test_new_folder_resets_format_channels_and_rf_chain(qtbot, make_tab, make_re
 
 
 # ---------------------------------------------------------------------------
-# Light and dark themes (second manual test, 2026-10-03)
+# Light and dark themes (second manual test, 2026-10-02)
 # ---------------------------------------------------------------------------
 
 

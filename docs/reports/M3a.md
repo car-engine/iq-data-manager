@@ -99,9 +99,11 @@ The user also approved the new branch and the new dependency, `tomli-w==1.2.0`.
    sets them on every connection. Only the journal mode describes the file. Left
    unchanged.
 4. **Wrong dates in the documentation.** STATUS.md, D27 to D30 and the Milestone 3
-   report give 2026-10-03 for the Milestone 3 merge and the Settings decisions. The
+   report gave 2026-10-03 for the Milestone 3 merge and the Settings decisions. The
    commits (`ce48c2c` to `77ed32c`) are dated 2026-10-02, UTC+8. The new entries D31
-   to D37 use 2026-10-02. The old dates are unchanged. Should they be corrected?
+   to D37 use 2026-10-02. At the user's request, every "2026-10-03" in DECISIONS.md,
+   STATUS.md, the Milestone 3 report and a section comment in `test_log_tab.py` now
+   reads 2026-10-02.
 5. **STATUS.md said that the hook change was not committed.** Commit `77ed32c`
    committed it. STATUS.md is corrected in this milestone's documentation commit.
 6. **A value of the wrong type in a shown key shows the default.** For example,
@@ -113,7 +115,7 @@ The user also approved the new branch and the new dependency, `tomli-w==1.2.0`.
 | Check | Who | Why |
 | --- | --- | --- |
 | Run the manual test set below | User | Only a person can judge the tab and the questions it asks |
-| Decide issue 4 | User | Dates in four documents |
+| Decide issue 4 | User | Done: the user asked for the dates to be corrected |
 | Optional: check a database on the NAS from the Settings tab | User | Network paths are not testable here |
 
 ### Manual test set
@@ -157,5 +159,4 @@ Both folders are under `dev/`, which `.gitignore` excludes.
 ## Recommendation and question
 
 Run the manual test set, then merge `m3a-settings` into `main` as a fast-forward. Does
-the user approve the merge after the manual tests? Should the dates in issue 4 be
-corrected?
+the user approve the merge after the manual tests?
