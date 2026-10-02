@@ -93,12 +93,17 @@ Key semantics:
 Per-machine TOML file at `%APPDATA%\IQDataManager\config.toml`, read with `tomllib`.
 Created with defaults on first run; editable from a small settings dialog.
 
+Until Milestone 7 the app only reads the file (DECISIONS.md D15). The user writes it
+by hand. A missing file gives the defaults, which have no `db_path`. Unknown keys are
+ignored. `--config PATH` reads another file, and `--db PATH` overrides `db_path`.
+
 ```toml
 db_path = '\\192.168.1.50\recordings\iq_catalog.db'
 default_local_copy_root = 'D:\work\iq'
 network_speed_mb_s = 110          # used for time estimates
 default_hash_mode = "sample"      # "none" | "sample" | "all"
 hash_sample_fraction = 0.05
+nas_roots = ['\\192.168.1.50\recordings']   # UNC roots; a folder under one is on the NAS (D14)
 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
@@ -124,20 +129,28 @@ hash_sample_fraction = 0.05
 
 Flow: choose folder, scan, review and complete fields, validate, save.
 
-1. **Source folder**: browse to a recording folder (local or on the NAS). "Scan
-   folder" runs the scanner (section 7) in a worker thread with progress.
-2. **Recording fields**: start and end (from scan, read-only), file duration (default
-   1.0 s), logged by (pre-filled with the Windows login name, editable), site
-   (dropdown plus "Add site"), recording plan reference, storage root and relative
-   path (derived from the folder, read-only), archive state (derived: `local` unless
-   the folder is under a configured NAS root, then `archived`; see DECISIONS.md D2 for
-   the `transfer_log` row written in that case), remarks.
+1. **Source folder**: browse to a recording folder (local or on the NAS; DECISIONS.md
+   D18). "Scan folder" runs the scanner (section 7) in a worker thread. The tab shows
+   the number of files found so far and has a Cancel button.
+2. **Recording fields**: start and end (from scan, read-only, in UTC; D17), file
+   duration (default 1.0 s), logged by (pre-filled with the Windows login name,
+   editable), site (dropdown plus "Add site"), recording plan reference, storage root
+   and relative path (derived from the folder, read-only), archive state (derived:
+   `local` unless the folder is under a configured NAS root, then `archived`; see
+   DECISIONS.md D2 for the `transfer_log` row written in that case), remarks.
+
+   Storage root and relative path follow D14. A mapped drive letter is replaced by
+   its UNC path. Under a NAS root, the root is the configured NAS root and the
+   relative path is the rest. Elsewhere, the root is the parent folder and the
+   relative path is the folder name. A drive root, a share root and a NAS root
+   itself cannot be logged.
 3. **File format**: sample type (`int8`, `int16` default, `float32`), IQ layout
    (`interleaved_iq` default, `interleaved_qi`, `planar_iq`), endianness (little
    default), header bytes (0, at the start of every file).
 4. **Channels**: one row per detected channel with folder, start, end, files and
    coverage from the scan; band, fc (MHz in the UI, Hz in the DB) and fs entered by
-   the user.
+   the user. Band is an optional editable dropdown that lists the bands already in
+   the DB. fs is also entered in MHz. Both convert to Hz through `Decimal` (D19).
 5. **RF chain**: editable rows of applies-to (Recording / Ch N), parameter, value,
    unit. Parameter names autocomplete from values already in the DB.
 
@@ -156,6 +169,18 @@ Validation before save (shown as a checklist):
 
 Save writes the recording, channels and params in one transaction. Edit mode loads an
 existing recording into the same form and updates it.
+
+Edit mode (DECISIONS.md D16):
+
+- It opens from the "already logged" item of the checklist, and from the Viewer in
+  Milestone 4.
+- The folder, storage root, relative path, archive state and `archived_at` stay as
+  stored. A save in edit mode writes no `transfer_log` row.
+- Logged by, site, plan reference, remarks, IQ layout, endianness, band, fc and the
+  RF chain save without a rescan.
+- A change to fs, sample type, header bytes or file duration needs a rescan first.
+- A rescan that removes channels asks for confirmation on save. The dialog names the
+  channels and the number of their parameters.
 
 ## 7. Scanner
 
@@ -266,6 +291,8 @@ iq-data-manager/
     config.py                 # TOML config load/save, defaults
     models.py                 # dataclasses: Recording, Channel, Param, Transfer...
     timeutil.py               # UTC ISO 8601 text <-> Unix seconds
+    location.py               # folder -> storage_root, rel_path, archive state (D14)
+    entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     db/
       schema.sql
       version.py              # LATEST_VERSION and schema_status(), shared by the two below

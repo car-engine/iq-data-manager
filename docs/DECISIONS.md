@@ -31,6 +31,12 @@ Rules for this file:
 | D11 | Scanner folder rules | 2026-10-02, Milestone 2 | Active |
 | D12 | Gap rule | 2026-10-02, Milestone 2 | Active |
 | D13 | Last file without IQ data | 2026-10-02, Milestone 2 | Active |
+| D14 | Recording folder location | 2026-10-02, Milestone 3 | Active |
+| D15 | Reading the configuration in Milestone 3 | 2026-10-02, Milestone 3 | Active |
+| D16 | Edit mode in the Log tab | 2026-10-02, Milestone 3 | Active |
+| D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Active |
+| D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |
+| D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -227,3 +233,101 @@ Closes O24 (Milestone 2 report, issue 2). Narrows D3.
   (D3).
 
 Affects: SPEC sections 6 and 7, `scan/scanner.py`.
+
+## D14. Recording folder location
+
+Closes O2 (M0 review 10) and O3 (M0 review 11).
+
+- A folder path is first normalised: backslashes, no trailing separator.
+- The drive letter of a mapped network drive is replaced by the drive's UNC path. The
+  app reads the drive mapping with `WNetGetConnectionW` through `ctypes`. This call
+  opens no folder.
+- The configuration lists the NAS roots in a new key, `nas_roots`. Each entry is a UNC
+  path.
+- A folder under a NAS root gets these values:
+  - `storage_root` = the NAS root as written in the configuration, without a
+    trailing separator;
+  - `rel_path` = the rest of the path;
+  - `archive_state = 'archived'`, with the `transfer_log` row from D2.
+- The match ignores letter case and compares whole path components, so
+  `\\nas\rec` does not match `\\nas\recordings2`. When two roots match, the longer
+  one wins.
+- Any other folder is local: `storage_root` = the parent folder, `rel_path` = the
+  folder name, `archive_state = 'local'`.
+- A network folder outside every NAS root is local by the rule above. The Log tab
+  reports it as information.
+- `rel_path` is stored with backslashes, like the UNC roots and the legacy
+  `data_dir` values.
+- A drive root, a UNC share root and a NAS root itself cannot be logged as a
+  recording folder.
+
+Affects: SPEC sections 4 and 6, `location.py`, `config.py`.
+
+## D15. Reading the configuration in Milestone 3
+
+Narrows O18 for Milestone 3. O18 stays open for Milestone 7.
+
+- `config.py` reads `%APPDATA%\IQDataManager\config.toml` with `tomllib`. It never
+  writes the file.
+- A missing file gives the defaults. The default has no database path, so the Log
+  tab cannot save until the user adds `db_path` to the file by hand.
+- A file that is not valid TOML, or a key with a wrong type or value, is an error
+  that names the file and the key. Unknown keys are ignored.
+- Two command-line options exist for development and manual tests. `--config PATH`
+  reads another configuration file. `--db PATH` overrides `db_path`.
+- Writing the file, and creating it with defaults on first run, stay in O18
+  (Milestone 7).
+
+Affects: SPEC section 4, `config.py`, `app.py`.
+
+## D16. Edit mode in the Log tab
+
+Closes O14 (M0 review 20). Builds on D7.
+
+- `LogTab.load_recording(recording_id)` opens edit mode. In Milestone 3 the Log tab
+  offers it when a scanned folder is already logged. In Milestone 4 the Viewer's
+  "Edit entry" action calls it.
+- The folder cannot change in edit mode. `storage_root`, `rel_path`,
+  `archive_state` and `archived_at` keep their stored values. A save in edit mode
+  writes no `transfer_log` row.
+- These fields save without a rescan: logged by, site, recording plan reference,
+  remarks, IQ layout, endianness, band, fc and the RF chain.
+- A change to fs, sample type, header bytes or file duration needs a rescan of the
+  stored folder before the save, so the size check can run.
+- After a rescan, the channel rows take their start, end, file count and size from
+  the scan.
+- A rescan that removes channels is allowed. On save, a dialog names the removed
+  channels and the number of their parameters. "Yes" calls
+  `update_recording(..., allow_channel_removal=True)`. "No" writes nothing.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D17. Times in the Log tab
+
+Narrows O1 for Milestone 3. O1 stays open for Milestones 4 and 6.
+
+- The Log tab shows every time in UTC, and each label says "(UTC)".
+- The config key for a display offset (UTC+8) is not added in Milestone 3. The
+  Viewer decides it in Milestone 4.
+
+Affects: SPEC section 6, `gui/log_tab.py`.
+
+## D18. Logging any folder
+
+Closes O23 (former SPEC section 13).
+
+- The Log tab logs a folder on a local disk or on the NAS.
+- A scan runs in a worker thread. The tab shows the number of files found so far and
+  has a Cancel button, because a scan over the network takes longer.
+
+Affects: SPEC section 6.
+
+## D19. Band and frequency input
+
+- Band is an editable dropdown. Its list holds the bands already in the database.
+  Band is optional, as the schema allows NULL.
+- fc and fs are entered in MHz and stored in Hz.
+- The conversion goes through `Decimal`, so a decimal entry such as `145.8` gives
+  exactly 145 800 000 Hz.
+
+Affects: SPEC section 6, `entry.py`, `db/repository.py`.

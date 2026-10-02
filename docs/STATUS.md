@@ -8,11 +8,12 @@ report. Last updated: 2026-10-02.
 
 - Milestone 2 (Scanner) is complete and merged into `main` (fast-forward,
   2026-10-02). Report: [reports/M2.md](reports/M2.md).
-- 307 tests pass and 1 skips (symbolic links need a privilege this account lacks).
-  `ruff check` is clean.
-- Next: Milestone 3 (Log tab), on a new branch `m3-log-tab`, starting with a plan in
-  plan mode. The NAS part of O21 is due before Milestone 3; the local part is done
-  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
+- 322 tests pass and 1 skips on `main` (symbolic links need a privilege this account
+  lacks). `ruff check` is clean.
+- Milestone 3 (Log tab) is in progress on branch `m3-log-tab`. The user approved the
+  plan on 2026-10-02 and chose the proposed default for every open item (D14–D19).
+- The user chose to start Milestone 3 before the NAS part of O21. The local part is
+  done ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
 
 ## Milestones
 
@@ -23,7 +24,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
-| 3. Log tab | Not started | | | |
+| 3. Log tab | In progress | `m3-log-tab` | | |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
@@ -42,9 +43,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O1 | Display time zone. The Viewer shows "start (UTC+8)", CLAUDE.md forbids local time, the Move / copy tab takes UTC input. | 3, 4, 6 | Store UTC. Config key `display_utc_offset_hours = 8`. Every displayed time shows its offset. Input fields stay UTC. | M0 review 9 |
-| O2 | How a local folder splits into `storage_root` and `rel_path` | 3 | Local: root = parent folder, `rel_path` = folder name. NAS: root = configured NAS root, `rel_path` = remainder. | M0 review 10 |
-| O3 | Mapped drives to UNC; no list of NAS roots in the config | 3 | Resolve mapped drives with `WNetGetConnectionW` through `ctypes`. Add a `nas_roots` config list. | M0 review 11 |
+| O1 | Display time zone. The Viewer shows "start (UTC+8)", CLAUDE.md forbids local time, the Move / copy tab takes UTC input. The Log tab shows UTC (D17). | 4, 6 | Store UTC. Config key `display_utc_offset_hours = 8`. Every displayed time shows its offset. Input fields stay UTC. | M0 review 9 |
 | O6 | Which files a time range includes | 5 | A file at time `t` is in range when `start <= t < end`. | M0 review 18 |
 | O7 | Archiving a time range or channel subset would point the DB at a partial copy | 5, 6 | "Archive to NAS" accepts only a whole recording with all channels. | M0 review 13 |
 | O8 | "Destination empty or new" blocks resuming a copy and copying a second range into the same folder | 5 | Keep for moves. For copies, allow a non-empty destination when none of the target files exist there. | M0 review 14 |
@@ -53,32 +52,35 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O11 | "Verify against source" for recordings logged in place on the NAS, and how a later verification clears the unverified mark | 6 | None yet | D2 |
 | O12 | `finish_transfer` replaces `notes`; source deletion is recorded in `notes` | 6 | Add to the existing text instead of replacing it. | M1 review |
 | O13 | The app can both save scripts and run them. If the user prefers "generate only", drop the run path in Milestone 6 and keep verification as a "Check" action. | 6 | Save and run. | Former SPEC section 13 |
-| O14 | Edit mode: the GUI must confirm before applying a rescan that changes the channel set | 3 | Ask, then call `update_recording(..., allow_channel_removal=True)`. | M0 review 20; D7 |
 | O15 | Coverage highlight threshold of 99% | 4 | 99%, as a config key. | Former SPEC section 13 |
 | O16 | `list_recordings` loads every channel in one query; not measured beyond thousands of recordings | 4 | Revisit with the Viewer filters. | M1 review |
 | O17 | No way to delete a wrongly logged recording in the GUI (`repository.delete_recording` exists) | 4 | Out of scope for v1. | M0 review 23 |
-| O18 | Missing config keys (data-file extensions, coverage threshold, free-space margin, NAS roots, display offset). `tomllib` only reads TOML. | 7 (NAS roots in 3) | Hand-written writer for flat keys, or `tomli-w` as a new dependency (needs approval). | M0 review 21 |
+| O18 | Missing config keys (data-file extensions, coverage threshold, free-space margin, display offset). `tomllib` only reads TOML. Milestone 3 reads the file and adds `nas_roots` (D15). | 7 | Hand-written writer for flat keys, or `tomli-w` as a new dependency (needs approval). | M0 review 21 |
 | O19 | GUI for the confirmed "Upgrade database" action | 7 | Settings dialog or startup prompt. | D6 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
-| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before Milestone 3 | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. | M1 check D |
+| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
-| O23 | Logging works on any folder, local or on the NAS; scanning NAS folders is slower | 3 | Keep. | Former SPEC section 13 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D13). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D19). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
 | --- | --- | --- |
+| O2 | How a local folder splits into `storage_root` and `rel_path` | D14 (2026-10-02) |
+| O3 | Mapped drives to UNC; no list of NAS roots in the config | D14 (2026-10-02) |
 | O4 | Scanner edge cases | D11 (2026-10-02) |
 | O5 | Gap tolerance with fractional timestamps | D12 (2026-10-02) |
+| O14 | Edit mode: confirming a rescan that changes the channel set | D16 (2026-10-02) |
+| O23 | Logging works on any folder, local or on the NAS | D18 (2026-10-02) |
 | O24 | A last file without IQ data | D13 (2026-10-02) |
 
 ## Pending checks for the user
 
-- O21 before Milestone 3: run `tools/db_check.py` `check`, `hold` and `write` on a
-  scratch database on the NAS, with `hold` and `write` on two PCs. Steps are in
+- O21 before the app writes to a real database on the NAS: run `tools/db_check.py`
+  `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
+  `write` on two PCs. Steps are in
   [reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md).
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
