@@ -48,7 +48,7 @@ BLOCKED_COMMAND_PATTERNS: list[tuple[str, str]] = [
 
 # UNC paths (\\server\share) and //server/share forms in shell commands.
 UNC_PATTERNS = [
-    r"\\\\[A-Za-z0-9_.\-]+\\",
+    r"(?:^|[\s\"'=(,;|&<>`])\\{2}(?:\\{2})?[A-Za-z0-9_.\-]+\\",
     r"(?<![:A-Za-z])//\d{1,3}(?:\.\d{1,3}){3}/",
 ]
 
