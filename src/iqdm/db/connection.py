@@ -9,12 +9,14 @@
 
 import sqlite3
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from urllib.parse import quote
 
+from iqdm.db import version
 from iqdm.db.version import SchemaStatus, schema_status
 
 Connection = sqlite3.Connection
@@ -153,6 +155,65 @@ def database_status(path: Path | str) -> SchemaStatus:
         return schema_status(conn)
     finally:
         conn.close()
+
+
+@dataclass(frozen=True, kw_only=True)
+class DatabaseInfo:
+    """What the Settings tab shows about a database file (SPEC section 4).
+
+    `error` is set when the file was not found or could not be read. The other
+    fields are then None.
+    """
+
+    path: str
+    found: bool
+    latest_version: int  # the schema version this app expects
+    user_version: int | None = None
+    status: SchemaStatus | None = None
+    settings: Mapping[str, str | int] | None = None
+    error: str | None = None
+
+
+def inspect_database(path: Path | str) -> DatabaseInfo:
+    """Schema version, schema status and connection settings of a database file.
+
+    Opens the file read-only and never changes it. Errors are returned in the result,
+    so the GUI can show them in its status line.
+    """
+    p = Path(path)
+    latest = version.LATEST_VERSION
+    if not p.is_file():
+        reason = "is a folder" if p.is_dir() else "was not found"
+        return DatabaseInfo(
+            path=str(p), found=False, latest_version=latest, error=f"The file {reason}."
+        )
+    try:
+        conn = open_unchecked(p, readonly=True)
+    except (sqlite3.Error, OSError) as exc:
+        return DatabaseInfo(
+            path=str(p), found=True, latest_version=latest, error=f"Cannot open the file: {exc}"
+        )
+    try:
+        user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        status = schema_status(conn, latest)
+        settings = connection_settings(conn)
+    except sqlite3.Error as exc:
+        return DatabaseInfo(
+            path=str(p),
+            found=True,
+            latest_version=latest,
+            error=f"Cannot read the file as an SQLite database: {exc}",
+        )
+    finally:
+        conn.close()
+    return DatabaseInfo(
+        path=str(p),
+        found=True,
+        latest_version=latest,
+        user_version=user_version,
+        status=status,
+        settings=settings,
+    )
 
 
 @contextmanager

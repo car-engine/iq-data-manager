@@ -13,6 +13,7 @@ from iqdm.db.connection import (
     connection_settings,
     create_database,
     database_status,
+    inspect_database,
     open_db,
     sqlite_uri,
     write_transaction,
@@ -181,6 +182,73 @@ def test_foreign_database_is_refused(tmp_path):
     for readonly in (False, True):
         with pytest.raises(SchemaVersionError, match="not an IQ Data Manager"):
             connect(path, readonly=readonly)
+
+
+# ---------------------------------------------------------------------------
+# inspect_database (Settings tab status line)
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_current_database(db_path):
+    info = inspect_database(db_path)
+    assert info.found
+    assert info.error is None
+    assert info.user_version == 1
+    assert info.latest_version == 1
+    assert info.status is SchemaStatus.CURRENT
+    assert info.settings == {"journal_mode": "delete", "foreign_keys": 1, "busy_timeout": 5000}
+
+
+def test_inspect_newer_database(db_path):
+    set_user_version(db_path, 3)
+    info = inspect_database(db_path)
+    assert (info.user_version, info.status) == (3, SchemaStatus.TOO_NEW)
+
+
+def test_inspect_older_database(db_path, monkeypatch):
+    monkeypatch.setattr(version, "LATEST_VERSION", 2)
+    info = inspect_database(db_path)
+    assert (info.user_version, info.latest_version) == (1, 2)
+    assert info.status is SchemaStatus.NEEDS_UPGRADE
+
+
+def test_inspect_sqlite_file_that_is_not_ours(tmp_path):
+    path = tmp_path / "other.db"
+    raw = sqlite3.connect(path, autocommit=True)
+    raw.execute("CREATE TABLE legacy (date TEXT)")
+    raw.close()
+    info = inspect_database(path)
+    assert (info.user_version, info.status) == (0, SchemaStatus.NOT_IQDM)
+
+
+def test_inspect_file_that_is_not_a_database(tmp_path):
+    path = tmp_path / "notes.db"
+    path.write_bytes(b"this is not an SQLite file" * 100)
+    info = inspect_database(path)
+    assert info.found
+    assert info.status is None
+    assert "Cannot read the file as an SQLite database" in info.error
+
+
+def test_inspect_missing_file_creates_nothing(tmp_path):
+    path = tmp_path / "absent.db"
+    info = inspect_database(path)
+    assert not info.found
+    assert info.error == "The file was not found."
+    assert not path.exists()
+
+
+def test_inspect_folder(tmp_path):
+    info = inspect_database(tmp_path)
+    assert not info.found
+    assert info.error == "The file is a folder."
+
+
+def test_inspect_changes_nothing(db_path):
+    before = (db_path.read_bytes(), db_path.stat().st_mtime_ns)
+    inspect_database(db_path)
+    assert (db_path.read_bytes(), db_path.stat().st_mtime_ns) == before
+    assert sorted(p.name for p in db_path.parent.iterdir()) == ["catalog.db"]
 
 
 # ---------------------------------------------------------------------------
