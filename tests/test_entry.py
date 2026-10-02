@@ -1113,3 +1113,49 @@ def test_format_frequency_reads_back(hz, text):
 def test_stored_fs_appears_with_a_unit_in_edit_mode(db_path, site_id, make_recording):
     original = saved(db_path, site_id, make_recording())
     assert entry.input_from_recording(original).channels[0].fs_text == "1 kHz"
+
+
+# ---------------------------------------------------------------------------
+# Folder named like a channel folder (DECISIONS.md D27)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("folder", "parent"),
+    [
+        (r"E:\captures\rec1\0", r"E:\captures\rec1"),
+        (r"E:\captures\rec1\12", r"E:\captures\rec1"),
+        (r"E:\captures\rec1\999", r"E:\captures\rec1"),
+        (r"E:\captures\rec1\1000", None),
+        (r"E:\captures\1790733600", None),
+        (r"E:\captures\01", None),
+        (r"E:\captures\20260930_0200", None),
+    ],
+)
+def test_channel_like_parent(folder, parent):
+    assert entry.channel_like_parent(split_location(folder)) == parent
+
+
+def test_channel_like_folder_is_a_warning(make_recording):
+    info = make_recording(n_channels=2)
+    folder = Path(info.root, "0")
+    scan = scan_recording(folder, 1.0)
+    location = split_location(str(folder))
+    items = ready_items(form_for(scan, 1), scan, location)
+    assert texts(items)[0] == (
+        "This folder is named like a channel folder. If it belongs to a recording, "
+        f"choose the parent folder: {location.storage_root}"
+    )
+    assert items[0].state is ItemState.INFO
+    assert can_save(items)
+
+
+def test_channel_like_folder_is_not_reported_in_edit_mode(db_path, site_id, make_recording):
+    original = saved(db_path, site_id, make_recording())
+    original.rel_path = "0"
+    form = entry.input_from_recording(original)
+    location = Location(
+        storage_root=original.storage_root, rel_path="0", archive_state=ArchiveState.LOCAL
+    )
+    items = checklist(form, scan=None, location=location, original=original)
+    assert not any("named like a channel folder" in t for t in texts(items))

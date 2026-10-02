@@ -289,6 +289,8 @@ class LogTab(QWidget):
         self.state_note.setWordWrap(True)
         self.edit_existing_button = QPushButton("Edit existing entry")
         self.edit_existing_button.clicked.connect(self._edit_existing)
+        self.use_parent_button = QPushButton("Use parent folder")
+        self.use_parent_button.clicked.connect(self._use_parent_folder)
         self.save_button = QPushButton("Save entry")
         self.save_button.clicked.connect(self.save)
         self.clear_button = QPushButton("Clear form")
@@ -303,6 +305,7 @@ class LogTab(QWidget):
         layout.addWidget(self.mode_label)
         layout.addWidget(self.checklist, 1)
         layout.addWidget(self.edit_existing_button)
+        layout.addWidget(self.use_parent_button)
         layout.addWidget(self.state_note)
         layout.addLayout(buttons)
         layout.addWidget(self.message_label)
@@ -418,6 +421,7 @@ class LogTab(QWidget):
         self.rel_path_edit.setText(location.rel_path if location else "")
         self.state_edit.setText(str(location.archive_state) if location else "")
         self.state_note.setText(entry.state_note(location, self._original))
+        self.use_parent_button.setVisible(self._channel_like_parent() is not None)
 
     def _folder_changed(self, text: str) -> None:
         if self._original is not None:
@@ -593,6 +597,7 @@ class LogTab(QWidget):
         self.checklist.set_items(items)
         self.state_note.setText(entry.state_note(self._location, self._original))
         self.edit_existing_button.setVisible(self._original is None and self._logged_id is not None)
+        self.use_parent_button.setVisible(self._channel_like_parent() is not None)
         self._update_buttons()
 
     def _update_buttons(self) -> None:
@@ -867,6 +872,18 @@ class LogTab(QWidget):
         self._saving = False
         self.show_message(f"Not saved: {exc}")
         self.refresh_checklist()
+
+    def _channel_like_parent(self) -> str | None:
+        """The parent folder when a new entry's folder is named like a channel (D27)."""
+        if self._original is not None or self._location is None:
+            return None
+        return entry.channel_like_parent(self._location)
+
+    def _use_parent_folder(self) -> None:
+        """Switch to the parent of the chosen folder, as typed (D27)."""
+        text = self.folder_edit.text().strip()
+        if text:
+            self.folder_edit.setText(str(Path(text).parent))
 
     def _edit_existing(self) -> None:
         if self._logged_id is not None:

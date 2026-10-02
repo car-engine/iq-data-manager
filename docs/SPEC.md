@@ -191,6 +191,9 @@ Choosing another folder for a new entry resets the file duration, the file forma
 the channel rows and the RF chain rows to their defaults (D26). Logged by, site,
 plan reference and remarks stay.
 
+A folder named like a channel folder (1 to 3 digits, such as `0`) gets an
+information line and a "Use parent folder" button. It does not block saving (D27).
+
 Save writes the recording, channels and params in one transaction. Edit mode loads an
 existing recording into the same form and updates it.
 

@@ -44,6 +44,7 @@ Rules for this file:
 | D24 | Display offset for times | 2026-10-02, Milestone 3 | Active |
 | D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
 | D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
+| D27 | Warning for a folder named like a channel folder | 2026-10-03, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -465,3 +466,20 @@ Closes issue 14 of the Milestone 3 report.
 - Edit mode is unchanged: its folder cannot change (D16).
 
 Affects: SPEC section 6, `gui/log_tab.py`.
+
+## D27. Warning for a folder named like a channel folder
+
+Closes issue 16 of the Milestone 3 report.
+
+- In the second manual test, the folder chosen was `04_short_last_file\0`, a channel
+  folder. The tab took it as a recording with relative path `0`.
+- A new entry whose folder name has 1 to 3 digits without a leading zero, such as `0`
+  or `12`, gets an information line that names the parent folder. A "Use parent
+  folder" button switches to the parent.
+- The warning does not block saving. The user decided that such a folder may be a
+  real recording.
+- Longer numbers, such as a Unix time like `1790733600`, do not trigger it. Channel
+  indices are small, and recording folders named by Unix time would otherwise all
+  get the warning.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.

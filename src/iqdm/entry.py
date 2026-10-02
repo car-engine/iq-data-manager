@@ -16,7 +16,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from iqdm.db import repository
 from iqdm.db.connection import Connection, open_db, write_transaction
@@ -419,6 +419,21 @@ def params_without_channels(
     """The RF chain rows that do not belong to these channels (DECISIONS.md D20)."""
     dropped = set(indices)
     return [p for p in params if p.channel_index not in dropped]
+
+
+_CHANNEL_NAME_RE = re.compile(r"^(0|[1-9][0-9]{0,2})$", re.ASCII)
+
+
+def channel_like_parent(location: Location) -> str | None:
+    """The parent folder if the folder is named like a channel folder, else None (D27).
+
+    A name of 1 to 3 digits without a leading zero, such as '0' or '12', matches.
+    Longer numbers, such as a Unix time, do not.
+    """
+    path = PureWindowsPath(location.full_path)
+    if not _CHANNEL_NAME_RE.match(path.name):
+        return None
+    return str(path.parent)
 
 
 def state_note(location: Location | None, original: Recording | None) -> str:
@@ -825,6 +840,16 @@ def checklist(
                 "The folder is on a network share outside the configured NAS roots, "
                 "so it is logged as local.",
             )
+        )
+    parent = None if location is None or original is not None else channel_like_parent(location)
+    if parent is not None:
+        items.insert(
+            0,
+            ChecklistItem(
+                ItemState.INFO,
+                f"This folder is named like a channel folder. If it belongs to a recording, "
+                f"choose the parent folder: {parent}",
+            ),
         )
     if scan is not None:
         items += _gap_items(scan)

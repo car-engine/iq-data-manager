@@ -941,3 +941,38 @@ def test_checklist_switches_colours_with_the_theme(make_tab, app_palette, qapp):
     app_palette(DARK)
     qapp.processEvents()
     assert tab.checklist.item(0).foreground().color() == DARK_COLOURS[ItemState.TODO]
+
+
+# ---------------------------------------------------------------------------
+# Folder named like a channel folder (DECISIONS.md D27)
+# ---------------------------------------------------------------------------
+
+
+def test_channel_folder_warning_and_use_parent(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(n_channels=2)
+    tab = make_tab()
+    tab.folder_edit.setText(str(Path(info.root, "0")))
+    assert tab.use_parent_button.isVisibleTo(tab)
+    infos = checklist_texts(tab, ItemState.INFO)
+    assert any(t.startswith("This folder is named like a channel folder.") for t in infos)
+    tab.use_parent_button.click()
+    assert Path(tab.folder_edit.text()) == Path(info.root)
+    assert not tab.use_parent_button.isVisibleTo(tab)
+    scan_folder(qtbot, tab, tab.folder_edit.text())
+    assert tab.channel_table.rowCount() == 2
+
+
+def test_channel_folder_warning_does_not_block_saving(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(n_channels=2)
+    tab = make_tab()
+    logged_ready(qtbot, tab, type("Info", (), {"root": str(Path(info.root, "0"))}), site_id)
+    assert entry.can_save(tab.checklist.items), checklist_texts(tab)
+    assert tab.save_button.isEnabled()
+
+
+def test_no_channel_folder_warning_for_a_normal_folder(make_tab, make_recording):
+    info = make_recording()
+    tab = make_tab()
+    tab.folder_edit.setText(info.root)
+    tab.refresh_checklist()
+    assert not tab.use_parent_button.isVisibleTo(tab)
