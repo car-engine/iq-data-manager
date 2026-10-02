@@ -158,19 +158,33 @@ existing recording into the same form and updates it.
 
 ## 7. Scanner
 
-Pure-Python module, no GUI imports. Input: a recording folder path and file
-duration. Output: a dataclass per channel.
+Pure-Python module (`src/iqdm/scan/scanner.py`), no GUI imports. Input: a recording
+folder path and file duration. Output: a result with a dataclass per channel and a
+list of unrecognised entries.
 
-- Channel detection: numeric subfolders (`0`, `1`, ...) are channels. If there are
-  none and the folder itself contains data files, it is channel 0 with
-  `sub_path = ''`.
+- Channel detection: subfolders named with a canonical decimal number (`0`, `1`,
+  `12`) are channels. `channel_index` is the folder number, so folders `0` and `2`
+  give channels 0 and 2 (DECISIONS.md D11). If there are none and the folder itself
+  contains data files, it is channel 0 with `sub_path = ''`. An empty channel folder
+  is a channel with no files.
 - Data files: names whose stem parses as a Unix timestamp (integer, optionally with a
-  fractional part), extensions `.dat` and `.bin` (configurable). Other files are
-  ignored and counted as "unrecognised" in the result.
+  fractional part: `^\d+(\.\d+)?$`), extensions `.dat` and `.bin` in any letter case
+  (configurable). Other files, other subfolders, folders inside a channel folder and
+  symbolic links are ignored and listed as "unrecognised" in the result.
+- Scan errors (D11): data files in the recording folder next to channel folders; a
+  numeric folder name with a leading zero, such as `01`; two files in one channel with
+  the same timestamp value. The scan stops and lists every such problem.
 - Per channel: sorted timestamps, first and last, `n_files`, `total_bytes`, set of
   distinct file sizes, the size of the last file (DECISIONS.md D3), and gaps as a list
-  of `(start_unix, missing_seconds)` runs.
-- Uses `os.scandir` for speed; must handle tens of thousands of files per channel.
+  of `(start_unix, missing_seconds)` runs. A gap exists where consecutive timestamps
+  differ by more than 1.5 × `file_duration_s`, and it is a whole number of missing
+  files (D12).
+- Channel check: given fs, sample type and header size, reports the size errors and
+  information in section 6, a channel with no files, and files closer together than
+  half the file duration (D11, D12).
+- Uses `os.scandir` for speed and takes file sizes from the directory entries; must
+  handle tens of thousands of files per channel. Reports progress and can be
+  cancelled.
 - **Gap detail**: gaps are not stored in the DB. The viewer computes them on demand
   with a "Scan" action; transfer previews compute them for the selected range.
 

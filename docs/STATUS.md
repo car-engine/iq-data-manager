@@ -8,8 +8,8 @@ report. Last updated: 2026-10-02.
 
 - Milestone 1 is complete and merged into `main` (fast-forward, 2026-10-02).
 - 202 tests pass, `ruff check` is clean.
-- Next: Milestone 2 (Scanner), on a new branch `m2-scanner`, starting with a plan in
-  plan mode.
+- Milestone 2 (Scanner) is in progress on branch `m2-scanner`. The user approved the
+  plan on 2026-10-02 and decided O4 and O5 (D11, D12).
 
 ## Milestones
 
@@ -19,7 +19,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | --- | --- | --- | --- | --- |
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
-| 2. Scanner | Not started | | | |
+| 2. Scanner | In progress | `m2-scanner` | | |
 | 3. Log tab | Not started | | | |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
@@ -42,8 +42,6 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O1 | Display time zone. The Viewer shows "start (UTC+8)", CLAUDE.md forbids local time, the Move / copy tab takes UTC input. | 3, 4, 6 | Store UTC. Config key `display_utc_offset_hours = 8`. Every displayed time shows its offset. Input fields stay UTC. | M0 review 9 |
 | O2 | How a local folder splits into `storage_root` and `rel_path` | 3 | Local: root = parent folder, `rel_path` = folder name. NAS: root = configured NAS root, `rel_path` = remainder. | M0 review 10 |
 | O3 | Mapped drives to UNC; no list of NAS roots in the config | 3 | Resolve mapped drives with `WNetGetConnectionW` through `ctypes`. Add a `nas_roots` config list. | M0 review 11 |
-| O4 | Scanner edge cases: data files at the root next to numeric subfolders; non-contiguous channel folders; the same timestamp as `.dat` and `.bin` | 2 | First and third are errors. `channel_index` = folder number. | M0 review 16 |
-| O5 | Gap tolerance with fractional timestamps | 2 | A gap exists where consecutive timestamps differ by more than 1.5 × `file_duration_s`. | M0 review 17 |
 | O6 | Which files a time range includes | 5 | A file at time `t` is in range when `start <= t < end`. | M0 review 18 |
 | O7 | Archiving a time range or channel subset would point the DB at a partial copy | 5, 6 | "Archive to NAS" accepts only a whole recording with all channels. | M0 review 13 |
 | O8 | "Destination empty or new" blocks resuming a copy and copying a second range into the same folder | 5 | Keep for moves. For copies, allow a non-empty destination when none of the target files exist there. | M0 review 14 |
@@ -65,8 +63,13 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D10). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D12). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
+
+| ID | Item | Closed by |
+| --- | --- | --- |
+| O4 | Scanner edge cases | D11 (2026-10-02) |
+| O5 | Gap tolerance with fractional timestamps | D12 (2026-10-02) |
 
 ## Pending checks for the user
 

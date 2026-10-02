@@ -28,6 +28,8 @@ Rules for this file:
 | D8 | PyInstaller onedir build | 2026-10-02, Milestone 0 | Active |
 | D9 | Qt package | 2026-10-02, Milestone 0 | Active |
 | D10 | Architecture tests read the package source | 2026-10-02, Milestone 0 | Active |
+| D11 | Scanner folder rules | 2026-10-02, Milestone 2 | Active |
+| D12 | Gap rule | 2026-10-02, Milestone 2 | Active |
 
 ## D1. Sample types
 
@@ -168,3 +170,45 @@ Affects: `requirements.txt`, `pyproject.toml`.
   in `os` and `shutil`.
 
 Affects: `tests/test_architecture.py`, `pyproject.toml`.
+
+## D11. Scanner folder rules
+
+Closes O4 (M0 review 16).
+
+- A subfolder is a channel folder when its name is a canonical decimal number: `0`,
+  `1`, `12`. `channel_index` is the folder number, so folders `0` and `2` give
+  channels 0 and 2. `sub_path` is the folder name.
+- The scan stops with an error in three cases:
+  - data files sit in the recording folder next to channel folders;
+  - a numeric folder name has a leading zero, such as `01`;
+  - two data files in one channel have the same timestamp value, for example
+    `1790733600.dat` and `1790733600.bin`, or `1790733600.dat` and
+    `1790733600.0.dat`.
+- The error lists every such problem in the folder. The folder cannot be logged
+  until someone fixes it.
+- A data file stem matches `^\d+(\.\d+)?$`. Extensions match in any letter case.
+- Other files, other subfolders, folders inside a channel folder and symbolic links
+  are listed as unrecognised.
+- An empty channel folder is a channel with no files. The channel check reports it
+  as an error.
+- The channel check combines all wrong-size files of a channel into one finding. The
+  finding gives the count and the names and sizes of the first 10 files.
+- A single file that is shorter than expected is a short first file, so it is an
+  error (D3).
+
+Affects: SPEC section 7, `scan/scanner.py`.
+
+## D12. Gap rule
+
+Closes O5 (M0 review 17).
+
+- Two consecutive timestamps `t1 < t2` in one channel differ by `d = t2 - t1`.
+- A gap exists where `d > 1.5 * file_duration_s`. Smaller differences are jitter.
+- The gap starts at `t1 + file_duration_s`.
+- `missing_seconds = (n - 1) * file_duration_s`, where `n` is `d / file_duration_s`
+  rounded to the nearest whole number, with halves rounded up. A gap is therefore
+  always a whole number of missing files.
+- Where `d < 0.5 * file_duration_s`, the channel check reports an error and asks the
+  user to check the file duration.
+
+Affects: SPEC section 7, `scan/scanner.py`.
