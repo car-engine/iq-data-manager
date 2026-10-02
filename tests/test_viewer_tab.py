@@ -472,6 +472,35 @@ def test_selecting_a_recording_shows_channels_and_details(qtbot, tab, catalogue)
     assert not tab.not_verified_label.isVisibleTo(tab)
 
 
+def set_times(db_path: Path, recording_id: int, created: str, updated: str) -> None:
+    raw = sqlite3.connect(db_path, autocommit=True)
+    raw.execute(
+        "UPDATE recordings SET created_at = ?, updated_at = ? WHERE id = ?",
+        (created, updated, recording_id),
+    )
+    raw.close()
+
+
+def test_details_name_the_last_change(qtbot, tab, db_path, catalogue):
+    gappy = catalogue["gappy"]
+    set_times(db_path, gappy, "2026-10-01T00:00:00Z", "2026-10-02T03:30:00Z")
+    tab.refresh_button.click()
+    wait_idle(qtbot, tab)
+    select(qtbot, tab, gappy)
+    assert tab.logged_label.text() == (
+        "by userA on 2026-10-01 08:00; last changed on 2026-10-02 11:30"
+    )
+
+
+def test_details_leave_out_the_last_change_when_there_was_none(qtbot, tab, db_path, catalogue):
+    gappy = catalogue["gappy"]
+    set_times(db_path, gappy, "2026-10-01T00:00:00Z", "2026-10-01T00:00:00Z")
+    tab.refresh_button.click()
+    wait_idle(qtbot, tab)
+    select(qtbot, tab, gappy)
+    assert tab.logged_label.text() == "by userA on 2026-10-01 08:00"
+
+
 def test_selecting_a_channel_shows_its_rf_chain_and_path(qtbot, tab, catalogue):
     select(qtbot, tab, catalogue["gappy"])
     select_channel(tab, 1)

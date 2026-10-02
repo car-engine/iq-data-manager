@@ -1105,6 +1105,48 @@ def build_recording(
     )
 
 
+def _stored_fields(rec: Recording) -> tuple[object, ...]:
+    """What an edit can change, without ids and the times the database sets.
+
+    Params compare as a set, as update_recording() stores them (D7).
+    """
+    channels = tuple(
+        replace(c, id=None) for c in sorted(rec.channels, key=lambda c: c.channel_index)
+    )
+    params = sorted(
+        (
+            (-1 if p.channel_index is None else p.channel_index, p.param, p.value, p.unit or "")
+            for p in rec.params
+        ),
+    )
+    return (
+        rec.logged_by,
+        rec.site_id,
+        rec.file_duration_s,
+        rec.dtype,
+        rec.iq_layout,
+        rec.endianness,
+        rec.header_bytes,
+        rec.storage_root,
+        rec.rel_path,
+        rec.archive_state,
+        rec.archived_at,
+        rec.recording_plan_ref,
+        rec.remarks,
+        channels,
+        tuple(params),
+    )
+
+
+def edit_changes_nothing(original: Recording, rec: Recording) -> bool:
+    """True when saving `rec` over `original` would store the same values (D47).
+
+    The Log tab then writes nothing, so updated_at keeps the time of the last real
+    change.
+    """
+    return _stored_fields(original) == _stored_fields(rec)
+
+
 def save_new(
     db_path: Path | str,
     rec: Recording,

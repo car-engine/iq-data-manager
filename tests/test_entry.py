@@ -1,6 +1,7 @@
 """Tests for iqdm.entry: form input, checklist and saving. Data lives in tmp_path."""
 
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -621,6 +622,54 @@ def saved(db_path, site_id, info, **kw):
         db_path, build_recording(form, scan=scan, location=local_location(info)), now=NOW
     )
     return entry.load_recording(db_path, rid)
+
+
+def test_an_unchanged_form_changes_nothing(db_path, site_id, make_recording):
+    info = make_recording(n_channels=2)
+    params = [
+        ParamInput(param="SDR", value="X310"),
+        ParamInput(param="Gain", value="30", unit="dB", channel_index=1),
+    ]
+    original = saved(db_path, site_id, info, params=params, remarks="note")
+    form = entry.input_from_recording(original)
+    assert entry.edit_changes_nothing(original, build_recording(form, scan=None, original=original))
+    reordered = replace(form, params=list(reversed(form.params)))  # params are a set (D7)
+    assert entry.edit_changes_nothing(
+        original, build_recording(reordered, scan=None, original=original)
+    )
+    rescanned = build_recording(form, scan=scan_of(info), original=original)
+    assert entry.edit_changes_nothing(original, rescanned)  # the folder did not change
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"remarks": "other"},
+        {"logged_by": "someone"},
+        {"recording_plan_ref": "plan"},
+        {"iq_layout": IqLayout.PLANAR_IQ},
+    ],
+)
+def test_a_changed_form_is_a_change(db_path, site_id, make_recording, change):
+    info = make_recording()
+    original = saved(db_path, site_id, info, remarks="note")
+    form = entry.input_from_recording(original)
+    edited = replace(form, **change)
+    assert not entry.edit_changes_nothing(
+        original, build_recording(edited, scan=None, original=original)
+    )
+
+
+def test_a_changed_channel_or_param_is_a_change(db_path, site_id, make_recording):
+    info = make_recording(n_channels=2)
+    original = saved(db_path, site_id, info, params=[ParamInput(param="SDR", value="X310")])
+    form = entry.input_from_recording(original)
+    fc = replace(form, channels=[replace(form.channels[0], fc_mhz="433.92"), form.channels[1]])
+    unit = replace(form, params=[replace(form.params[0], unit="dB")])
+    for edited in (fc, unit):
+        assert not entry.edit_changes_nothing(
+            original, build_recording(edited, scan=None, original=original)
+        )
 
 
 def test_input_from_recording_round_trip(db_path, site_id, make_recording):

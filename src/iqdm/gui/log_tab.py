@@ -881,6 +881,9 @@ class LogTab(QWidget):
         if original is None:
             self._start_save(lambda task: entry.save_new(db, rec), self._saved_new)
             return
+        if entry.edit_changes_nothing(original, rec):
+            self.show_message("No changes to save.")  # keeps the last-changed time (D47)
+            return
         allow_removal = False
         if self._scan is not None:
             removed = entry.channel_set_change(original, self._scan).removed

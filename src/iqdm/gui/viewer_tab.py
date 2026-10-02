@@ -774,6 +774,8 @@ class ViewerTab(QWidget):
         logged = f"by {rec.logged_by}"
         if rec.created_at:
             logged += f" on {viewer.iso_display(rec.created_at, self._offset)}"
+        if rec.updated_at and rec.updated_at != rec.created_at:  # D47
+            logged += f"; last changed on {viewer.iso_display(rec.updated_at, self._offset)}"
         if rec.archive_state is ArchiveState.ARCHIVED and rec.archived_at:
             logged += f"; archived on {viewer.iso_display(rec.archived_at, self._offset)}"
         self.logged_label.setText(logged)

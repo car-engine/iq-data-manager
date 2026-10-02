@@ -457,6 +457,23 @@ def test_edit_metadata_and_save(qtbot, make_tab, make_recording, site_id, db_pat
     assert tab.editing.remarks == "edited"
 
 
+def test_an_edit_without_changes_writes_nothing(qtbot, make_tab, make_recording, site_id, db_path):
+    info = make_recording(n_channels=2)
+    tab = saved_tab(qtbot, make_tab, info, site_id)
+    before = entry.load_recording(db_path, 1).updated_at
+    saves: list[int] = []
+    tab.saved.connect(saves.append)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    tab.save_button.click()
+    wait_idle(qtbot, tab)
+    assert tab.message_label.text() == "No changes to save."
+    assert saves == []
+    assert not tab.is_saving
+    assert entry.load_recording(db_path, 1).updated_at == before
+    assert tab.editing is not None  # still in edit mode
+
+
 def test_edit_of_fs_needs_a_rescan(qtbot, make_tab, make_recording, site_id):
     info = make_recording()
     tab = make_tab()
