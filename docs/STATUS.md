@@ -61,16 +61,21 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O15 | Coverage highlight threshold of 99% | 4 | 99%, as a config key. | Former SPEC section 13 |
 | O16 | `list_recordings` loads every channel in one query; not measured beyond thousands of recordings | 4 | Revisit with the Viewer filters. | M1 review |
 | O17 | No way to delete a wrongly logged recording in the GUI (`repository.delete_recording` exists) | 4 | Out of scope for v1. | M0 review 23 |
-| O18 | Missing config keys (data-file extensions, coverage threshold, free-space margin, display offset). `tomllib` only reads TOML. Milestone 3 reads the file and adds `nas_roots` (D15). | 7 | Hand-written writer for flat keys, or `tomli-w` as a new dependency (needs approval). | M0 review 21 |
-| O19 | GUI for the confirmed "Upgrade database" action | 7 | Settings dialog or startup prompt. | D6 |
+| O18 | Writing `config.toml`: `tomllib` only reads TOML. Also the missing keys: data-file extensions (3a), coverage threshold (4), free-space margin (5). | 3a | `tomli-w` as a new pinned dependency (needs the user's approval under CLAUDE.md). It escapes Windows paths correctly. A hand-written writer is the fallback. New key `data_file_extensions`, default `[".dat", ".bin"]`. | M0 review 21; D29 |
+| O19 | GUI for the confirmed "Upgrade database" action | 3a | A button in the Settings tab's database section, shown only when the schema needs an upgrade. At startup, a database that needs an upgrade shows a message that points to the Settings tab. | D6; D29 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
+| O27 | Name of the Settings milestone | 3a | "Milestone 3a". Later milestones keep their numbers, so references such as "the Viewer in Milestone 4" stay true. | D29 |
+| O28 | When Settings changes apply | 3a | On Save, without a restart. The Log tab takes the new configuration and reloads its lists. If it holds input that is not saved, the app asks first. | D29 |
+| O29 | Creating a new database from the Settings tab | 3a | No. Development databases come from `tools/db_check.py create`. The first real database comes from the legacy migration tool (Milestone 7, D4). A "Create" button could leave stray databases on the NAS. | D29 |
+| O30 | Which keys the Settings tab shows in Milestone 3a | 3a | Only keys in use now: `db_path`, `nas_roots`, `display_utc_offset_hours`, `data_file_extensions`. Each later milestone adds its own keys to the tab. | D29 |
+| O31 | Backup of `config.toml` on Save | 3a | Keep the previous file as `config.toml.bak`, replaced on each Save. | D29 |
 | O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D28). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D29). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -148,3 +153,9 @@ These come from the safety configuration and from experience in this repository.
   The `db_path` fixture gives a fresh database.
 - **Reports:** every milestone ends with a report in `docs/reports/` that follows
   `docs/REPORT_TEMPLATE.md`, and an update to this file.
+- **`ruff format` only on the files you change.** Several files on `main` are not in
+  `ruff format` style, and the project checks only `ruff check`. Running the formatter
+  on a whole folder rewrapped unrelated code three times in Milestone 3.
+- **Screenshots of the GUI** render offscreen with the light palette. Set
+  `QT_QPA_FONTDIR=C:/Windows/Fonts` for readable text. The user runs Windows in dark
+  mode, so check colours against a dark palette too (Milestone 3 report, issue 15).

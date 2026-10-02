@@ -46,6 +46,7 @@ Rules for this file:
 | D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
 | D27 | Warning for a folder named like a channel folder | 2026-10-03, Milestone 3 | Active |
 | D28 | RF chain repeats, overrides and conflicts | 2026-10-03, Milestone 3 | Active |
+| D29 | Settings tab before the Viewer | 2026-10-03, after Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -508,3 +509,20 @@ this decision it accepted any rows and saved them as typed.
   catch spelling slips.
 
 Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D29. Settings tab before the Viewer
+
+- The user decided on 2026-10-03 to build the settings as a fourth tab, "Settings",
+  in place of the settings dialog that SPEC section 4 described for Milestone 7.
+- The Settings tab is the next milestone, before Milestone 4 (Viewer).
+- Reasons, from the Milestone 3 manual tests:
+  - Every PC needs `db_path`. Today the user can set it only by editing
+    `config.toml` by hand or with `--db`.
+  - `nas_roots` decides whether a logged folder is local or archived (D14, D2).
+  - Hand-edited Windows paths in TOML are easy to get wrong.
+- The settings dialog and the config writer move out of Milestone 7. Milestone 7
+  keeps the PyInstaller build, the legacy migration tool and the user guide.
+- The scope is in SPEC section 4, "Settings tab". Its open questions are O18, O19 and
+  O27–O31 in `docs/STATUS.md`. The milestone's working name is "Milestone 3a" (O27).
+
+Affects: SPEC sections 1, 4, 9 and 12.

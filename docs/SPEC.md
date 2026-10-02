@@ -22,6 +22,9 @@ This app replaces both with one Windows desktop tool with three tabs:
 3. **Move / copy**: archive recordings to the NAS, or copy whole recordings or time
    ranges to a local PC, via previewed and verified generated scripts.
 
+A fourth tab, **Settings**, edits the per-machine configuration and shows the state
+of the database (section 4; DECISIONS.md D29).
+
 Mockups of all three tabs exist on a design canvas, with exports in `docs/mockup/`;
 this document is the source of truth where they differ.
 
@@ -91,9 +94,9 @@ Key semantics:
 ## 4. Configuration
 
 Per-machine TOML file at `%APPDATA%\IQDataManager\config.toml`, read with `tomllib`.
-Created with defaults on first run; editable from a small settings dialog.
+The Settings tab writes it (see "Settings tab" below; DECISIONS.md D29).
 
-Until Milestone 7 the app only reads the file (DECISIONS.md D15). The user writes it
+Until Milestone 3a the app only reads the file (DECISIONS.md D15). The user writes it
 by hand. A missing file gives the defaults, which have no `db_path`. Unknown keys are
 ignored. `--config PATH` reads another file, and `--db PATH` overrides `db_path`.
 
@@ -109,6 +112,54 @@ display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
 ```
+
+### Settings tab (Milestone 3a)
+
+A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29). It edits
+`config.toml` and shows the state of the database. Its open questions are O18, O19
+and O27–O31 in `docs/STATUS.md`; each has a proposed default.
+
+| Section | Fields and actions |
+| --- | --- |
+| Database | `db_path`, with Browse for an existing `.db` file. A status line: file found or not; schema version `current`, `needs upgrade`, `too new`, or not an IQ Data Manager database (`connection.database_status()`); journal mode, foreign keys and busy timeout (`connection.connection_settings()`). A "Check connection" button runs the same checks on demand, on a read-only connection. |
+| Database upgrade | An "Upgrade database" button, shown only when the status is `needs upgrade` (O19). It names the backup file, asks for confirmation, and calls `migrations.upgrade()`, which writes and verifies a backup first and never overwrites one (D6). |
+| NAS roots | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule: a folder under a NAS root is logged as archived (D14, D2). |
+| Display | `display_utc_offset_hours`, from −12 to 14 in steps of 0.25 (D24), with a preview such as "2026-09-30 10:00:00 (UTC+8)". |
+| Log tab | `data_file_extensions`, a new key with the default `[".dat", ".bin"]` (O18). The Log tab passes it to `scan_recording(extensions=...)`. |
+| About | The path of the configuration file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
+
+Keys that later milestones need are added to the tab by those milestones (O30): the
+coverage threshold (Milestone 4, O15); `default_local_copy_root`,
+`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and a free-space
+margin (Milestones 5 and 6).
+
+Behaviour:
+
+- **Validation.** Every field is checked by the same rules as
+  `config.parse_config()`. A wrong value is marked at its field, and Save stays
+  disabled until it is fixed.
+- **Writing.** Save writes `config.toml` with the writer chosen in O18. It creates
+  `%APPDATA%\IQDataManager` if the folder is missing. It writes a new file in the same
+  folder and then replaces the old file with it, so a failed write leaves the old
+  file intact. The previous file is kept as a backup (O31).
+- **Keys the tab does not show** stay in the file, for example `storage_roots` and any
+  key added by hand. Comments in the file are lost on write. The tab says so.
+- **Applying.** Changes apply on Save, without a restart (O28). The Log tab takes the
+  new configuration and reloads its lists. If the Log tab holds input that is not
+  saved, the app asks before it applies the change.
+- **Overrides.** `--config` and `--db` keep working. With `--db`, Save writes
+  `db_path` to the file, and the `--db` path stays in force for the current run. The
+  tab says so.
+- **Startup errors.** A configuration file that cannot be read opens the app on the
+  Settings tab with the error shown, so the user can correct it there.
+- **Database files.** The Settings tab never creates a database (O29). It opens the
+  chosen file read-only, except for the confirmed upgrade.
+- **Architecture.** The writer and its validation live in `config.py` (no Qt). The tab
+  is `gui/settings_tab.py`. Database checks and the upgrade run in the `TaskRunner`,
+  because a database on the NAS can take seconds to answer.
+- **Tests.** Configuration files are written only under `tmp_path`. The upgrade test
+  uses a database under `tmp_path` and a test migration, as `tests/test_migrations.py`
+  does.
 
 ## 5. Tab: Viewer
 
@@ -351,7 +402,7 @@ iq-data-manager/
       viewer_tab.py
       log_tab.py
       transfer_tab.py
-      settings_dialog.py
+      settings_tab.py         # Settings tab (section 4, D29)
       workers.py              # QThread/QRunnable wrappers
       widgets/                # timeline, checklist, param table, etc.
   tools/
@@ -410,13 +461,17 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 2. **Scanner**: channel detection, file listing, gaps, sizes, fs consistency check,
    tests on fixtures including large synthetic file counts (empty files are fine).
 3. **Log tab**: form, scan worker, validation checklist, save and edit mode.
+
+   3a. **Settings tab** (brought forward from Milestone 7; DECISIONS.md D29): config
+   writer, Settings tab with database status, check and upgrade, NAS roots, display
+   offset and data-file extensions, applying changes without a restart, tests.
 4. **Viewer tab**: filters, recordings table, channels, details, actions.
 5. **Transfer core**: selection, path checks, manifest, script generators, estimates,
    verification, delete module. No GUI. Heavily tested.
 6. **Move / copy tab**: GUI over the core, dry run, run with progress and cancel,
    transfer logging, archive state update, post-verification delete flow.
-7. **Packaging and migration**: settings dialog, config file, PyInstaller build,
-   legacy migration tool, short user guide.
+7. **Packaging and migration**: PyInstaller build, legacy migration tool, short user
+   guide. The settings dialog and the config writer moved to Milestone 3a (D29).
 
 ## 13. Scope
 
