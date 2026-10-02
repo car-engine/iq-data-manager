@@ -6,10 +6,12 @@ report. Last updated: 2026-10-02.
 
 ## Current state
 
-- Milestone 1 is complete and merged into `main` (fast-forward, 2026-10-02).
-- 202 tests pass, `ruff check` is clean.
-- Milestone 2 (Scanner) is in progress on branch `m2-scanner`. The user approved the
-  plan on 2026-10-02 and decided O4 and O5 (D11, D12).
+- Milestone 2 (Scanner) is complete on branch `m2-scanner` and waits for the user's
+  merge approval. Report: [reports/M2.md](reports/M2.md).
+- 301 tests pass and 1 skips (symbolic links need a privilege this account lacks).
+  `ruff check` is clean.
+- Next: merge `m2-scanner`, then Milestone 3 (Log tab). O21 is due before
+  Milestone 3.
 
 ## Milestones
 
@@ -19,7 +21,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | --- | --- | --- | --- | --- |
 | 0. Scaffold | Done | `main` | `dac3d8f`–`ccf08f3` | [M0](reports/M0.md) |
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
-| 2. Scanner | In progress | `m2-scanner` | | |
+| 2. Scanner | Done, not merged | `m2-scanner` | `fa39b82`–`6402af7`, plus the commit that adds the report | [M2](reports/M2.md) |
 | 3. Log tab | Not started | | | |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
@@ -60,6 +62,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before Milestone 3 | The agent writes a script that takes the path as an argument. The user runs it. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O23 | Logging works on any folder, local or on the NAS; scanning NAS folders is slower | 3 | Keep. | Former SPEC section 13 |
+| O24 | A 0-byte last file counts as a short last file and gives an info finding (D3). It could also mean a failed write. | 3 | Keep as information. | M2 review 2 |
 
 ## Closed items
 
@@ -74,6 +77,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D12). The M0 review table in
 ## Pending checks for the user
 
 - O21 before Milestone 3.
+- Merge approval for `m2-scanner`, and O24.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 
@@ -85,7 +89,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `build/work-smoke-1/`, `build/work-smoke-2/`
 - `build/smoke-1-build.log`, `build/smoke-2-build.log`
 - `build/spec-removed-sections.md`
-- `fixtures_out/demo/`
+- `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
+- `fixtures_out_mut_conftest.py` in the repository root (empty; created by mistake in
+  Milestone 2)
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
 
 ## Notes for agents
@@ -112,6 +118,8 @@ These come from the safety configuration and from experience in this repository.
   `commit` need the user's approval.
 - **Line endings:** `core.autocrlf=true`, so commits print CRLF warnings. They are
   harmless.
+- **Shell commands** must not leave a command waiting on standard input. A stray
+  `cat > file` hung a command in Milestone 2 and left an empty file behind.
 - **Tests** write under pytest's `tmp_path`, which is in `%TEMP%`. The fixture
   generator, `tools/make_fixtures.py`, is importable in tests as `make_fixtures`.
   The `db_path` fixture gives a fresh database.
