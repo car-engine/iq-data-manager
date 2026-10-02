@@ -53,6 +53,7 @@ class Config:
     nas_roots: tuple[str, ...] = ()  # UNC roots, without a trailing separator (D14)
     display_utc_offset_hours: float = 8.0  # displayed times only; storage stays UTC (D24)
     coverage_highlight_percent: float = 99.0  # the Viewer marks coverage below this (D39)
+    free_space_margin_gb: float = 10.0  # kept free on a transfer destination (D51)
     storage_roots: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -159,6 +160,9 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     error = coverage_error(threshold)
     if error is not None:
         raise ConfigError(f"{where}: {error}")
+    margin = _number(data, "free_space_margin_gb", where, Config.free_space_margin_gb)
+    if margin < 0:
+        raise ConfigError(f"{where}: free_space_margin_gb must be 0 or more")
     mode_text = data.get("default_hash_mode", str(Config.default_hash_mode))
     try:
         mode = HashMode(mode_text)
@@ -174,6 +178,7 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
         nas_roots=_nas_roots(data, where),
         display_utc_offset_hours=offset,
         coverage_highlight_percent=threshold,
+        free_space_margin_gb=margin,
         storage_roots=_storage_roots(data, where),
     )
 

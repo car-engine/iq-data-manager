@@ -176,6 +176,29 @@ def test_coverage_threshold_must_be_above_0_and_at_most_100(tmp_path, text):
         load_config(path)
 
 
+def test_free_space_margin_defaults_to_10_gb(tmp_path):
+    assert load_config(tmp_path / "absent.toml").free_space_margin_gb == 10.0
+
+
+@pytest.mark.parametrize(("text", "gb"), [("0", 0.0), ("2.5", 2.5), ("500", 500.0)])
+def test_free_space_margin_is_read(tmp_path, text, gb):
+    path = write(tmp_path, f"free_space_margin_gb = {text}")
+    assert load_config(path).free_space_margin_gb == gb
+
+
+@pytest.mark.parametrize("text", ["-1", "-0.5", "true", "'10'", "nan", "inf"])
+def test_free_space_margin_must_be_0_or_more(tmp_path, text):
+    path = write(tmp_path, f"free_space_margin_gb = {text}")
+    with pytest.raises(ConfigError, match="free_space_margin_gb"):
+        load_config(path)
+
+
+def test_hidden_key_error_names_the_free_space_margin():
+    error = hidden_key_error({"free_space_margin_gb": -1}, "config.toml")
+    assert error is not None
+    assert "free_space_margin_gb" in error
+
+
 # =========================================================================
 # Writing (Settings tab, Milestone 3a)
 # =========================================================================

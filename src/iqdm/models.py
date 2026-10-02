@@ -45,6 +45,7 @@ class Operation(StrEnum):
     MOVE = "move"
     COPY = "copy"
     CHECK = "check"
+    DELETE = "delete"  # the laptop copy after a passed move (DECISIONS.md D52)
 
 
 class Verification(StrEnum):
@@ -166,7 +167,10 @@ class RecordingFilter:
 
 @dataclass(kw_only=True)
 class TransferEntry:
-    """One transfer_log row. channels None means all channels."""
+    """One transfer_log row. channels None means all channels.
+
+    parent_id is set exactly for a delete row and names the move it follows (D52).
+    """
 
     recording_id: int
     operation: Operation
@@ -183,6 +187,9 @@ class TransferEntry:
     total_bytes: int | None = None
     verification: Verification = Verification.SKIPPED
     notes: str | None = None
+    parent_id: int | None = None
+    manifest_path: str | None = None
+    manifest_sha256: str | None = None
     id: int | None = None
 
 

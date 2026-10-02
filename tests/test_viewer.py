@@ -336,6 +336,34 @@ def test_transfer_rows():
     assert rows[2].notes == IN_PLACE_NOTE
 
 
+@pytest.mark.parametrize(
+    ("verification", "finished_at", "result"),
+    [
+        (Verification.PASS, "2026-09-18T05:00:00Z", "deleted"),
+        (Verification.FAIL, "2026-09-18T05:00:00Z", "some files not deleted"),
+        (Verification.SKIPPED, "2026-09-18T05:00:00Z", "not deleted"),
+        (Verification.SKIPPED, None, "not finished"),
+    ],
+)
+def test_transfer_rows_name_a_deletion(verification, finished_at, result):
+    (row,) = viewer.transfer_rows(
+        [
+            transfer(
+                operation=Operation.DELETE,
+                parent_id=1,
+                destination=None,
+                n_files=None,
+                total_bytes=None,
+                verification=verification,
+                finished_at=finished_at,
+            )
+        ],
+        8.0,
+    )
+    assert row.operation == "Delete laptop copy"
+    assert row.result == result
+
+
 # ---------------------------------------------------------------------------
 # Gap scan
 # ---------------------------------------------------------------------------

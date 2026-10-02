@@ -184,6 +184,97 @@ def test_transfer_valid(conn, overrides):
 
 
 # ---------------------------------------------------------------------------
+# Delete rows and manifests (DECISIONS.md D52)
+# ---------------------------------------------------------------------------
+
+
+def passed_move(conn, rid) -> int:
+    return add_transfer(conn, rid, operation="move", verification="pass")
+
+
+def add_delete(conn, rid, parent_id) -> int:
+    return add_transfer(conn, rid, operation="delete", parent_id=parent_id, destination=None)
+
+
+def test_delete_after_a_passed_move_is_accepted(conn):
+    rid = add_recording(conn)
+    add_delete(conn, rid, passed_move(conn, rid))
+    assert count(conn, "transfer_log") == 2
+
+
+@pytest.mark.parametrize(
+    "parent",
+    [
+        {"operation": "move", "verification": "fail"},
+        {"operation": "move", "verification": "skipped"},
+        {"operation": "copy", "verification": "pass"},
+        {"operation": "check", "verification": "pass", "destination": None},
+    ],
+)
+def test_delete_needs_a_passed_move_as_parent(conn, parent):
+    rid = add_recording(conn)
+    parent_id = add_transfer(conn, rid, **parent)
+    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+        add_delete(conn, rid, parent_id)
+
+
+def test_delete_parent_must_exist(conn):
+    rid = add_recording(conn)
+    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+        add_delete(conn, rid, 999)
+
+
+def test_delete_parent_must_belong_to_the_same_recording(conn):
+    rid = add_recording(conn)
+    other = add_recording(conn, rel_path="rec2")
+    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+        add_delete(conn, other, passed_move(conn, rid))
+
+
+def test_parent_id_only_on_a_delete_row(conn):
+    rid = add_recording(conn)
+    move = passed_move(conn, rid)
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        add_transfer(conn, rid, parent_id=move)
+
+
+def test_delete_row_cannot_be_moved_to_a_failed_parent(conn):
+    rid = add_recording(conn)
+    delete = add_delete(conn, rid, passed_move(conn, rid))
+    failed = add_transfer(conn, rid, operation="move", verification="fail")
+    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+        conn.execute("UPDATE transfer_log SET parent_id = ? WHERE id = ?", (failed, delete))
+
+
+def test_row_cannot_become_a_delete_of_a_failed_move(conn):
+    rid = add_recording(conn)
+    failed = add_transfer(conn, rid, operation="move", verification="fail")
+    copy = add_transfer(conn, rid)
+    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+        conn.execute(
+            "UPDATE transfer_log SET operation = 'delete', parent_id = ? WHERE id = ?",
+            (failed, copy),
+        )
+
+
+def test_manifest_columns(conn):
+    rid = add_recording(conn)
+    digest = "0123456789abcdef" * 4
+    tid = add_transfer(conn, rid, manifest_path="C:/m/transfer-1.json", manifest_sha256=digest)
+    row = conn.execute(
+        "SELECT manifest_path, manifest_sha256 FROM transfer_log WHERE id = ?", (tid,)
+    ).fetchone()
+    assert row == ("C:/m/transfer-1.json", digest)
+
+
+@pytest.mark.parametrize("digest", ["abc", "0123456789ABCDEF" * 4, "g" * 64, "0" * 65])
+def test_manifest_sha256_must_be_lower_case_hex(conn, digest):
+    rid = add_recording(conn)
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        add_transfer(conn, rid, manifest_sha256=digest)
+
+
+# ---------------------------------------------------------------------------
 # Uniqueness
 # ---------------------------------------------------------------------------
 

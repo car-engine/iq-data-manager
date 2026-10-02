@@ -299,12 +299,22 @@ def update_archive_location(
     rel_path: str,
     archived_at: str,
 ) -> None:
-    """Point a recording at its verified NAS copy and mark it archived."""
-    cur = conn.execute(
-        "UPDATE recordings SET storage_root = ?, rel_path = ?, archive_state = 'archived',"
-        " archived_at = ? WHERE id = ?",
-        (storage_root, rel_path, archived_at, recording_id),
-    )
+    """Point a recording at its verified NAS copy and mark it archived.
+
+    Raises DuplicateLocationError if another recording uses that location.
+    """
+    try:
+        cur = conn.execute(
+            "UPDATE recordings SET storage_root = ?, rel_path = ?, archive_state = 'archived',"
+            " archived_at = ? WHERE id = ?",
+            (storage_root, rel_path, archived_at, recording_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        if _is_unique_violation(exc, "recordings.storage_root, recordings.rel_path"):
+            raise DuplicateLocationError(
+                f"{rel_path!r} under {storage_root!r} is already logged"
+            ) from exc
+        raise
     if cur.rowcount == 0:
         raise NotFoundError(f"no recording with id {recording_id}")
 
@@ -580,15 +590,21 @@ def decode_channels(text: str | None) -> tuple[int, ...] | None:
 
 
 def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
-    """Add a transfer_log row. Returns its id."""
+    """Add a transfer_log row. Returns its id.
+
+    A delete row needs parent_id: a move of the same recording that passed
+    verification. The schema refuses any other delete row (D52).
+    """
     row = conn.execute(
-        "INSERT INTO transfer_log (recording_id, operation, source, destination,"
+        "INSERT INTO transfer_log (recording_id, operation, parent_id, source, destination,"
         " range_start_unix, range_end_unix, channels, hash_mode, started_at, finished_at,"
-        " n_files, total_bytes, verification, performed_by, notes)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        " n_files, total_bytes, verification, performed_by, notes, manifest_path,"
+        " manifest_sha256)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
         (
             entry.recording_id,
             str(entry.operation),
+            entry.parent_id,
             entry.source,
             entry.destination,
             entry.range_start_unix,
@@ -602,6 +618,8 @@ def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
             str(entry.verification),
             entry.performed_by,
             entry.notes,
+            entry.manifest_path,
+            entry.manifest_sha256,
         ),
     ).fetchone()
     return row[0]
@@ -616,8 +634,13 @@ def finish_transfer(
     n_files: int | None = None,
     total_bytes: int | None = None,
     notes: str | None = None,
+    manifest_path: str | None = None,
+    manifest_sha256: str | None = None,
 ) -> None:
-    """Record the end of a transfer. Refused if the row is already finished."""
+    """Record the end of a transfer. Refused if the row is already finished.
+
+    None leaves n_files, total_bytes, notes and the manifest fields as stored.
+    """
     row = _one(conn, "SELECT finished_at FROM transfer_log WHERE id = ?", (transfer_id,))
     if row is None:
         raise NotFoundError(f"no transfer with id {transfer_id}")
@@ -626,32 +649,95 @@ def finish_transfer(
     conn.execute(
         "UPDATE transfer_log SET finished_at = ?, verification = ?,"
         " n_files = COALESCE(?, n_files), total_bytes = COALESCE(?, total_bytes),"
-        " notes = COALESCE(?, notes) WHERE id = ?",
-        (finished_at, str(verification), n_files, total_bytes, notes, transfer_id),
+        " notes = COALESCE(?, notes), manifest_path = COALESCE(?, manifest_path),"
+        " manifest_sha256 = COALESCE(?, manifest_sha256) WHERE id = ?",
+        (
+            finished_at,
+            str(verification),
+            n_files,
+            total_bytes,
+            notes,
+            manifest_path,
+            manifest_sha256,
+            transfer_id,
+        ),
     )
+
+
+def finish_move(
+    conn: sqlite3.Connection,
+    transfer_id: int,
+    *,
+    finished_at: str,
+    n_files: int,
+    total_bytes: int,
+    manifest_path: str,
+    manifest_sha256: str,
+    storage_root: str,
+    rel_path: str,
+) -> None:
+    """Finish a passed move and point its recording at the new copy (SPEC section 8).
+
+    Both writes happen in the caller's transaction, so the log row and the archive
+    state change together. archived_at is the finish time.
+    """
+    entry = get_transfer(conn, transfer_id)
+    if entry.operation is not Operation.MOVE:
+        raise RepositoryError(f"transfer {transfer_id} is a {entry.operation}, not a move")
+    finish_transfer(
+        conn,
+        transfer_id,
+        finished_at=finished_at,
+        verification=Verification.PASS,
+        n_files=n_files,
+        total_bytes=total_bytes,
+        manifest_path=manifest_path,
+        manifest_sha256=manifest_sha256,
+    )
+    update_archive_location(
+        conn,
+        entry.recording_id,
+        storage_root=storage_root,
+        rel_path=rel_path,
+        archived_at=finished_at,
+    )
+
+
+def _transfer(r: sqlite3.Row) -> TransferEntry:
+    return TransferEntry(
+        id=r["id"],
+        recording_id=r["recording_id"],
+        operation=Operation(r["operation"]),
+        parent_id=r["parent_id"],
+        source=r["source"],
+        destination=r["destination"],
+        range_start_unix=r["range_start_unix"],
+        range_end_unix=r["range_end_unix"],
+        channels=decode_channels(r["channels"]),
+        hash_mode=None if r["hash_mode"] is None else HashMode(r["hash_mode"]),
+        started_at=r["started_at"],
+        finished_at=r["finished_at"],
+        n_files=r["n_files"],
+        total_bytes=r["total_bytes"],
+        verification=Verification(r["verification"]),
+        performed_by=r["performed_by"],
+        notes=r["notes"],
+        manifest_path=r["manifest_path"],
+        manifest_sha256=r["manifest_sha256"],
+    )
+
+
+def get_transfer(conn: sqlite3.Connection, transfer_id: int) -> TransferEntry:
+    row = _one(conn, "SELECT * FROM transfer_log WHERE id = ?", (transfer_id,))
+    if row is None:
+        raise NotFoundError(f"no transfer with id {transfer_id}")
+    return _transfer(row)
 
 
 def list_transfers(conn: sqlite3.Connection, recording_id: int) -> list[TransferEntry]:
     """Transfer history of one recording, oldest first."""
     return [
-        TransferEntry(
-            id=r["id"],
-            recording_id=r["recording_id"],
-            operation=Operation(r["operation"]),
-            source=r["source"],
-            destination=r["destination"],
-            range_start_unix=r["range_start_unix"],
-            range_end_unix=r["range_end_unix"],
-            channels=decode_channels(r["channels"]),
-            hash_mode=None if r["hash_mode"] is None else HashMode(r["hash_mode"]),
-            started_at=r["started_at"],
-            finished_at=r["finished_at"],
-            n_files=r["n_files"],
-            total_bytes=r["total_bytes"],
-            verification=Verification(r["verification"]),
-            performed_by=r["performed_by"],
-            notes=r["notes"],
-        )
+        _transfer(r)
         for r in _rows(
             conn,
             "SELECT * FROM transfer_log WHERE recording_id = ? ORDER BY started_at, id",

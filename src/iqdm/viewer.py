@@ -288,11 +288,21 @@ class TransferRow:
     notes: str = ""
 
 
-_OPERATIONS = {Operation.MOVE: "Move", Operation.COPY: "Copy", Operation.CHECK: "Check"}
+_OPERATIONS = {
+    Operation.MOVE: "Move",
+    Operation.COPY: "Copy",
+    Operation.CHECK: "Check",
+    Operation.DELETE: "Delete laptop copy",
+}
 _RESULTS = {
     Verification.PASS: "verified",
     Verification.FAIL: "verification failed",
     Verification.SKIPPED: "not verified",
+}
+_DELETE_RESULTS = {  # a delete row's verification says whether every file went (D52)
+    Verification.PASS: "deleted",
+    Verification.FAIL: "some files not deleted",
+    Verification.SKIPPED: "not deleted",
 }
 
 
@@ -329,7 +339,8 @@ def transfer_rows(entries: Iterable[TransferEntry], offset_hours: float) -> list
             parts.append(f"{e.n_files:,} files")
         if e.total_bytes is not None:
             parts.append(format_size(e.total_bytes))
-        parts.append(_RESULTS[e.verification] if e.finished_at is not None else "not finished")
+        results = _DELETE_RESULTS if e.operation is Operation.DELETE else _RESULTS
+        parts.append(results[e.verification] if e.finished_at is not None else "not finished")
         rows.append(
             TransferRow(
                 when=iso_display(e.started_at, offset_hours),
