@@ -32,5 +32,10 @@ def test_smoke_test_exits_one_when_schema_missing(qapp, monkeypatch):
     def missing() -> str:
         raise FileNotFoundError("schema.sql")
 
-    monkeypatch.setattr("iqdm.app.schema_sql", missing)
+    monkeypatch.setattr("iqdm.app.verify_schema_in_memory", missing)
+    assert main(["--smoke-test"]) == 1
+
+
+def test_smoke_test_exits_one_on_wrong_schema_version(qapp, monkeypatch):
+    monkeypatch.setattr("iqdm.app.verify_schema_in_memory", lambda: 0)
     assert main(["--smoke-test"]) == 1

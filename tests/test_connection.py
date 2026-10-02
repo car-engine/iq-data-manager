@@ -261,3 +261,7 @@ def test_write_transaction_refuses_newer_schema(db_path):
     set_user_version(db_path, 2)
     with pytest.raises(SchemaVersionError):
         write_transaction(db_path, add_site)
+
+
+def test_verify_schema_in_memory():
+    assert connection.verify_schema_in_memory() == version.LATEST_VERSION

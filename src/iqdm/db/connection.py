@@ -42,6 +42,21 @@ def schema_sql() -> str:
     return resources.files("iqdm.db").joinpath("schema.sql").read_text(encoding="utf-8")
 
 
+def verify_schema_in_memory() -> int:
+    """Build schema.sql in an in-memory database and return its user_version.
+
+    The --smoke-test of a frozen build uses this to show that the bundled sqlite3
+    module and schema.sql work together. It touches no file.
+    """
+    conn = sqlite3.connect(":memory:", autocommit=True)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.executescript(f"BEGIN;\n{schema_sql()}\nCOMMIT;")
+        return conn.execute("PRAGMA user_version").fetchone()[0]
+    finally:
+        conn.close()
+
+
 def sqlite_uri(path: Path | str, mode: str) -> str:
     """SQLite `file:` URI for a path. mode is 'ro', 'rw' or 'rwc'.
 

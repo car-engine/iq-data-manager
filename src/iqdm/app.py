@@ -7,7 +7,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget
 
 from iqdm import __version__
-from iqdm.db.connection import schema_sql
+from iqdm.db.connection import verify_schema_in_memory
+from iqdm.db.version import LATEST_VERSION
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
@@ -50,11 +51,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def _smoke_test(app: QApplication) -> int:
     """Check the bundled schema and the main window, then quit. Returns an exit code.
 
-    A windowed PyInstaller build has no console, so the exit code is the result.
+    The schema is built in an in-memory database, which also exercises the bundled
+    sqlite3 module. A windowed PyInstaller build has no console, so the exit code is
+    the result.
     """
     try:
-        if "CREATE TABLE recordings" not in schema_sql():
-            print("smoke test: schema.sql has no recordings table", file=sys.stderr)
+        built_version = verify_schema_in_memory()
+        if built_version != LATEST_VERSION:
+            print(
+                f"smoke test: schema built version {built_version}, expected {LATEST_VERSION}",
+                file=sys.stderr,
+            )
             return 1
         window = MainWindow()
         window.show()
