@@ -2,18 +2,20 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-03 (Milestone 4 merged).
+report. Last updated: 2026-10-03 (Milestone 5 report).
 
 ## Current state
 
-- Milestone 4 (Viewer tab) is merged into `main` (fast-forward, 2026-10-03) and
-  pushed. Report: [reports/M4.md](reports/M4.md). Decisions D39–D47. The user ran
-  the manual tests on 2026-10-03, and they passed.
-- 918 tests pass and 2 skip on `main`. One skip needs the symbolic-link privilege;
-  the other runs only off Windows. `ruff check` is clean.
-- **In progress: Milestone 5, Transfer core**, on branch `m5-transfer-core`. The
-  user approved the plan on 2026-10-03 and decided D48–D53, which close O6, O7, O8,
-  O9, O13 and O32. The app copies files itself (D48); there are no transfer scripts.
+- Milestones 0 to 4 are merged into `main`. The last is Milestone 4 (Viewer tab),
+  report [reports/M4.md](reports/M4.md).
+- **Milestone 5 (Transfer core) is done on branch `m5-transfer-core`, not merged.**
+  Report: [reports/M5.md](reports/M5.md). Decisions D48–D53 close O6, O7, O8, O9,
+  O13 and O32. The app copies files itself (D48); there are no transfer scripts.
+- 1,187 tests pass and 4 skip on `m5-transfer-core`. Three skips need the
+  symbolic-link privilege; the other runs only off Windows. `ruff check` is clean.
+- **Next: Milestone 6, Move / copy tab**, after the merge. Before it, the user runs
+  `tools/copy_check.py` on the NAS (pending checks below). Open items for its plan:
+  O1, O10, O11, O12 and O25.
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
   `tests/test_user_text.py` checks the Viewer, Log and Settings tabs.
 - The NAS part of O21 is still open. The local part is done
@@ -31,7 +33,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
-| 5. Transfer core | In progress | `m5-transfer-core` | | |
+| 5. Transfer core | Done, not merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, plus the commit that holds the report | [M5](reports/M5.md) |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
 
@@ -97,6 +99,10 @@ Decided items are in `docs/DECISIONS.md` (D1–D53). The M0 review table in
   `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
   `write` on two PCs. Steps are in
   [reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md).
+- Before Milestone 6: run `tools/copy_check.py` from a laptop to a scratch folder on
+  the NAS, once with large files and once with small files. Commands are in
+  [reports/M5.md](reports/M5.md), "Checks before merging". The results set how many
+  files the Move / copy tab copies at once.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 
@@ -117,6 +123,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `dev/m4-bench/` (timing script and two synthetic databases, 2.5 MB and 25.5 MB),
   `dev/m4-shots/` (Viewer and Settings screenshots), and `dev/m4-manual/` after the
   Milestone 4 manual tests.
+- `dev/m5-copy-check/` (local copy timings and the fsync probe, about 4.8 GB).
+- The folders that `tools/copy_check.py` writes on the NAS and the laptop, after the
+  check.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
   folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
@@ -173,7 +182,12 @@ These come from the safety configuration and from experience in this repository.
   `cat > file` hung a command in Milestone 2 and left an empty file behind.
 - **Tests** write under pytest's `tmp_path`, which is in `%TEMP%`. The fixture
   generator, `tools/make_fixtures.py`, is importable in tests as `make_fixtures`.
-  The `db_path` fixture gives a fresh database.
+  The `db_path` fixture gives a fresh database. `recording_from(info)` in
+  `tests/conftest.py` turns a generated recording into a matching `Recording`.
+- **Transfer tests** copy, verify and delete real files, always under `tmp_path`. A
+  "NAS" in them is a `tmp_path` folder passed to `Config(nas_roots=...)` directly;
+  `resolve_drive=None` and a stubbed `disk_usage` keep the tests off real drives. See
+  `tests/test_operations.py`.
 - **Reports:** every milestone ends with a report in `docs/reports/` that follows
   `docs/REPORT_TEMPLATE.md`, and an update to this file.
 - **`ruff format` only on the files you change.** Several files on `main` are not in
