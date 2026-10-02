@@ -412,12 +412,8 @@ def test_finish_transfer(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     tid = repo.insert_transfer(conn, transfer(rid, notes="started"))
     repo.finish_transfer(
-        conn,
-        tid,
-        finished_at="2026-10-02T01:10:00Z",
-        verification=Verification.PASS,
-        n_files=20,
-        total_bytes=80000,
+        conn, tid, finished_at="2026-10-02T01:10:00Z", verification=Verification.PASS,
+        n_files=20, total_bytes=80000,
     )
     (got,) = repo.list_transfers(conn, rid)
     assert got.finished_at == "2026-10-02T01:10:00Z"
