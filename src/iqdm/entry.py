@@ -23,6 +23,7 @@ from iqdm.db.connection import Connection, open_db, write_transaction
 from iqdm.location import Location, join_location
 from iqdm.models import (
     BYTES_PER_SAMPLE,
+    IN_PLACE_NOTE,
     ArchiveState,
     Channel,
     Endianness,
@@ -45,7 +46,6 @@ from iqdm.scan.scanner import (
 )
 from iqdm.timeutil import utc_now_iso
 
-IN_PLACE_NOTE = "logged in place, not verified against a source"  # DECISIONS.md D2
 TIMES = "\N{MULTIPLICATION SIGN}"
 
 

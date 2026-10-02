@@ -5,12 +5,14 @@ import pytest
 from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
 from iqdm.models import (
+    IN_PLACE_NOTE,
     ArchiveState,
     Channel,
     HashMode,
     Operation,
     Param,
     Recording,
+    RecordingFilter,
     SampleType,
     TransferEntry,
     Verification,
@@ -184,9 +186,7 @@ def test_get_missing_recording(conn):
 
 
 def test_list_recordings(conn, site_id):
-    old = recording(
-        site_id, "old", channels=[channel(0, start=T0 - 100, end=T0 - 90)], params=[]
-    )
+    old = recording(site_id, "old", channels=[channel(0, start=T0 - 100, end=T0 - 90)], params=[])
     new = recording(
         site_id,
         "new",
@@ -194,7 +194,9 @@ def test_list_recordings(conn, site_id):
         params=[],
     )
     unknown = recording(
-        site_id, "unknown", channels=[channel(0, start=T0 - 50, end=T0 - 40, n_files=None)],
+        site_id,
+        "unknown",
+        channels=[channel(0, start=T0 - 50, end=T0 - 40, n_files=None)],
         params=[],
     )
     for rec in (old, new, unknown):
@@ -210,6 +212,211 @@ def test_list_recordings(conn, site_id):
     assert first.archive_state is ArchiveState.LOCAL
     assert summaries[1].total_bytes is None
     assert summaries[1].coverage is None
+
+
+# ---------------------------------------------------------------------------
+# Viewer filters (Milestone 4)
+# ---------------------------------------------------------------------------
+
+ARCHIVED_AT = "2026-10-01T00:00:00Z"
+
+
+def band_channel(index: int, band: str | None, fc: float, start: float = T0) -> Channel:
+    ch = channel(index, start=start, end=start + 10, fc=fc)
+    ch.band = band
+    return ch
+
+
+@pytest.fixture
+def filter_set(conn, site_id) -> dict[str, int]:
+    """Four recordings that differ in every filtered field. Returns their ids by name."""
+    other_site = repo.add_site(conn, "SiteB").id
+    recs = {
+        "vhf": recording(
+            site_id,
+            "vhf",
+            channels=[band_channel(0, "VHF", 145.8e6, start=T0)],
+            params=[Param(param="SDR", value="X310")],
+            remarks="Baseline 100% run",
+        ),
+        "uhf": recording(
+            other_site,
+            "uhf",
+            channels=[
+                band_channel(0, "VHF", 145.0e6, T0 + 86400),
+                band_channel(1, "UHF", 435e6, T0 + 86400),
+            ],
+            params=[Param(param="LNA gain", value="20", unit="dB", channel_index=1)],
+            remarks="second_run",
+            archive_state=ArchiveState.ARCHIVED,
+            archived_at=ARCHIVED_AT,
+        ),
+        "none": recording(
+            site_id,
+            "none",
+            channels=[band_channel(0, None, 868.3e6, T0 + 2 * 86400)],
+            params=[],
+            remarks=None,
+        ),
+        "later": recording(
+            other_site,
+            "later",
+            channels=[band_channel(0, "uhf", 433.92e6, T0 + 3 * 86400)],
+            params=[Param(param="Antenna", value="Monopole B")],
+            remarks="BASELINE check",
+        ),
+    }
+    return {name: repo.insert_recording(conn, rec) for name, rec in recs.items()}
+
+
+def ids(conn, flt: RecordingFilter | None, names: dict[str, int]) -> list[str]:
+    by_id = {v: k for k, v in names.items()}
+    return [by_id[s.id] for s in repo.list_recordings(conn, flt)]
+
+
+def test_no_filter_lists_everything_newest_first(conn, filter_set):
+    assert ids(conn, None, filter_set) == ["later", "none", "uhf", "vhf"]
+    assert ids(conn, RecordingFilter(), filter_set) == ["later", "none", "uhf", "vhf"]
+
+
+def test_filter_by_start_bounds(conn, filter_set):
+    flt = RecordingFilter(start_from_unix=T0 + 86400, start_before_unix=T0 + 3 * 86400)
+    assert ids(conn, flt, filter_set) == ["none", "uhf"]  # from inclusive, before exclusive
+
+
+def test_filter_by_site(conn, filter_set):
+    site = repo.find_site(conn, "SiteB")
+    assert ids(conn, RecordingFilter(site_id=site.id), filter_set) == ["later", "uhf"]
+
+
+def test_filter_by_band_ignores_case(conn, filter_set):
+    assert ids(conn, RecordingFilter(band="UHF"), filter_set) == ["later", "uhf"]
+
+
+def test_filter_by_fc_range_matches_any_channel(conn, filter_set):
+    flt = RecordingFilter(fc_min_hz=430e6, fc_max_hz=440e6)
+    assert ids(conn, flt, filter_set) == ["later", "uhf"]
+
+
+def test_fc_range_bounds_are_inclusive(conn, filter_set):
+    assert ids(conn, RecordingFilter(fc_min_hz=868.3e6), filter_set) == ["none"]
+    assert ids(conn, RecordingFilter(fc_max_hz=145.0e6), filter_set) == ["uhf"]
+
+
+def test_band_and_fc_range_must_match_on_one_channel(conn, filter_set):
+    # "uhf" has a VHF channel at 145 MHz and a UHF channel at 435 MHz.
+    flt = RecordingFilter(band="UHF", fc_min_hz=140e6, fc_max_hz=150e6)
+    assert ids(conn, flt, filter_set) == []
+
+
+def test_filter_by_archive_state(conn, filter_set):
+    assert ids(conn, RecordingFilter(archive_state=ArchiveState.ARCHIVED), filter_set) == ["uhf"]
+    local = ids(conn, RecordingFilter(archive_state=ArchiveState.LOCAL), filter_set)
+    assert local == ["later", "none", "vhf"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("x310", ["vhf"]),  # value, any letter case
+        ("lna", ["uhf"]),  # parameter name
+        ("dB", ["uhf"]),  # unit
+        ("mono", ["later"]),
+        ("nothing", []),
+    ],
+)
+def test_filter_by_rf_chain_text(conn, filter_set, text, expected):
+    assert ids(conn, RecordingFilter(rf_chain_text=text), filter_set) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("baseline", ["later", "vhf"]),
+        ("100%", ["vhf"]),  # % is literal
+        ("%", ["vhf"]),
+        ("_", ["uhf"]),  # _ is literal
+        ("d_run", ["uhf"]),
+        ("e_r", []),  # _ would match any letter as a wildcard
+    ],
+)
+def test_filter_by_remarks_text_takes_wildcards_literally(conn, filter_set, text, expected):
+    assert ids(conn, RecordingFilter(remarks_text=text), filter_set) == expected
+
+
+def test_like_pattern_escapes_the_escape_character():
+    assert repo.like_pattern(r"a\b%c_d") == r"%a\\b\%c\_d%"
+
+
+def test_filters_combine(conn, filter_set):
+    flt = RecordingFilter(band="uhf", remarks_text="baseline", rf_chain_text="antenna")
+    assert ids(conn, flt, filter_set) == ["later"]
+
+
+def test_filtered_list_has_the_channels_of_its_recordings_only(conn, filter_set):
+    summaries = repo.list_recordings(
+        conn, RecordingFilter(site_id=repo.find_site(conn, "SiteB").id)
+    )
+    assert [s.fc_hz for s in summaries] == [(433.92e6,), (145.0e6, 435e6)]
+    assert [s.channel_count for s in summaries] == [1, 2]
+
+
+def in_place_entry(recording_id: int, notes: str = IN_PLACE_NOTE) -> TransferEntry:
+    return TransferEntry(
+        recording_id=recording_id,
+        operation=Operation.CHECK,
+        source=r"\\nas\recordings\uhf",
+        started_at=ARCHIVED_AT,
+        finished_at=ARCHIVED_AT,
+        performed_by="tester",
+        verification=Verification.SKIPPED,
+        notes=notes,
+    )
+
+
+def test_recording_logged_in_place_is_unverified(conn, filter_set):
+    repo.insert_transfer(conn, in_place_entry(filter_set["uhf"]))
+    flags = {s.id: s.unverified for s in repo.list_recordings(conn)}
+    assert flags[filter_set["uhf"]] is True
+    assert sum(flags.values()) == 1
+
+
+def test_other_check_rows_do_not_mark_unverified(conn, filter_set):
+    repo.insert_transfer(conn, in_place_entry(filter_set["uhf"], notes="something else"))
+    passed = in_place_entry(filter_set["uhf"])
+    passed.verification = Verification.PASS
+    repo.insert_transfer(conn, passed)
+    assert not any(s.unverified for s in repo.list_recordings(conn))
+
+
+def test_a_local_recording_is_never_unverified(conn, filter_set):
+    repo.insert_transfer(conn, in_place_entry(filter_set["vhf"]))
+    assert not any(s.unverified for s in repo.list_recordings(conn))
+
+
+def test_many_recordings_keep_their_own_channels(db_path):
+    """5,000 recordings with 1 to 3 channels each (O16: the expected catalogue size)."""
+
+    def fill(conn):
+        site = repo.add_site(conn, "Bulk").id
+        for i in range(5000):
+            n = i % 3 + 1
+            chans = [
+                channel(k, start=T0 + i * 100, end=T0 + i * 100 + 10, fc=(i * 10 + k) * 1e3)
+                for k in range(n)
+            ]
+            repo.insert_recording(conn, recording(site, f"r{i}", channels=chans, params=[]))
+
+    write_transaction(db_path, fill)
+    with open_db(db_path, readonly=True) as c:
+        summaries = repo.list_recordings(c)
+        assert len(summaries) == 5000
+        for s in summaries:
+            i = round((s.start_unix - T0) / 100)
+            assert s.channel_count == i % 3 + 1
+            assert s.fc_hz == tuple((i * 10 + k) * 1e3 for k in range(i % 3 + 1))
+        some = repo.list_recordings(c, RecordingFilter(fc_min_hz=12_340e3, fc_max_hz=12_342e3))
+        assert [s.fc_hz[0] for s in some] == [12_340e3]
 
 
 def test_list_param_names(conn, site_id):
@@ -312,7 +519,10 @@ def test_update_needs_existing_id(conn, site_id):
 def test_update_archive_location(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     repo.update_archive_location(
-        conn, rid, storage_root="//nas/recordings", rel_path="2026/rec1",
+        conn,
+        rid,
+        storage_root="//nas/recordings",
+        rel_path="2026/rec1",
         archived_at="2026-10-02T00:00:00Z",
     )
     got = repo.get_recording(conn, rid)
@@ -379,8 +589,11 @@ def test_transfer_round_trip(conn, site_id):
     tid = repo.insert_transfer(
         conn,
         transfer(
-            rid, channels=(2, 0, 2), hash_mode=HashMode.SAMPLE,
-            range_start_unix=T0, range_end_unix=T0 + 5,
+            rid,
+            channels=(2, 0, 2),
+            hash_mode=HashMode.SAMPLE,
+            range_start_unix=T0,
+            range_end_unix=T0 + 5,
         ),
     )
     (got,) = repo.list_transfers(conn, rid)
@@ -412,8 +625,12 @@ def test_finish_transfer(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     tid = repo.insert_transfer(conn, transfer(rid, notes="started"))
     repo.finish_transfer(
-        conn, tid, finished_at="2026-10-02T01:10:00Z", verification=Verification.PASS,
-        n_files=20, total_bytes=80000,
+        conn,
+        tid,
+        finished_at="2026-10-02T01:10:00Z",
+        verification=Verification.PASS,
+        n_files=20,
+        total_bytes=80000,
     )
     (got,) = repo.list_transfers(conn, rid)
     assert got.finished_at == "2026-10-02T01:10:00Z"

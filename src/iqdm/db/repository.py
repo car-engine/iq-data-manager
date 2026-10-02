@@ -17,6 +17,7 @@ from typing import Any
 
 from iqdm.db.connection import DatabaseError
 from iqdm.models import (
+    IN_PLACE_NOTE,
     ArchiveState,
     Channel,
     Endianness,
@@ -25,6 +26,7 @@ from iqdm.models import (
     Operation,
     Param,
     Recording,
+    RecordingFilter,
     RecordingSummary,
     SampleType,
     Site,
@@ -420,20 +422,92 @@ def find_recording_by_location(
     return None if row is None else row["id"]
 
 
-def list_recordings(conn: sqlite3.Connection) -> list[RecordingSummary]:
-    """All recordings, newest first. Viewer filters come in Milestone 4."""
+def like_pattern(text: str) -> str:
+    """A LIKE pattern that matches `text` anywhere, with % and _ taken literally.
+
+    Use it with ESCAPE '\\'.
+    """
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _filter_sql(flt: RecordingFilter | None) -> tuple[str, list[Any]]:
+    """WHERE clause on recordings `r` for a Viewer filter, and its parameters."""
+    if flt is None:
+        return "1", []
+    clauses: list[str] = []
+    params: list[Any] = []
+    if flt.start_from_unix is not None:
+        clauses.append("r.start_unix >= ?")
+        params.append(flt.start_from_unix)
+    if flt.start_before_unix is not None:
+        clauses.append("r.start_unix < ?")
+        params.append(flt.start_before_unix)
+    if flt.site_id is not None:
+        clauses.append("r.site_id = ?")
+        params.append(flt.site_id)
+    if flt.archive_state is not None:
+        clauses.append("r.archive_state = ?")
+        params.append(str(flt.archive_state))
+    channel_terms: list[str] = []  # band and fc range must match on one channel
+    if flt.band:
+        channel_terms.append("c.band = ? COLLATE NOCASE")
+        params.append(flt.band)
+    if flt.fc_min_hz is not None:
+        channel_terms.append("c.fc_hz >= ?")
+        params.append(flt.fc_min_hz)
+    if flt.fc_max_hz is not None:
+        channel_terms.append("c.fc_hz <= ?")
+        params.append(flt.fc_max_hz)
+    if channel_terms:  # S608: the terms are fixed text; values are parameters
+        clauses.append(
+            "EXISTS (SELECT 1 FROM channels c WHERE c.recording_id = r.id AND "  # noqa: S608
+            + " AND ".join(channel_terms)
+            + ")"
+        )
+    if flt.rf_chain_text:
+        pattern = like_pattern(flt.rf_chain_text)
+        clauses.append(
+            "EXISTS (SELECT 1 FROM recording_params p WHERE p.recording_id = r.id AND"
+            " (p.param LIKE ? ESCAPE '\\' OR p.value LIKE ? ESCAPE '\\'"
+            " OR p.unit LIKE ? ESCAPE '\\'))"
+        )
+        params.extend([pattern, pattern, pattern])
+    if flt.remarks_text:
+        clauses.append("r.remarks LIKE ? ESCAPE '\\'")
+        params.append(like_pattern(flt.remarks_text))
+    return (" AND ".join(clauses) or "1"), params
+
+
+def list_recordings(
+    conn: sqlite3.Connection, flt: RecordingFilter | None = None
+) -> list[RecordingSummary]:
+    """Recordings that match the filter (all when None), newest first.
+
+    The filter runs in SQL. Channels are read only for the matching recordings (O16).
+    """
+    # S608 below: `where` comes from _filter_sql(), fixed text only; values are parameters.
+    where, params = _filter_sql(flt)
     recordings = _rows(
         conn,
-        "SELECT r.id, r.date, r.start_unix, r.end_unix, r.file_duration_s,"
-        " r.archive_state, r.logged_by, s.name AS site_name"
+        "SELECT r.id, r.date, r.start_unix, r.end_unix, r.file_duration_s,"  # noqa: S608
+        " r.archive_state, r.logged_by, s.name AS site_name,"
+        " (r.archive_state = 'archived' AND EXISTS (SELECT 1 FROM transfer_log t"
+        "  WHERE t.recording_id = r.id AND t.operation = 'check'"
+        "  AND t.verification = 'skipped' AND t.notes = ?)) AS unverified"
         " FROM recordings r JOIN sites s ON s.id = r.site_id"
+        f" WHERE {where}"
         " ORDER BY r.start_unix DESC, r.id DESC",
+        [IN_PLACE_NOTE, *params],
     )
     channels_by_recording: dict[int, list[Channel]] = {}
     for r in _rows(
         conn,
-        "SELECT id, recording_id, channel_index, sub_path, band, fc_hz, fs_hz, start_unix,"
-        " end_unix, n_files, total_bytes FROM channels ORDER BY recording_id, channel_index",
+        "SELECT id, recording_id, channel_index, sub_path, band, fc_hz, fs_hz,"  # noqa: S608
+        " start_unix, end_unix, n_files, total_bytes FROM channels"
+        f" WHERE recording_id IN (SELECT r.id FROM recordings r WHERE {where})"
+        " ORDER BY recording_id, channel_index",
+        params,
     ):
         channels_by_recording.setdefault(r["recording_id"], []).append(_channel(r))
 
@@ -458,6 +532,7 @@ def list_recordings(conn: sqlite3.Connection) -> list[RecordingSummary]:
                 coverage=recording_coverage(chans, r["file_duration_s"]),
                 archive_state=ArchiveState(r["archive_state"]),
                 logged_by=r["logged_by"],
+                unverified=bool(r["unverified"]),
             )
         )
     return summaries

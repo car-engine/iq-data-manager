@@ -7,6 +7,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+# transfer_log.notes of the row written when a folder on the NAS is logged in place.
+# The Viewer marks such a recording as not verified (DECISIONS.md D2).
+IN_PLACE_NOTE = "logged in place, not verified against a source"
+
 
 class SampleType(StrEnum):
     INT8 = "int8"
@@ -136,6 +140,28 @@ class RecordingSummary:
     coverage: float | None  # minimum across channels; None if any is undefined
     archive_state: ArchiveState
     logged_by: str
+    unverified: bool = False  # archived in place on the NAS, never checked (D2)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RecordingFilter:
+    """Viewer filters. None leaves a filter out; all given filters must match.
+
+    Start bounds apply to the recording's start: from inclusive, before exclusive.
+    Band and the fc range must match on the same channel. Text filters match a part of
+    the text, ignoring letter case for ASCII letters. RF chain text matches a
+    parameter's name, value or unit.
+    """
+
+    start_from_unix: float | None = None
+    start_before_unix: float | None = None
+    site_id: int | None = None
+    band: str | None = None
+    fc_min_hz: float | None = None
+    fc_max_hz: float | None = None
+    archive_state: ArchiveState | None = None
+    rf_chain_text: str | None = None
+    remarks_text: str | None = None
 
 
 @dataclass(kw_only=True)
