@@ -236,8 +236,10 @@ iq-data-manager/
     app.py                    # QApplication, main window with three tabs
     config.py                 # TOML config load/save, defaults
     models.py                 # dataclasses: Recording, Channel, Param, Transfer...
+    timeutil.py               # UTC ISO 8601 text <-> Unix seconds
     db/
       schema.sql
+      version.py              # LATEST_VERSION and schema_status(), shared by the two below
       connection.py           # connect(), read-only connect, retry-on-lock helper
       migrations.py           # user_version-based migrations, backup before migrate
       repository.py           # all queries and writes
