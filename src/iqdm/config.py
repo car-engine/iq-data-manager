@@ -1,22 +1,34 @@
 """Per-machine configuration file (SPEC section 4).
 
-Until Milestone 7 the app only reads the file (DECISIONS.md D15). A missing file gives
-the defaults. Unknown keys are ignored. A wrong type or value raises ConfigError,
-which names the file and the key.
+A missing file gives the defaults. Unknown keys are ignored. A wrong type or value
+raises ConfigError, which names the file and the key (DECISIONS.md D15).
+
+The Settings tab writes the file through save_config() with tomli-w (Milestone 3a,
+O18). The tab shows three keys (SETTINGS_KEYS). Every other key in the file is kept
+as it was. Comments are lost.
 """
 
 import math
 import os
+import shutil
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any
+
+import tomli_w
 
 from iqdm.models import HashMode
 
 CONFIG_DIR_NAME = "IQDataManager"
 CONFIG_FILE_NAME = "config.toml"
+NEW_SUFFIX = ".new"  # written first, then renamed over config.toml
+BACKUP_SUFFIX = ".bak"  # the file as it was before the last Save (O31)
+SETTINGS_KEYS = ("db_path", "nas_roots", "display_utc_offset_hours")  # shown in the Settings tab
+OFFSET_MIN_HOURS = -12.0
+OFFSET_MAX_HOURS = 14.0
+OFFSET_STEP_HOURS = 0.25
 
 
 class ConfigError(Exception):
@@ -79,14 +91,29 @@ def _number(data: Mapping[str, Any], key: str, where: str, default: float) -> fl
     return float(value)
 
 
+def nas_root_error(text: str) -> str | None:
+    """Why `text` cannot be a nas_roots entry, or None if it can (D14)."""
+    if not is_unc_path(text):
+        return f"nas_roots entry {text!r} is not a UNC path"
+    return None
+
+
+def offset_error(hours: float) -> str | None:
+    """Why `hours` cannot be display_utc_offset_hours, or None if it can (D24)."""
+    if not OFFSET_MIN_HOURS <= hours <= OFFSET_MAX_HOURS or (hours / OFFSET_STEP_HOURS) % 1:
+        return "display_utc_offset_hours must be between -12 and 14 in steps of 0.25"
+    return None
+
+
 def _nas_roots(data: Mapping[str, Any], where: str) -> tuple[str, ...]:
     value = data.get("nas_roots", [])
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         raise ConfigError(f"{where}: nas_roots must be a list of strings")
     roots = []
     for v in value:
-        if not is_unc_path(v):
-            raise ConfigError(f"{where}: nas_roots entry {v!r} is not a UNC path")
+        error = nas_root_error(v)
+        if error is not None:
+            raise ConfigError(f"{where}: {error}")
         roots.append(_clean_root(v))
     return tuple(roots)
 
@@ -109,10 +136,9 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     if not 0 < fraction <= 1:
         raise ConfigError(f"{where}: hash_sample_fraction must be above 0 and at most 1")
     offset = _number(data, "display_utc_offset_hours", where, Config.display_utc_offset_hours)
-    if not -12 <= offset <= 14 or (offset * 4) % 1:
-        raise ConfigError(
-            f"{where}: display_utc_offset_hours must be between -12 and 14 in steps of 0.25"
-        )
+    error = offset_error(offset)
+    if error is not None:
+        raise ConfigError(f"{where}: {error}")
     mode_text = data.get("default_hash_mode", str(Config.default_hash_mode))
     try:
         mode = HashMode(mode_text)
@@ -131,14 +157,135 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     )
 
 
-def load_config(path: Path) -> Config:
-    """Read a configuration file. A missing file gives the defaults."""
+def read_config_data(path: Path) -> dict[str, Any]:
+    """The parsed TOML of a configuration file, unchecked. A missing file gives {}."""
     if not path.exists():
-        return Config()
+        return {}
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        return tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{path}: not valid TOML: {exc}") from exc
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError(f"{path}: cannot read the file: {exc}") from exc
-    return parse_config(data, str(path))
+
+
+def load_config(path: Path) -> Config:
+    """Read a configuration file. A missing file gives the defaults."""
+    return parse_config(read_config_data(path), str(path))
+
+
+# =========================================================================
+# Writing (Settings tab, Milestone 3a)
+# =========================================================================
+
+
+@dataclass(frozen=True, kw_only=True)
+class SettingsInput:
+    """The keys the Settings tab shows, as the user entered them.
+
+    db_path "" means no database path. NAS roots are kept as typed until they are
+    written.
+    """
+
+    db_path: str = ""
+    nas_roots: tuple[str, ...] = ()
+    display_utc_offset_hours: float = Config.display_utc_offset_hours
+
+
+def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
+    """The shown keys of parsed TOML, as far as they have the right type.
+
+    A value of the wrong type gives the default for that field, so the tab can still
+    open on a file that parse_config() refuses.
+    """
+    db = data.get("db_path")
+    roots = data.get("nas_roots")
+    offset = data.get("display_utc_offset_hours")
+    if isinstance(offset, bool) or not isinstance(offset, int | float):
+        offset = Config.display_utc_offset_hours
+    return SettingsInput(
+        db_path=db.strip() if isinstance(db, str) else "",
+        nas_roots=tuple(r for r in roots if isinstance(r, str)) if isinstance(roots, list) else (),
+        display_utc_offset_hours=float(offset),
+    )
+
+
+def settings_errors(settings: SettingsInput) -> dict[str, str]:
+    """Errors by key, with the same rules as parse_config(). Empty when all are valid."""
+    errors = {}
+    root_errors = [e for e in map(nas_root_error, _stripped(settings.nas_roots)) if e]
+    if root_errors:
+        errors["nas_roots"] = root_errors[0]
+    error = offset_error(settings.display_utc_offset_hours)
+    if error is not None:
+        errors["display_utc_offset_hours"] = error
+    return errors
+
+
+def hidden_key_error(data: Mapping[str, Any], where: str) -> str | None:
+    """The error in a key the Settings tab does not show, or None.
+
+    Save is blocked while such a key is wrong, because the app would write a file it
+    cannot read back. The user corrects the key by hand.
+    """
+    try:
+        parse_config({k: v for k, v in data.items() if k not in SETTINGS_KEYS}, where)
+    except ConfigError as exc:
+        return str(exc)
+    return None
+
+
+def _stripped(roots: Sequence[str]) -> list[str]:
+    return [r.strip() for r in roots]
+
+
+def merge_settings(data: Mapping[str, Any], settings: SettingsInput) -> dict[str, Any]:
+    """`data` with the shown keys replaced by `settings`. Every other key stays.
+
+    A blank db_path removes the key. NAS roots lose a trailing separator. A whole
+    number of hours is written as an integer.
+    """
+    merged = dict(data)
+    db = settings.db_path.strip()
+    if db:
+        merged["db_path"] = db
+    else:
+        merged.pop("db_path", None)
+    merged["nas_roots"] = [_clean_root(r) for r in _stripped(settings.nas_roots)]
+    offset = float(settings.display_utc_offset_hours)
+    merged["display_utc_offset_hours"] = int(offset) if offset.is_integer() else offset
+    return merged
+
+
+def backup_path(path: Path) -> Path:
+    """config.toml.bak next to the configuration file (O31)."""
+    return path.with_name(path.name + BACKUP_SUFFIX)
+
+
+def save_config(path: Path, data: Mapping[str, Any]) -> Config:
+    """Write `data` to `path` and return the Config it holds.
+
+    The data is checked first, and the TOML text is read back before anything is
+    written. The text goes to config.toml.new in the same folder. The old file is
+    copied to config.toml.bak, and config.toml.new then replaces config.toml. A
+    failure before that last step leaves config.toml unchanged. A missing folder is
+    created.
+    """
+    where = str(path)
+    config = parse_config(data, where)
+    try:
+        text = tomli_w.dumps(dict(data))
+    except TypeError as exc:
+        raise ConfigError(f"{where}: cannot write the value: {exc}") from exc
+    if parse_config(tomllib.loads(text), where) != config:
+        raise ConfigError(f"{where}: the written text does not read back the same")
+    new_path = path.with_name(path.name + NEW_SUFFIX)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        new_path.write_text(text, encoding="utf-8")
+        if path.exists():
+            shutil.copy2(path, backup_path(path))
+        new_path.replace(path)
+    except OSError as exc:
+        raise ConfigError(f"{where}: cannot write the file: {exc}") from exc
+    return config
