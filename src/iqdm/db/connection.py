@@ -121,6 +121,18 @@ def connect(path: Path | str, *, readonly: bool = False) -> sqlite3.Connection:
     return conn
 
 
+def connection_settings(conn: sqlite3.Connection) -> dict[str, str | int]:
+    """journal_mode, foreign_keys and busy_timeout of an open connection.
+
+    tools/db_check.py reports these, so the check needs no SQL of its own.
+    """
+    return {
+        "journal_mode": str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower(),
+        "foreign_keys": int(conn.execute("PRAGMA foreign_keys").fetchone()[0]),
+        "busy_timeout": int(conn.execute("PRAGMA busy_timeout").fetchone()[0]),
+    }
+
+
 def _version_message(status: SchemaStatus, path: Path) -> str:
     match status:
         case SchemaStatus.NEEDS_UPGRADE:

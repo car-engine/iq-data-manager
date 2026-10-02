@@ -10,6 +10,7 @@ from iqdm.db.connection import (
     DatabaseBusyError,
     SchemaVersionError,
     connect,
+    connection_settings,
     create_database,
     database_status,
     open_db,
@@ -106,6 +107,17 @@ def test_pragmas(db_path):
         assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
         assert conn.autocommit is True
         assert not conn.in_transaction
+
+
+def test_connection_settings(db_path):
+    with open_db(db_path) as conn:
+        assert connection_settings(conn) == {
+            "journal_mode": "delete",
+            "foreign_keys": 1,
+            "busy_timeout": 5000,
+        }
+    with open_db(db_path, readonly=True) as conn:
+        assert connection_settings(conn)["foreign_keys"] == 1
 
 
 def test_wal_is_switched_back_to_delete(db_path):

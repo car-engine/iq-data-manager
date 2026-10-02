@@ -294,6 +294,7 @@ iq-data-manager/
       widgets/                # timeline, checklist, param table, etc.
   tools/
     make_fixtures.py          # synthetic IQ recordings for tests and manual testing
+    db_check.py               # create, write and locking checks on a scratch database (O21)
     migrate_legacy.py         # legacy DB -> new schema (writes a NEW file)
   tests/
   build/

@@ -11,7 +11,8 @@ report. Last updated: 2026-10-02.
 - 307 tests pass and 1 skips (symbolic links need a privilege this account lacks).
   `ruff check` is clean.
 - Next: Milestone 3 (Log tab), on a new branch `m3-log-tab`, starting with a plan in
-  plan mode. O21 is due before Milestone 3.
+  plan mode. The NAS part of O21 is due before Milestone 3; the local part is done
+  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
 
 ## Milestones
 
@@ -59,7 +60,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O18 | Missing config keys (data-file extensions, coverage threshold, free-space margin, NAS roots, display offset). `tomllib` only reads TOML. | 7 (NAS roots in 3) | Hand-written writer for flat keys, or `tomli-w` as a new dependency (needs approval). | M0 review 21 |
 | O19 | GUI for the confirmed "Upgrade database" action | 7 | Settings dialog or startup prompt. | D6 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
-| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before Milestone 3 | The agent writes a script that takes the path as an argument. The user runs it. | M1 check D |
+| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before Milestone 3 | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O23 | Logging works on any folder, local or on the NAS; scanning NAS folders is slower | 3 | Keep. | Former SPEC section 13 |
 
@@ -76,7 +77,9 @@ Decided items are in `docs/DECISIONS.md` (D1–D13). The M0 review table in
 
 ## Pending checks for the user
 
-- O21 before Milestone 3.
+- O21 before Milestone 3: run `tools/db_check.py` `check`, `hold` and `write` on a
+  scratch database on the NAS, with `hold` and `write` on two PCs. Steps are in
+  [reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md).
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 
@@ -90,7 +93,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `build/spec-removed-sections.md`
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
 - `fixtures_out_mut_conftest.py` in the repository root (empty; created by mistake in
-  Milestone 2)
+  Milestone 2). It is untracked but not gitignored, so `git status` lists it.
+- `dev/test.db` is the user's scratch database for O21. Move it out of the repository
+  before the NAS test.
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
 
 ## Notes for agents
