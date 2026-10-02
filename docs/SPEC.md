@@ -138,8 +138,8 @@ to the tab by those milestones: the coverage threshold (Milestone 4, O15);
 Not in the Settings tab (D30):
 
 - **"Upgrade database".** It waits for the first real schema migration (O19). Until
-  then the status line reports the state only. With status `needs upgrade`, the line
-  is red and says that this version of the app cannot open the database (D37, D38).
+  then an older database gives a red status line that says this version of the app
+  cannot open it (D37, D38).
 - **Data-file extensions.** They stay fixed in code as `.dat` and `.bin`
   (`scanner.DEFAULT_EXTENSIONS`, any letter case), so every PC scans a folder the same
   way. A new extension comes with a new release.

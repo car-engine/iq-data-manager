@@ -2,26 +2,20 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-03 (Milestone 3a, D38).
+report. Last updated: 2026-10-03 (Milestone 3a merged).
 
 ## Current state
 
-- Milestone 3a (Settings tab) is complete on branch `m3a-settings` and waits for the
-  user's manual tests and merge approval. Report: [reports/M3a.md](reports/M3a.md).
-  Decisions D31–D38. The dates "2026-10-03" in older documents are corrected to
-  2026-10-02, the date of their commits (issue 4). After the user's first look,
-  D38 made the tab's text plain and coloured the database status. CLAUDE.md now has
-  a section "User-facing text" that applies to every later tab.
-- 736 tests pass and 2 skip on `m3a-settings`. One skip needs the symbolic-link
-  privilege; the other runs only off Windows. `ruff check` is clean.
-- Milestone 3 (Log tab) is merged into `main`. Report: [reports/M3.md](reports/M3.md).
-  Decisions D14–D28.
-- Next after the merge: **Milestone 4, Viewer tab**. Open items to raise in its plan:
-  O15, O16 and O17. Milestone 4 adds the coverage threshold to the Settings tab (D34).
-- The user's narrower UNC pattern in `.claude/hooks/block_destructive.py` is committed
-  (`77ed32c`).
-- The user chose to start Milestone 3 before the NAS part of O21. The local part is
-  done ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
+- Milestone 3a (Settings tab) is merged into `main` (fast-forward, 2026-10-03) and
+  pushed. Report: [reports/M3a.md](reports/M3a.md). Decisions D31–D38.
+- 736 tests pass and 2 skip on `main`. One skip needs the symbolic-link privilege;
+  the other runs only off Windows. `ruff check` is clean.
+- **Next: Milestone 4, Viewer tab**, on a new branch `m4-viewer`. Open items to raise
+  in its plan: O15, O16 and O17. Milestone 4 adds the coverage threshold to the
+  Settings tab (D34) and the Viewer to `tests/test_user_text.py`.
+- All text on screen follows CLAUDE.md, section "User-facing text" (D38).
+- The NAS part of O21 is still open. The local part is done
+  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
 
 ## Milestones
 
@@ -33,14 +27,16 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 1. Database layer | Done, merged | `m1-database` | `d2e11b3`–`f832167`, `48d7749` (handoff documents), plus the commit that records the merge | [M1](reports/M1.md) |
 | 2. Scanner | Done, merged | `m2-scanner` | `fa39b82`–`d764074`, plus the commit that records the merge | [M2](reports/M2.md) |
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
-| 3a. Settings tab (D29) | Done, not merged | `m3a-settings` | `8298a97`–`a7e647f`, plus the commit that adds the report | [M3a](reports/M3a.md) |
+| 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Not started | | | |
 | 5. Transfer core | Not started | | | |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
 
-Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec) and
-`89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`).
+Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
+`89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
+`68fb49c` (D29, D30), `257244c` (documentation review) and `77ed32c` (the user's
+narrower UNC pattern in the safety hook).
 
 ## Open items
 
@@ -64,7 +60,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O15 | Coverage highlight threshold of 99% | 4 | 99%, as a config key. | Former SPEC section 13 |
 | O16 | `list_recordings` loads every channel in one query; not measured beyond thousands of recordings | 4 | Revisit with the Viewer filters. | M1 review |
 | O17 | No way to delete a wrongly logged recording in the GUI (`repository.delete_recording` exists) | 4 | Out of scope for v1. | M0 review 23 |
-| O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then the status line shows the schema version. | D6; D29; D30 |
+| O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
@@ -94,8 +90,6 @@ Decided items are in `docs/DECISIONS.md` (D1–D38). The M0 review table in
 
 ## Pending checks for the user
 
-- Milestone 3a: run the manual test set in [reports/M3a.md](reports/M3a.md), then
-  decide on the merge of `m3a-settings`.
 - O21 before the app writes to a real database on the NAS: run `tools/db_check.py`
   `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
   `write` on two PCs. Steps are in
@@ -126,8 +120,10 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 These come from the safety configuration and from experience in this repository.
 
 - **The safety hook blocks Write and Edit outside the repository.** That includes
-  Claude Code plan files and the memory folder. Present plans in chat, and keep
-  anything that must outlast a session in `docs/`.
+  Claude Code plan files, the memory folder and the session scratchpad. Present plans
+  in chat; ExitPlanMode works without a plan file. Keep anything that must outlast a
+  session in `docs/`. Put screenshot and probe scripts under `dev/`, which is
+  gitignored (example: `dev/m3a-shots/shot.py`).
 - **The hook scans the full text of shell commands.** Words such as `rm`, `rmtree`,
   `robocopy`, `.unlink(`, `os.remove`, `format x:` and `shutdown` block the command,
   even inside a commit message or a heredoc. A UNC path also blocks it: two
@@ -135,9 +131,6 @@ These come from the safety configuration and from experience in this repository.
   escaped backslashes. The user narrowed this pattern on 2026-10-02, so a backslash
   pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. Commit
   `77ed32c` holds that change.
-- **Scripts that are not part of the project** (screenshots, probes) go under `dev/`,
-  which is gitignored. The hook blocks Write outside the repository, including the
-  session scratchpad.
 - **Write and change file content only with the Write and Edit tools.** Do not use
   heredocs, `cat >>` or `python -` scripts for file content. The hook checks the
   target path of Write and Edit and does not read their content, so docs, code and
@@ -171,4 +164,6 @@ These come from the safety configuration and from experience in this repository.
   on a whole folder rewrapped unrelated code three times in Milestone 3.
 - **Screenshots of the GUI** render offscreen with the light palette. Set
   `QT_QPA_FONTDIR=C:/Windows/Fonts` for readable text. The user runs Windows in dark
-  mode, so check colours against a dark palette too (Milestone 3 report, issue 15).
+  mode, so render with a dark palette too (`dev/m3a-shots/shot.py` does both). The
+  offscreen style draws disabled buttons nearly like enabled ones; check button states
+  in tests.

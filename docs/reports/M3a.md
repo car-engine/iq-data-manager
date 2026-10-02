@@ -6,7 +6,7 @@
 | Commits | `8298a97` to `a7e647f` (5 commits), `40a3e24` (report and documentation), `f8c29e4` (dates), `d673cd8` (plain text, D38), plus the commit that records D38 |
 | Tests | 736 passed, 2 skipped (`pytest`), `ruff check` clean |
 | Report date | 2026-10-02, updated 2026-10-03 after the user's first look (D38) |
-| Merge status | Not merged |
+| Merge status | Merged into `main` by fast-forward on 2026-10-03 at the user's request, and pushed |
 
 ## Objectives against what was delivered
 
@@ -140,7 +140,7 @@ The user also approved the new branch and the new dependency, `tomli-w==1.2.0`.
 
 | Check | Who | Why |
 | --- | --- | --- |
-| Run the manual test set below | User | Only a person can judge the tab and the questions it asks |
+| Run the manual test set below | User | Only a person can judge the tab and the questions it asks. The user's first look led to D38. The user then asked for the merge. |
 | Decide issue 4 | User | Done: the user asked for the dates to be corrected |
 | Optional: check a database on the NAS from the Settings tab | User | Network paths are not testable here |
 
@@ -184,5 +184,6 @@ Both folders are under `dev/`, which `.gitignore` excludes.
 
 ## Recommendation and question
 
-Run the manual test set, then merge `m3a-settings` into `main` as a fast-forward. Does
-the user approve the merge after the manual tests?
+Run the manual test set, then merge `m3a-settings` into `main` as a fast-forward. The
+user asked for the merge and the push on 2026-10-03. The next milestone is
+Milestone 4, Viewer tab.

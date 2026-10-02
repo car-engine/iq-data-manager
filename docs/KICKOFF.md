@@ -91,7 +91,8 @@ A new session has no memory of earlier ones. Everything it needs is in the repos
 Paste this in plan mode, with the milestone filled in:
 
 ```
-Read CLAUDE.md, docs/STATUS.md and the latest report in docs/reports/. Then read
+Read CLAUDE.md, docs/STATUS.md and the latest milestone report that STATUS.md links
+to. Then read
 the docs/SPEC.md sections for Milestone <n> and the DECISIONS.md entries they
 refer to. Summarise the current state and the open items in STATUS.md that belong
 to Milestone <n>, then propose a plan for Milestone <n> with its test list. Ask me

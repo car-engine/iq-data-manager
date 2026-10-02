@@ -32,7 +32,7 @@ Rules for this file:
 | D12 | Gap rule | 2026-10-02, Milestone 2 | Active |
 | D13 | Last file without IQ data | 2026-10-02, Milestone 2 | Active |
 | D14 | Recording folder location | 2026-10-02, Milestone 3 | Active |
-| D15 | Reading the configuration in Milestone 3 | 2026-10-02, Milestone 3 | Active; the writer moved to Milestone 3a (D29) |
+| D15 | Reading the configuration in Milestone 3 | 2026-10-02, Milestone 3 | Active; the app writes the file since D31 |
 | D16 | Edit mode in the Log tab | 2026-10-02, Milestone 3 | Active |
 | D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Replaced by D24 |
 | D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |

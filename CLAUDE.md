@@ -100,8 +100,8 @@ sense to them on its own (DECISIONS.md D38).
 
 ## Workflow
 
-- At the start of a session, read `docs/STATUS.md` and the latest report in
-  `docs/reports/`.
+- At the start of a session, read `docs/STATUS.md` and the latest milestone report
+  that it links to in `docs/reports/`.
 - Work in the milestone order in `docs/SPEC.md`. One milestone per branch or session.
 - For each task: propose a plan first, wait for approval, then implement with tests.
   The safety hook blocks plan files outside the repository, so present plans in chat.
