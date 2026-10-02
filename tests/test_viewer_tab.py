@@ -179,19 +179,19 @@ def tab(make_tab, db_path, catalogue) -> ViewerTab:
 
 
 def shown_ids(tab: ViewerTab) -> list[int]:
-    return [tab.proxy.index(r, 0).data(ID_ROLE) for r in range(tab.proxy.rowCount())]
+    return [tab.model.index(r, 0).data(ID_ROLE) for r in range(tab.model.rowCount())]
 
 
 def cell(tab: ViewerTab, recording_id: int, col: int, role=Qt.ItemDataRole.DisplayRole):
-    for r in range(tab.proxy.rowCount()):
-        if tab.proxy.index(r, 0).data(ID_ROLE) == recording_id:
-            return tab.proxy.index(r, col).data(role)
+    for r in range(tab.model.rowCount()):
+        if tab.model.index(r, 0).data(ID_ROLE) == recording_id:
+            return tab.model.index(r, col).data(role)
     raise AssertionError(f"recording {recording_id} not shown")
 
 
 def select(qtbot, tab: ViewerTab, recording_id: int) -> None:
-    for r in range(tab.proxy.rowCount()):
-        if tab.proxy.index(r, 0).data(ID_ROLE) == recording_id:
+    for r in range(tab.model.rowCount()):
+        if tab.model.index(r, 0).data(ID_ROLE) == recording_id:
             tab.table.selectRow(r)
             break
     wait_idle(qtbot, tab)
@@ -204,7 +204,7 @@ def select_channel(tab: ViewerTab, row: int) -> None:
 
 
 def header(tab: ViewerTab, col: int) -> str:
-    return tab.proxy.headerData(col, Qt.Orientation.Horizontal)
+    return tab.model.headerData(col, Qt.Orientation.Horizontal)
 
 
 def set_user_version(path: Path, value: int) -> None:
@@ -222,7 +222,7 @@ def test_without_a_database_the_tab_says_where_to_set_it(make_tab):
     tab = make_tab(Config())
     assert tab.message == (ItemState.TODO, NO_DATABASE, "")
     assert tab.message_label.text().endswith(NO_DATABASE)
-    assert tab.proxy.rowCount() == 0
+    assert tab.model.rowCount() == 0
     for button in (tab.refresh_button, tab.open_button, tab.edit_button, tab.scan_button):
         assert not button.isEnabled()
 
@@ -262,6 +262,22 @@ def test_columns_sort_as_numbers(tab, catalogue):
     tab.table.sortByColumn(COL_COVERAGE, Qt.SortOrder.DescendingOrder)
     assert shown_ids(tab) == [catalogue["full"], catalogue["gappy"], catalogue["legacy"]]
     tab.table.sortByColumn(COL_ID, Qt.SortOrder.AscendingOrder)
+    assert shown_ids(tab) == sorted(catalogue.values())
+
+
+def test_sorting_keeps_the_selected_recording(qtbot, tab, catalogue):
+    select(qtbot, tab, catalogue["legacy"])
+    tab.table.sortByColumn(COL_SIZE, Qt.SortOrder.AscendingOrder)
+    rows = tab.table.selectionModel().selectedRows()
+    assert [r.data(ID_ROLE) for r in rows] == [catalogue["legacy"]]
+    assert rows[0].row() == 0
+    assert tab.selected_id == catalogue["legacy"]
+
+
+def test_a_refresh_keeps_the_sort_order(qtbot, tab, catalogue):
+    tab.table.sortByColumn(COL_ID, Qt.SortOrder.AscendingOrder)
+    tab.refresh_button.click()
+    wait_idle(qtbot, tab)
     assert shown_ids(tab) == sorted(catalogue.values())
 
 

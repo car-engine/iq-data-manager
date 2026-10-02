@@ -14,7 +14,6 @@ from pathlib import Path
 from PySide6.QtCore import (
     QEvent,
     QItemSelection,
-    QSortFilterProxyModel,
     Qt,
     QUrl,
     Signal,
@@ -46,7 +45,6 @@ from iqdm.gui.log_tab import NO_DATABASE
 from iqdm.gui.widgets.checklist import MARKS, colours_for
 from iqdm.gui.widgets.recording_model import (
     ID_ROLE,
-    SORT_ROLE,
     RecordingTableModel,
     low_coverage_tooltip,
 )
@@ -89,7 +87,15 @@ def _read_only_table(headers: tuple[str, ...]) -> QTableWidget:
     table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
     table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     table.horizontalHeader().setStretchLastSection(True)
+    table.setWordWrap(False)
     return table
+
+
+def _fit_height(table: QTableWidget) -> None:
+    """Make a short table as tall as its rows, so the details panel has no empty boxes."""
+    height = table.horizontalHeader().height() + 2 * table.frameWidth()
+    height += sum(table.rowHeight(r) for r in range(table.rowCount()))
+    table.setFixedHeight(height + 2)
 
 
 class ViewerTab(QWidget):
@@ -136,9 +142,6 @@ class ViewerTab(QWidget):
 
     def _build(self) -> None:
         self.model = RecordingTableModel(self._offset, self._threshold)
-        self.proxy = QSortFilterProxyModel(self)
-        self.proxy.setSourceModel(self.model)
-        self.proxy.setSortRole(SORT_ROLE)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(self._build_list())
@@ -241,11 +244,13 @@ class ViewerTab(QWidget):
         self.message_label.setWordWrap(True)
 
         self.table = QTableView()
-        self.table.setModel(self.proxy)
+        self.table.setModel(self.model)
+        self.table.horizontalHeader().setResizeContentsPrecision(200)  # rows sampled per column
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.setWordWrap(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(1, Qt.SortOrder.DescendingOrder)  # newest first
@@ -315,6 +320,7 @@ class ViewerTab(QWidget):
         self.not_verified_label.setWordWrap(True)
         self.param_table = _read_only_table(("Applies to", "Parameter", "Value", "Note"))
         self.param_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.param_hint = QLabel("No RF chain details were logged.")
         self.path_label = QLabel()
         self.format_label = QLabel()
         self.plan_label = QLabel()
@@ -345,6 +351,7 @@ class ViewerTab(QWidget):
         column.addWidget(self.details_title)
         column.addWidget(self.not_verified_label)
         column.addWidget(QLabel("RF chain"))
+        column.addWidget(self.param_hint)
         column.addWidget(self.param_table)
         column.addLayout(form)
         column.addWidget(QLabel("Transfer history"))
@@ -490,6 +497,7 @@ class ViewerTab(QWidget):
             return  # a later load replaces this one
         keep = self._selected_id
         self.model.set_rows(result.summaries)
+        self.table.resizeColumnsToContents()  # samples 200 rows per column (see _build_list)
         refreshed = display_time(time.time(), self._offset)[11:16]
         self.count_label.setText(
             f"{len(result.summaries):,} shown \N{MIDDLE DOT} refreshed {refreshed} "
@@ -594,9 +602,8 @@ class ViewerTab(QWidget):
         row = self.model.row_of(recording_id)
         if row is None:
             return False
-        index = self.proxy.mapFromSource(self.model.index(row, 0))
-        self.table.selectRow(index.row())
-        self.table.scrollTo(index)
+        self.table.selectRow(row)
+        self.table.scrollTo(self.model.index(row, 0))
         self._selected_id = recording_id
         self._load_details(recording_id)  # also after a Refresh of the same recording
         return True
@@ -605,7 +612,7 @@ class ViewerTab(QWidget):
         rows = self.table.selectionModel().selectedRows()
         if not rows:
             return
-        recording_id = self.proxy.data(rows[0], ID_ROLE)
+        recording_id = self.model.data(rows[0], ID_ROLE)
         if isinstance(recording_id, int) and recording_id != self._selected_id:
             self._selected_id = recording_id
             self._load_details(recording_id)
@@ -731,6 +738,8 @@ class ViewerTab(QWidget):
             ):
                 label.setText("")
             self.not_verified_label.setVisible(False)
+            for widget in (self.param_table, self.param_hint, self.transfer_table):
+                widget.setVisible(False)
             return
         rec = details.recording
         channel = self._selected_channel()
@@ -756,6 +765,9 @@ class ViewerTab(QWidget):
             self.param_table.insertRow(i)
             for col, text in enumerate((p.scope, p.param, p.value, p.note)):
                 self.param_table.setItem(i, col, _cell(text))
+        _fit_height(self.param_table)
+        self.param_table.setVisible(bool(rows))
+        self.param_hint.setVisible(not rows)
         self.format_label.setText(viewer.format_text(rec))
         self.plan_label.setText(rec.recording_plan_ref or "")
         self.remarks_label.setText(rec.remarks or "")
@@ -777,6 +789,8 @@ class ViewerTab(QWidget):
             self.transfer_table.insertRow(i)
             for col, text in enumerate((t.when, t.operation, t.scope, t.result, t.by)):
                 self.transfer_table.setItem(i, col, _cell(text, t.notes))
+        _fit_height(self.transfer_table)
+        self.transfer_table.setVisible(bool(transfers))
 
     # =====================================================================
     # Gap scan

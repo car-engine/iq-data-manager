@@ -1,9 +1,11 @@
 """Table model for the Viewer's recordings list (SPEC section 5).
 
 A model over RecordingSummary rows, so thousands of recordings load quickly (O16).
-SORT_ROLE gives each cell a value that sorts as a number or a date. Coverage below
-the threshold is shown in amber with a mark (D39). A recording logged in place on
-the NAS shows "not verified" in amber (D2).
+The model sorts its own rows with list.sort(). A QSortFilterProxyModel would call
+data() from Python for every comparison, which took about 0.5 s for 5,000 rows.
+SORT_ROLE gives each cell the value it sorts by, as a number or a date. Coverage
+below the threshold is shown in amber with a mark (D39). A recording logged in
+place on the NAS shows "not verified" in amber (D2).
 """
 
 from collections.abc import Sequence
@@ -63,13 +65,35 @@ class RecordingTableModel(QAbstractTableModel):
         self._offset = offset_hours
         self._threshold = threshold_percent
         self._colours: dict[ItemState, QColor] = LIGHT_COLOURS
+        self._sort: tuple[int, Qt.SortOrder] | None = None
 
     # ---- settings -------------------------------------------------------
 
     def set_rows(self, rows: Sequence[RecordingSummary]) -> None:
+        """Show new rows, in the order of the last sort if there was one."""
         self.beginResetModel()
         self._rows = list(rows)
+        if self._sort is not None:
+            self._sort_rows(*self._sort)
         self.endResetModel()
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
+        """Sort by a column. Persistent indexes, such as the selection, follow their rows."""
+        self._sort = (column, order)
+        self.layoutAboutToBeChanged.emit()
+        old = self.persistentIndexList()
+        ids = [self._rows[i.row()].id for i in old]
+        self._sort_rows(column, order)
+        rows = {s.id: r for r, s in enumerate(self._rows)}
+        new = [self.index(rows[rid], i.column()) for rid, i in zip(ids, old, strict=True)]
+        self.changePersistentIndexList(old, new)
+        self.layoutChanged.emit()
+
+    def _sort_rows(self, column: int, order: Qt.SortOrder) -> None:
+        self._rows.sort(
+            key=lambda s: self._sort_key(s, column),
+            reverse=order == Qt.SortOrder.DescendingOrder,
+        )
 
     def set_offset(self, offset_hours: float) -> None:
         self._offset = offset_hours
