@@ -7,7 +7,10 @@ D16 (edit mode) and D19 (input in MHz).
 """
 
 import getpass
+import itertools
 import math
+import statistics
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
@@ -45,9 +48,14 @@ IN_PLACE_NOTE = "logged in place, not verified against a source"  # DECISIONS.md
 TIMES = "\N{MULTIPLICATION SIGN}"
 
 
+COVERAGE_LIMIT_PERCENT = 100.0  # coverage above this, at one decimal place, is an error (D22)
+SPACING_TOLERANCE = 0.01  # relative difference allowed between file spacing and duration (D22)
+
+
 class ItemState(StrEnum):
     OK = "ok"
     INFO = "info"
+    TODO = "todo"  # a field still to fill in (D23); blocks saving like an error
     ERROR = "error"
 
 
@@ -61,12 +69,16 @@ class ChecklistItem:
 
 @dataclass(kw_only=True)
 class ChannelInput:
-    """What the user typed for one channel. fc and fs are MHz text (D19)."""
+    """What the user typed for one channel. fc and fs are MHz text (D19).
+
+    fs_inferred is True while fs holds the value worked out from the file size (D21).
+    """
 
     channel_index: int
     band: str = ""
     fc_mhz: str = ""
     fs_mhz: str = ""
+    fs_inferred: bool = False
 
 
 @dataclass(kw_only=True)
@@ -85,13 +97,17 @@ class ParamInput:
 
 @dataclass(kw_only=True)
 class EntryInput:
-    """The Log tab form, apart from the folder."""
+    """The Log tab form, apart from the folder.
+
+    file_duration_inferred is True when the duration came from the file names (D22).
+    """
 
     logged_by: str = ""
     site_id: int | None = None
     recording_plan_ref: str = ""
     remarks: str = ""
     file_duration_s: float = 1.0
+    file_duration_inferred: bool = False
     dtype: SampleType = SampleType.INT16
     iq_layout: IqLayout = IqLayout.INTERLEAVED_IQ
     endianness: Endianness = Endianness.LITTLE
@@ -207,6 +223,100 @@ def with_file_duration(scan: ScanResult, file_duration_s: float) -> ScanResult:
     )
 
 
+@dataclass(frozen=True, kw_only=True)
+class FsInference:
+    """fs worked out from a channel's file size (DECISIONS.md D21).
+
+    fs_hz is None when the size does not give a whole number of complex samples;
+    reason then says why.
+    """
+
+    fs_hz: float | None
+    file_bytes: int | None
+    reason: str | None = None
+
+
+def typical_file_bytes(channel: ChannelScan) -> int | None:
+    """The most common file size of a channel, leaving out the last file (D3).
+
+    A channel with one file uses that file. Ties go to the larger size. None for a
+    channel with no files.
+    """
+    files = channel.files[:-1] if len(channel.files) > 1 else channel.files
+    if not files:
+        return None
+    counts = Counter(f.size for f in files)
+    return max(counts, key=lambda size: (counts[size], size))
+
+
+def _header_text(header_bytes: int) -> str:
+    return "no header" if header_bytes == 0 else f"a {header_bytes}-byte header"
+
+
+def infer_fs(
+    channel: ChannelScan,
+    *,
+    dtype: SampleType | str,
+    header_bytes: int,
+    file_duration_s: float,
+) -> FsInference:
+    """fs = (typical file size - header) / (2 * bytes per sample * file duration) (D21).
+
+    The header is never guessed. Sample type, header and duration come from the form.
+    """
+    size = typical_file_bytes(channel)
+    if size is None:
+        return FsInference(fs_hz=None, file_bytes=None, reason="the channel has no data files")
+    if not math.isfinite(file_duration_s) or file_duration_s <= 0:
+        return FsInference(fs_hz=None, file_bytes=size, reason="the file duration is not positive")
+    sample_type = SampleType(dtype)
+    sample_bytes = 2 * BYTES_PER_SAMPLE[sample_type]
+    payload = size - header_bytes
+    if payload <= 0:
+        return FsInference(
+            fs_hz=None,
+            file_bytes=size,
+            reason=f"a {size}-byte file holds no samples after {_header_text(header_bytes)}",
+        )
+    if payload % sample_bytes:
+        return FsInference(
+            fs_hz=None,
+            file_bytes=size,
+            reason=(
+                f"a {size}-byte file with {_header_text(header_bytes)} is not a whole number "
+                f"of {sample_type} samples ({sample_bytes} bytes each). Check the sample type "
+                "and header bytes"
+            ),
+        )
+    samples = payload // sample_bytes
+    fs = Decimal(samples) / Decimal(repr(float(file_duration_s)))
+    return FsInference(fs_hz=float(fs), file_bytes=size)
+
+
+def typical_spacing(scan: ScanResult) -> float | None:
+    """Median step between consecutive file timestamps, over all channels (D22).
+
+    Gaps barely move a median, so this is the file duration the names show. Rounded
+    to 1 µs. None when no channel has two files.
+    """
+    steps = [
+        b.timestamp - a.timestamp for ch in scan.channels for a, b in itertools.pairwise(ch.files)
+    ]
+    if not steps:
+        return None
+    return round(statistics.median(steps), 6)
+
+
+def coverage_percent(
+    n_files: int, file_duration_s: float, start: float, end: float
+) -> float | None:
+    """n_files * duration / span as a percentage at one decimal place, or None."""
+    span = end - start
+    if span <= 0:
+        return None
+    return round(100 * n_files * file_duration_s / span, 1)
+
+
 def input_from_recording(rec: Recording) -> EntryInput:
     """The form for a stored recording (edit mode)."""
     return EntryInput(
@@ -297,10 +407,20 @@ def _fs_hz(form: EntryInput, index: int) -> float | None:
         return None
 
 
-def _scan_items(scan: ScanResult | None, original: Recording | None) -> list[ChecklistItem]:
+def _scan_items(
+    scan: ScanResult | None, original: Recording | None, scan_problems: Sequence[str]
+) -> list[ChecklistItem]:
+    if scan is None and scan_problems:
+        return [
+            ChecklistItem(
+                ItemState.ERROR,
+                f"The scan stopped with {_plural(len(scan_problems), 'problem')}. Fix the "
+                f"folder and scan again: {'; '.join(scan_problems[:NAMES_SHOWN])}",
+            )
+        ]
     if scan is None:
         if original is None:
-            return [ChecklistItem(ItemState.ERROR, "Folder not scanned")]
+            return [ChecklistItem(ItemState.TODO, "Scan the folder")]
         return [
             ChecklistItem(
                 ItemState.INFO, "Not rescanned: the stored file counts and times are kept"
@@ -356,6 +476,18 @@ def _size_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
     any_error = False
     for ch in scan.channels:
         fs = _fs_hz(form, ch.channel_index)
+        if not ch.files:
+            # check_channel reports a channel with no files before it uses fs.
+            items.append(
+                ChecklistItem(
+                    ItemState.ERROR,
+                    check_channel(
+                        ch, fs_hz=fs or 1.0, dtype=form.dtype, header_bytes=form.header_bytes
+                    )[0].message,
+                )
+            )
+            any_error = True
+            continue
         if fs is None:
             all_checked = False  # the required-fields item reports the missing fs
             continue
@@ -400,25 +532,39 @@ def _size_relevant_change(form: EntryInput, original: Recording) -> bool:
 
 
 def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
-    problems = []
+    """Empty fields are to-do items, grouped by field. Wrong values are errors (D23)."""
+    items: list[ChecklistItem] = []
     if not form.logged_by.strip():
-        problems.append("Logged by is empty")
+        items.append(ChecklistItem(ItemState.TODO, "Enter the logged-by name"))
     if form.site_id is None:
-        problems.append("No site chosen")
+        items.append(ChecklistItem(ItemState.TODO, "Choose a site"))
     if not math.isfinite(form.file_duration_s) or form.file_duration_s <= 0:
-        problems.append("File duration must be positive")
+        items.append(ChecklistItem(ItemState.ERROR, "File duration must be positive"))
     if form.header_bytes < 0:
-        problems.append("Header bytes must be 0 or more")
-    for index in indices:
-        inp = form.channel(index) or ChannelInput(channel_index=index)
-        for label, text in (("fc", inp.fc_mhz), ("fs", inp.fs_mhz)):
+        items.append(ChecklistItem(ItemState.ERROR, "Header bytes must be 0 or more"))
+    for label in ("fc", "fs"):
+        empty = []
+        for index in indices:
+            inp = form.channel(index) or ChannelInput(channel_index=index)
+            text = inp.fc_mhz if label == "fc" else inp.fs_mhz
+            if not text.strip():
+                empty.append(index)
+                continue
             try:
                 parse_mhz(text)
             except ValueError as exc:
-                problems.append(f"Channel {index}: {label} (MHz) {exc}")
-    if not problems:
+                items.append(
+                    ChecklistItem(ItemState.ERROR, f"Channel {index}: {label} (MHz) {exc}")
+                )
+        if empty:
+            items.append(
+                ChecklistItem(
+                    ItemState.TODO, f"Enter {label} (MHz) for channel {_index_list(empty)}"
+                )
+            )
+    if not items:
         return [ChecklistItem(ItemState.OK, "Required fields filled")]
-    return [ChecklistItem(ItemState.ERROR, p) for p in problems]
+    return items
 
 
 def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
@@ -429,9 +575,9 @@ def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem
         name = p.param.strip()
         label = f"RF chain row {row}" + (f" ({name})" if name else "")
         if not name:
-            items.append(ChecklistItem(ItemState.ERROR, f"{label}: the parameter name is empty"))
+            items.append(ChecklistItem(ItemState.TODO, f"{label}: enter the parameter name"))
         if not p.value.strip():
-            items.append(ChecklistItem(ItemState.ERROR, f"{label}: the value is empty"))
+            items.append(ChecklistItem(ItemState.TODO, f"{label}: enter a value"))
         if p.channel_index is not None and p.channel_index not in indices:
             items.append(
                 ChecklistItem(
@@ -439,6 +585,93 @@ def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem
                     f"{label}: channel {p.channel_index} is not in this recording",
                 )
             )
+    return items
+
+
+def _spacing_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
+    """File duration against the spacing of the file names (D22)."""
+    spacing = typical_spacing(scan)
+    if spacing is None:
+        return []
+    duration = form.file_duration_s
+    valid = math.isfinite(duration) and duration > 0
+    if valid and abs(spacing - duration) > SPACING_TOLERANCE * duration:
+        return [
+            ChecklistItem(
+                ItemState.ERROR,
+                f"The file names are {spacing:g} s apart, but the file duration is "
+                f"{duration:g} s. Set the file duration to match the files.",
+            )
+        ]
+    if form.file_duration_inferred:
+        return [
+            ChecklistItem(
+                ItemState.INFO,
+                f"File duration set to {duration:g} s from the spacing of the file names.",
+            )
+        ]
+    return []
+
+
+def _coverage_items(
+    channels: Iterable[tuple[int, int | None, float | None, float | None]], file_duration_s: float
+) -> list[ChecklistItem]:
+    """Coverage above 100.0 % is an error in every case (D22).
+
+    channels holds (index, n_files, start, end) with an exclusive end.
+    """
+    items = []
+    for index, n_files, start, end in channels:
+        if n_files is None or start is None or end is None:
+            continue
+        percent = coverage_percent(n_files, file_duration_s, start, end)
+        if percent is not None and percent > COVERAGE_LIMIT_PERCENT:
+            items.append(
+                ChecklistItem(
+                    ItemState.ERROR,
+                    f"Channel {index}: coverage is {percent:.1f}%, so the files overlap in "
+                    "time. Check the file duration.",
+                )
+            )
+    return items
+
+
+def _fs_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
+    """Which fs values were filled in from the file size, and why others were not (D21)."""
+    items = []
+    filled: dict[tuple[str, int | None], list[int]] = {}
+    for ch in scan.channels:
+        inp = form.channel(ch.channel_index)
+        if inp is not None and inp.fs_inferred and inp.fs_mhz.strip():
+            filled.setdefault((inp.fs_mhz.strip(), typical_file_bytes(ch)), []).append(
+                ch.channel_index
+            )
+        elif (inp is None or not inp.fs_mhz.strip()) and ch.files:
+            result = infer_fs(
+                ch,
+                dtype=form.dtype,
+                header_bytes=form.header_bytes,
+                file_duration_s=form.file_duration_s,
+            )
+            if result.reason is not None:
+                items.append(
+                    ChecklistItem(
+                        ItemState.INFO,
+                        f"Channel {ch.channel_index}: fs could not be filled in from the file "
+                        f"size, because {result.reason}.",
+                    )
+                )
+    for (fs_text, size), indices in filled.items():
+        size_text = "" if size is None else f"{format_size(size)} per "
+        items.insert(
+            0,
+            ChecklistItem(
+                ItemState.INFO,
+                f"fs filled in from the file size for channel {_index_list(indices)}: "
+                f"{fs_text} MHz ({size_text}{form.file_duration_s:g} s file, {form.dtype}, "
+                f"{_header_text(form.header_bytes)}). Check it against the recording plan.",
+            ),
+        )
     return items
 
 
@@ -482,8 +715,11 @@ def checklist(
     logged_id: int | None = None,
     duplicate_checked: bool = False,
     original: Recording | None = None,
+    scan_problems: Sequence[str] = (),
 ) -> list[ChecklistItem]:
-    """The "Before saving" checklist (SPEC section 6). Saving needs no ERROR item.
+    """The "Before saving" checklist (SPEC section 6). Saving needs no ERROR or TODO item.
+
+    scan_problems holds the problems of a scan that stopped (ScanError.problems).
 
     New entry: original is None, and scan, location and the duplicate check come from
     the scan worker. Edit mode (D16): original is the stored recording, scan is None
@@ -492,7 +728,7 @@ def checklist(
     items: list[ChecklistItem] = []
     if location_error is not None:
         items.append(ChecklistItem(ItemState.ERROR, f"Folder cannot be logged: {location_error}"))
-    items += _scan_items(scan, original)
+    items += _scan_items(scan, original, scan_problems)
     if original is None:
         items += _duplicate_items(scan, logged_id, duplicate_checked)
     if scan is not None:
@@ -512,6 +748,21 @@ def checklist(
                     ItemState.INFO, "File sizes not checked: the folder was not rescanned"
                 )
             )
+    if scan is not None:
+        items += _spacing_items(form, scan)
+        items += _coverage_items(
+            (
+                (c.channel_index, c.n_files, c.start_unix, _end(c, form.file_duration_s))
+                for c in scan.channels
+            ),
+            form.file_duration_s,
+        )
+        items += _fs_items(form, scan)
+    elif original is not None:
+        items += _coverage_items(
+            ((c.channel_index, c.n_files, c.start_unix, c.end_unix) for c in original.channels),
+            form.file_duration_s,
+        )
     indices = _channel_indices(scan, original)
     items += _required_items(form, indices)
     items += _param_items(form, indices)
@@ -529,8 +780,14 @@ def checklist(
     return items
 
 
+def _end(channel: ChannelScan, file_duration_s: float) -> float | None:
+    """Exclusive end of a scanned channel at the form's file duration."""
+    return None if not channel.files else channel.files[-1].timestamp + file_duration_s
+
+
 def can_save(items: Iterable[ChecklistItem]) -> bool:
-    return all(i.state is not ItemState.ERROR for i in items)
+    """True when no item is an error or still to do."""
+    return all(i.state not in (ItemState.ERROR, ItemState.TODO) for i in items)
 
 
 # ---------------------------------------------------------------------------

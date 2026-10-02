@@ -18,7 +18,7 @@ from iqdm.entry import ItemState
 from iqdm.gui.log_tab import LogTab, scan_summary, utc_text
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
-from iqdm.models import ArchiveState, Operation
+from iqdm.models import ArchiveState, Operation, SampleType
 from iqdm.scan.scanner import ScanCancelled, scan_recording
 from make_fixtures import ChannelSpec
 
@@ -99,7 +99,7 @@ def test_without_database_save_is_disabled(qtbot):
     assert "No database configured" in tab.message_label.text()
     assert not tab.save_button.isEnabled()
     assert tab.mode_label.text() == "New entry"
-    assert "Folder not scanned" in checklist_texts(tab, ItemState.ERROR)
+    assert "Scan the folder" in checklist_texts(tab, ItemState.TODO)
 
 
 def test_loads_sites_parameter_names_and_bands(make_tab, db_path, site_id, make_recording):
@@ -234,7 +234,12 @@ def test_scan_error_lists_the_problems(qtbot, make_tab, make_recording):
     assert tab.scan_summary.text().startswith("Scan stopped:")
     assert "leading zero: 01" in tab.scan_summary.text()
     assert tab.scan is None
-    assert "Folder not scanned" in checklist_texts(tab, ItemState.ERROR)
+    assert checklist_texts(tab, ItemState.ERROR) == [
+        "The scan stopped with 1 problem. Fix the folder and scan again: "
+        "channel folder name has a leading zero: 01"
+    ]
+    tab.folder_edit.setText(info.root + "x")
+    assert "Scan the folder" in checklist_texts(tab, ItemState.TODO)
     assert not tab.save_button.isEnabled()
 
 
@@ -324,7 +329,7 @@ def test_save_needs_a_clean_checklist(qtbot, make_tab, make_recording, site_id, 
     tab.channel_widgets(0)[2].setText("")
     tab.save()
     assert not tab.runner.busy
-    assert tab.message_label.text() == "Fix the items marked in the checklist first."
+    assert tab.message_label.text() == "Complete or fix the items in the checklist first."
     assert entry.find_logged(db_path, tab._location) is None
 
 
@@ -560,3 +565,123 @@ def test_rescan_without_a_removed_channel_keeps_every_row(qtbot, make_tab, make_
     wait_idle(qtbot, tab)
     assert [p.param for p in tab.param_table.rows()] == ["Gain"]
     assert tab.message_label.text() == ""
+
+
+# ---------------------------------------------------------------------------
+# fs from the file size (D21), duration from the file names (D22), to-do items (D23)
+# ---------------------------------------------------------------------------
+
+
+def fs_widget(tab: LogTab, index: int = 0):
+    return tab.channel_widgets(index)[2]
+
+
+def test_scan_fills_in_fs_and_leaves_fc_and_site_to_do(qtbot, make_tab, make_recording):
+    info = make_recording(n_channels=4)
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    for index in range(4):
+        fs = fs_widget(tab, index)
+        assert fs.text() == "0.001"
+        assert "italic" in fs.styleSheet()
+        assert fs.toolTip().startswith("Filled in from the file size")
+    assert checklist_texts(tab, ItemState.TODO) == [
+        "Choose a site",
+        "Enter fc (MHz) for channel 0, 1, 2, 3",
+    ]
+    assert checklist_texts(tab, ItemState.ERROR) == []
+    assert any(
+        t.startswith("fs filled in from the file size for channel 0, 1, 2, 3: 0.001 MHz")
+        for t in checklist_texts(tab, ItemState.INFO)
+    )
+    assert not tab.save_button.isEnabled()
+
+
+def test_filled_in_fs_follows_sample_type_and_header(qtbot, make_tab, make_recording):
+    info = make_recording()  # 4000-byte files
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
+    assert fs_widget(tab).text() == "0.002"
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.FLOAT32))
+    assert fs_widget(tab).text() == "0.0005"
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT16))
+    tab.header_spin.setValue(3)  # 3997 bytes: not whole int16 samples
+    assert fs_widget(tab).text() == ""
+    assert any(
+        "fs could not be filled in from the file size" in t
+        for t in checklist_texts(tab, ItemState.INFO)
+    )
+    tab.header_spin.setValue(0)
+    assert fs_widget(tab).text() == "0.001"
+
+
+def test_typed_fs_stays(qtbot, make_tab, make_recording):
+    info = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    fs = fs_widget(tab)
+    fs.clear()
+    qtbot.keyClicks(fs, "0.004")
+    assert fs.styleSheet() == ""
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
+    assert fs.text() == "0.004"
+    assert any("differ from the expected size" in t for t in checklist_texts(tab, ItemState.ERROR))
+
+
+def test_duration_comes_from_the_file_names(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(file_duration_s=0.5, n_slots=40)
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    assert tab.duration_spin.value() == 0.5
+    assert fs_widget(tab).text() == "0.001"
+    assert "File duration set to 0.5 s from the spacing of the file names." in checklist_texts(
+        tab, ItemState.INFO
+    )
+    assert tab.channel_table.item(0, 8).text() == "100.0%"
+    assert entry.can_save(tab.checklist.items), checklist_texts(tab)
+
+
+def test_duration_set_by_the_user_stays(qtbot, make_tab, make_recording):
+    info = make_recording(file_duration_s=0.5, n_slots=40)
+    tab = make_tab()
+    tab.duration_spin.setValue(1.0)
+    tab.duration_spin.setValue(2.0)  # the user's choice
+    scan_folder(qtbot, tab, info.root)
+    assert tab.duration_spin.value() == 2.0
+    errors = checklist_texts(tab, ItemState.ERROR)
+    assert any(t.startswith("The file names are 0.5 s apart") for t in errors)
+    assert any("coverage is" in t for t in errors)
+
+
+def test_next_folder_gets_its_own_duration(qtbot, make_tab, make_recording):
+    half = make_recording(file_duration_s=0.5, n_slots=20)
+    whole = make_recording(n_slots=20)
+    tab = make_tab()
+    scan_folder(qtbot, tab, half.root)
+    assert tab.duration_spin.value() == 0.5
+    scan_folder(qtbot, tab, whole.root)
+    assert tab.duration_spin.value() == 1.0
+    assert not any("File duration set" in t for t in checklist_texts(tab))
+
+
+def test_edit_mode_keeps_stored_fs_and_fills_a_new_channel(
+    qtbot, make_tab, make_recording, site_id, db_path
+):
+    info = make_recording(n_channels=2)
+    Path(info.root, "1").rename(Path(info.root, "x1"))
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    fs_widget(tab).clear()
+    qtbot.keyClicks(fs_widget(tab), "0.001")  # typed by the user
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert fs_widget(tab).styleSheet() == ""
+    Path(info.root, "x1").rename(Path(info.root, "1"))
+    tab.start_scan()
+    wait_idle(qtbot, tab)
+    assert fs_widget(tab, 0).styleSheet() == ""
+    assert fs_widget(tab, 1).text() == "0.001"
+    assert "italic" in fs_widget(tab, 1).styleSheet()
+    assert tab.duration_spin.value() == 1.0

@@ -214,9 +214,10 @@ def test_complete_entry_has_no_errors(make_recording):
     ]
 
 
-def test_not_scanned_is_an_error():
+def test_not_scanned_is_to_do():
     items = checklist(EntryInput(logged_by="u", site_id=1), scan=None)
-    assert "Folder not scanned" in texts(items, ItemState.ERROR)
+    assert texts(items, ItemState.TODO) == ["Scan the folder"]
+    assert texts(items, ItemState.ERROR) == []
     assert not can_save(items)
 
 
@@ -344,41 +345,60 @@ def test_unrecognised_entries_are_information(make_recording):
 
 
 @pytest.mark.parametrize(
-    ("change", "message"),
+    ("change", "state", "message"),
     [
-        ({"logged_by": "  "}, "Logged by is empty"),
-        ({"site_id": None}, "No site chosen"),
-        ({"file_duration_s": 0.0}, "File duration must be positive"),
-        ({"header_bytes": -1}, "Header bytes must be 0 or more"),
+        ({"logged_by": "  "}, ItemState.TODO, "Enter the logged-by name"),
+        ({"site_id": None}, ItemState.TODO, "Choose a site"),
+        ({"file_duration_s": 0.0}, ItemState.ERROR, "File duration must be positive"),
+        ({"header_bytes": -1}, ItemState.ERROR, "Header bytes must be 0 or more"),
     ],
 )
-def test_missing_required_field(make_recording, change, message):
+def test_missing_required_field(make_recording, change, state, message):
     info = make_recording()
     scan = scan_of(info)
     form = form_for(scan, 1)
     for name, value in change.items():
         setattr(form, name, value)
     items = ready_items(form, scan, local_location(info))
-    assert message in texts(items, ItemState.ERROR)
+    assert message in texts(items, state)
     assert "Required fields filled" not in texts(items)
+    assert not can_save(items)
 
 
 @pytest.mark.parametrize(
-    ("field", "text", "message"),
+    ("field", "text", "state", "message"),
     [
-        ("fc_mhz", "", "Channel 0: fc (MHz) is empty"),
-        ("fc_mhz", "-1", "Channel 0: fc (MHz) must be positive: '-1'"),
-        ("fs_mhz", "x", "Channel 0: fs (MHz) is not a number: 'x'"),
-        ("fs_mhz", "0", "Channel 0: fs (MHz) must be positive: '0'"),
+        ("fc_mhz", "", ItemState.TODO, "Enter fc (MHz) for channel 0"),
+        ("fs_mhz", " ", ItemState.TODO, "Enter fs (MHz) for channel 0"),
+        ("fc_mhz", "-1", ItemState.ERROR, "Channel 0: fc (MHz) must be positive: '-1'"),
+        ("fs_mhz", "x", ItemState.ERROR, "Channel 0: fs (MHz) is not a number: 'x'"),
+        ("fs_mhz", "0", ItemState.ERROR, "Channel 0: fs (MHz) must be positive: '0'"),
     ],
 )
-def test_channel_frequencies_are_required_and_positive(make_recording, field, text, message):
+def test_channel_frequencies_are_required_and_positive(make_recording, field, text, state, message):
     info = make_recording()
     scan = scan_of(info)
     form = form_for(scan, 1)
     setattr(form.channels[0], field, text)
     items = ready_items(form, scan, local_location(info))
-    assert message in texts(items, ItemState.ERROR)
+    assert message in texts(items, state)
+    assert not can_save(items)
+
+
+def test_empty_fields_are_grouped_into_one_to_do_line_each(make_recording):
+    info = make_recording(n_channels=4)
+    scan = scan_of(info)
+    form = EntryInput(
+        logged_by="u",
+        channels=[ChannelInput(channel_index=c.channel_index) for c in scan.channels],
+    )
+    items = ready_items(form, scan, local_location(info))
+    assert texts(items, ItemState.TODO) == [
+        "Choose a site",
+        "Enter fc (MHz) for channel 0, 1, 2, 3",
+        "Enter fs (MHz) for channel 0, 1, 2, 3",
+    ]
+    assert texts(items, ItemState.ERROR) == []
 
 
 def test_channel_without_input_row_is_reported(make_recording):
@@ -387,7 +407,7 @@ def test_channel_without_input_row_is_reported(make_recording):
     form = form_for(scan, 1)
     form.channels.pop()
     items = ready_items(form, scan, local_location(info))
-    assert "Channel 1: fc (MHz) is empty" in texts(items, ItemState.ERROR)
+    assert "Enter fc (MHz) for channel 1" in texts(items, ItemState.TODO)
 
 
 def test_rf_chain_rows(make_recording):
@@ -405,9 +425,11 @@ def test_rf_chain_rows(make_recording):
         ],
     )
     items = ready_items(form, scan, local_location(info))
+    assert texts(items, ItemState.TODO) == [
+        "RF chain row 3: enter the parameter name",
+        "RF chain row 4 (Antenna): enter a value",
+    ]
     assert texts(items, ItemState.ERROR) == [
-        "RF chain row 3: the parameter name is empty",
-        "RF chain row 4 (Antenna): the value is empty",
         "RF chain row 5 (LNA gain): channel 3 is not in this recording",
     ]
 
@@ -756,7 +778,7 @@ def test_rescan_that_adds_a_channel_needs_its_frequencies(db_path, site_id, make
     form = entry.input_from_recording(original)
     items = checklist(form, scan=two, original=original)
     assert "The rescan adds channel 1." in texts(items, ItemState.INFO)
-    assert "Channel 1: fs (MHz) is empty" in texts(items, ItemState.ERROR)
+    assert "Enter fs (MHz) for channel 1" in texts(items, ItemState.TODO)
 
 
 def test_save_edit_needs_an_id(make_recording, db_path):
@@ -823,3 +845,191 @@ def test_params_without_channels_keeps_recording_rows_and_other_channels():
     kept = entry.params_without_channels(rows, [1, 2])
     assert [(p.param, p.channel_index) for p in kept] == [("SDR", None), ("LNA", 0)]
     assert entry.params_without_channels(rows, []) == rows
+
+
+# ---------------------------------------------------------------------------
+# fs from the file size (D21), duration from the file names and coverage (D22)
+# ---------------------------------------------------------------------------
+
+
+def hand_channel(sizes, *, index=0, step=1.0, duration=1.0) -> ChannelScan:
+    files = tuple(
+        DataFile(name=f"{T0 + i * step}.dat", timestamp=T0 + i * step, size=s)
+        for i, s in enumerate(sizes)
+    )
+    return ChannelScan(
+        channel_index=index, sub_path=str(index), file_duration_s=duration, files=files
+    )
+
+
+@pytest.mark.parametrize(
+    ("spec", "dtype", "header", "duration", "fs_hz"),
+    [
+        ({}, SampleType.INT16, 0, 1.0, 1000.0),
+        ({"dtype": "int8", "header_bytes": 64}, SampleType.INT8, 64, 1.0, 1000.0),
+        ({"dtype": "float32"}, SampleType.FLOAT32, 0, 1.0, 1000.0),
+        ({"file_duration_s": 0.5}, SampleType.INT16, 0, 0.5, 1000.0),
+        ({"fs_hz": 2500.0}, SampleType.INT16, 0, 1.0, 2500.0),
+    ],
+)
+def test_infer_fs_from_fixture(make_recording, spec, dtype, header, duration, fs_hz):
+    info = make_recording(**spec)
+    channel = scan_recording(Path(info.root), duration).channels[0]
+    result = entry.infer_fs(channel, dtype=dtype, header_bytes=header, file_duration_s=duration)
+    assert result.fs_hz == fs_hz
+    assert result.file_bytes == info.channels[0].expected_file_bytes
+
+
+def test_infer_fs_follows_the_sample_type():
+    channel = hand_channel([200_000_000] * 3)
+    fs = {
+        t: entry.infer_fs(channel, dtype=t, header_bytes=0, file_duration_s=1.0).fs_hz
+        for t in SampleType
+    }
+    assert fs == {SampleType.INT8: 100e6, SampleType.INT16: 50e6, SampleType.FLOAT32: 25e6}
+
+
+def test_infer_fs_ignores_a_short_last_file_and_odd_files():
+    channel = hand_channel([4000, 4000, 4000, 100, 4000, 1234])
+    assert entry.typical_file_bytes(channel) == 4000
+    result = entry.infer_fs(channel, dtype="int16", header_bytes=0, file_duration_s=1.0)
+    assert result.fs_hz == 1000.0
+
+
+def test_typical_file_bytes_single_file_and_ties():
+    assert entry.typical_file_bytes(hand_channel([4000])) == 4000
+    assert entry.typical_file_bytes(hand_channel([4000, 8000, 1])) == 8000
+    assert entry.typical_file_bytes(hand_channel([])) is None
+
+
+@pytest.mark.parametrize(
+    ("sizes", "header", "reason"),
+    [
+        ([4001, 4001], 0, "is not a whole number of int16 samples (4 bytes each)"),
+        ([64, 64], 64, "holds no samples after a 64-byte header"),
+        ([], 0, "the channel has no data files"),
+    ],
+)
+def test_infer_fs_gives_a_reason_when_it_cannot(sizes, header, reason):
+    result = entry.infer_fs(
+        hand_channel(sizes), dtype="int16", header_bytes=header, file_duration_s=1.0
+    )
+    assert result.fs_hz is None
+    assert reason in result.reason
+
+
+def test_infer_fs_with_a_header_never_guesses_it():
+    channel = hand_channel([4064] * 3)
+    no_header = entry.infer_fs(channel, dtype="int16", header_bytes=0, file_duration_s=1.0)
+    assert no_header.fs_hz == 1016.0
+    with_header = entry.infer_fs(channel, dtype="int16", header_bytes=64, file_duration_s=1.0)
+    assert with_header.fs_hz == 1000.0
+
+
+def test_typical_spacing(make_recording):
+    assert entry.typical_spacing(scan_of(make_recording())) == 1.0
+    half = make_recording(file_duration_s=0.5)
+    assert entry.typical_spacing(scan_recording(Path(half.root), 0.5)) == 0.5
+    gappy = make_recording(n_slots=20, gaps=frozenset({3, 4, 5, 9, 10}))
+    assert entry.typical_spacing(scan_of(gappy)) == 1.0
+    assert entry.typical_spacing(scan_of(make_recording(n_slots=1))) is None
+
+
+def test_duration_that_disagrees_with_the_file_names_is_an_error(make_recording):
+    info = make_recording(file_duration_s=0.5, n_slots=40)
+    scan = scan_of(info)  # the form keeps the default file duration of 1.0 s
+    form = form_for(scan, 1)
+    form.channels[0].fs_mhz = "0.0005"  # 2000-byte files at 1.0 s and int16
+    items = ready_items(form, scan, local_location(info))
+    errors = texts(items, ItemState.ERROR)
+    assert (
+        "The file names are 0.5 s apart, but the file duration is 1 s. Set the file "
+        "duration to match the files." in errors
+    )
+    assert (
+        "Channel 0: coverage is 195.1%, so the files overlap in time. Check the file duration."
+        in errors
+    )
+    assert not can_save(items)
+
+
+def test_folder_07_case_is_caught_without_inference(make_recording):
+    """Duration left at 1.0 s with fs typed to match the size: still an error (D22)."""
+    info = make_recording(file_duration_s=0.5, n_slots=40)
+    scan = scan_of(info)
+    form = form_for(scan, 1)
+    form.channels[0].fs_mhz = "0.0005"
+    assert not can_save(ready_items(form, scan, local_location(info)))
+    fixed = with_file_duration(scan, 0.5)
+    form = form_for(fixed, 1, file_duration_s=0.5, file_duration_inferred=True)
+    items = ready_items(form, fixed, local_location(info))
+    assert can_save(items), texts(items)
+    assert "File duration set to 0.5 s from the spacing of the file names." in texts(
+        items, ItemState.INFO
+    )
+
+
+def test_coverage_at_exactly_100_percent_is_fine(make_recording):
+    info = make_recording(n_slots=10)
+    scan = scan_of(info)
+    items = ready_items(form_for(scan, 1), scan, local_location(info))
+    assert not any("coverage is" in t for t in texts(items))
+
+
+def test_coverage_above_100_percent_in_edit_mode_without_rescan(db_path, site_id, make_recording):
+    original = saved(db_path, site_id, make_recording())
+    original.channels[0].n_files = 20  # as if a stored count were wrong
+    form = entry.input_from_recording(original)
+    items = checklist(form, scan=None, original=original)
+    assert (
+        "Channel 0: coverage is 200.0%, so the files overlap in time. Check the file duration."
+        in texts(items, ItemState.ERROR)
+    )
+
+
+def test_inferred_fs_is_reported_with_its_basis(make_recording):
+    info = make_recording(n_channels=2)
+    scan = scan_of(info)
+    form = form_for(scan, 1)
+    for c in form.channels:
+        c.fs_inferred = True
+    items = ready_items(form, scan, local_location(info))
+    assert (
+        "fs filled in from the file size for channel 0, 1: 0.001 MHz (4.0 kB per 1 s file, "
+        "int16, no header). Check it against the recording plan." in texts(items, ItemState.INFO)
+    )
+    assert can_save(items)
+
+
+def test_fs_that_cannot_be_filled_in_says_why(make_recording):
+    info = make_recording(header_bytes=2)  # 4002-byte files: not whole int16 samples
+    scan = scan_of(info)
+    form = form_for(scan, 1)
+    form.channels[0].fs_mhz = ""
+    items = ready_items(form, scan, local_location(info))
+    assert any(
+        t.startswith(
+            "Channel 0: fs could not be filled in from the file size, because a "
+            "4002-byte file with no header is not a whole number of int16 samples"
+        )
+        for t in texts(items, ItemState.INFO)
+    )
+    assert "Enter fs (MHz) for channel 0" in texts(items, ItemState.TODO)
+
+
+def test_scan_problems_are_an_error():
+    items = checklist(EntryInput(), scan=None, scan_problems=("a", "b"))
+    assert texts(items, ItemState.ERROR) == [
+        "The scan stopped with 2 problems. Fix the folder and scan again: a; b"
+    ]
+    assert "Scan the folder" not in texts(items)
+
+
+def test_empty_channel_is_an_error_before_fs_is_entered(make_recording):
+    info = make_recording(n_channels=2)
+    Path(info.root, "2").mkdir()
+    scan = scan_of(info)
+    form = form_for(scan, 1)
+    form.channels.pop()  # no input row for channel 2, so no fs either
+    items = ready_items(form, scan, local_location(info))
+    assert "channel 2 (folder 2) has no data files" in texts(items, ItemState.ERROR)

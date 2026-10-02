@@ -38,6 +38,9 @@ Rules for this file:
 | D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |
 | D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active |
 | D20 | RF chain rows of channels removed by a rescan | 2026-10-02, Milestone 3 | Active |
+| D21 | fs from the file size | 2026-10-02, Milestone 3 | Active |
+| D22 | File duration from the file names; coverage above 100 % | 2026-10-02, Milestone 3 | Active |
+| D23 | To-do items in the checklist | 2026-10-02, Milestone 3 | Active |
 
 ## D1. Sample types
 
@@ -346,3 +349,63 @@ Closes issue 1 of the Milestone 3 report. Adds to D16.
   stored rows come back when the user opens the entry again.
 
 Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D21. fs from the file size
+
+The user found the empty fs fields alarming after a scan (manual test, 2026-10-02).
+
+- After a scan, the Log tab fills each channel's fs:
+  fs = (typical file size − header bytes) / (2 × bytes per sample × file duration).
+- The typical file size is the most common size in the channel, leaving out the last
+  file (D3). Ties go to the larger size.
+- The header is never guessed. Header bytes default to 0, as the file duration
+  defaults to 1 s and the sample type to `int16`. The user changes them by hand.
+- A filled-in fs is shown in italics with a tooltip. The checklist names its basis:
+  file size, duration, sample type and header. It asks the user to check the value
+  against the recording plan.
+- A filled-in fs follows the sample type, header bytes and file duration until the
+  user types in the field. From then on the typed value stays.
+- When the typical file is not a whole number of complex samples after the header,
+  fs stays empty and the checklist says why.
+- Edit mode never replaces a stored fs. Only a channel that a rescan adds gets a
+  filled-in value.
+- Known limits, accepted by the user:
+  - The size check cannot catch a wrong filled-in fs. It still finds files that
+    differ from the typical size.
+  - Sample type and fs trade off exactly. A 200,000,000-byte 1 s file is 100 MS/s as
+    `int8`, 50 MS/s as `int16` or 25 MS/s as `float32`. The user must set the sample
+    type.
+  - A wrong header gives a wrong fs in the same way.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D22. File duration from the file names; coverage above 100 %
+
+- The median step between consecutive file timestamps, over all channels, is the
+  file duration the names show. Gaps barely move a median. The value is rounded to
+  1 µs.
+- After a scan of a new entry, the Log tab sets the file duration to that value
+  until the user changes the field. A value other than 1 s adds an information
+  line.
+- A file duration that differs from the median step by more than 1 % is an error.
+  This covers a duration the user set and a stored duration in edit mode after a
+  rescan.
+- Channel coverage above 100.0 %, at one decimal place, is an error in every case.
+  Coverage above 100 % means that the files overlap in time.
+- Reason: with D21 alone, 0.5 s files logged at the default 1 s gave a filled-in fs
+  of half the true rate, an all-green checklist and 195 % coverage.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`.
+
+## D23. To-do items in the checklist
+
+- A checklist item has one of four states: ok, information, to do and error.
+- To do (grey) is a field still to fill in: the folder still to scan, the
+  logged-by name, the site, empty fc or fs, and an RF chain row without a name or
+  value. Empty fc and fs give one line per field that lists the channels.
+- Error (red) is a value that is wrong, or a folder that cannot be logged as it
+  stands. A scan that stopped is an error that lists its problems. A channel with no
+  files is an error before fs is entered.
+- Saving needs no to-do item and no error.
+
+Affects: SPEC section 6, `entry.py`, `gui/widgets/checklist.py`.

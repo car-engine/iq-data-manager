@@ -11,11 +11,13 @@ from iqdm.entry import ChecklistItem, ItemState
 MARKS = {
     ItemState.OK: "\N{CHECK MARK}",
     ItemState.INFO: "\N{CIRCLED LATIN SMALL LETTER I}",
+    ItemState.TODO: "\N{WHITE CIRCLE}",
     ItemState.ERROR: "\N{BALLOT X}",
 }
 COLOURS = {
     ItemState.OK: QColor(0, 120, 90),
     ItemState.INFO: QColor(170, 100, 0),
+    ItemState.TODO: QColor(110, 110, 110),
     ItemState.ERROR: QColor(190, 0, 30),
 }
 

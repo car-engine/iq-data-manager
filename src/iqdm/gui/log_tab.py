@@ -57,6 +57,11 @@ CHANNEL_HEADERS = (
     "Coverage",
 )
 REFRESH_DELAY_MS = 150  # checklist refresh after typing stops
+DEFAULT_FILE_DURATION_S = 1.0
+FS_FILLED_TOOLTIP = (
+    "Filled in from the file size, sample type, header bytes and file duration. "
+    "Type a value to replace it."
+)
 NO_DATABASE = "No database configured. Set db_path in the configuration file, or start with --db."
 
 
@@ -75,12 +80,13 @@ class ScanOutcome:
     db_error: str | None = None
 
 
-@dataclass
+@dataclass(eq=False)
 class _ChannelRow:
     index: int
     band: QComboBox
     fc: QLineEdit
     fs: QLineEdit
+    fs_auto: bool = False  # fs holds the value worked out from the file size (D21)
 
 
 class LogTab(QWidget):
@@ -110,6 +116,8 @@ class LogTab(QWidget):
         self._scan_task: Task | None = None
         self._saving = False
         self._channel_rows: list[_ChannelRow] = []
+        self._duration_set_by_user = False  # D22: the file names set it until the user does
+        self._duration_from_names = False
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -224,9 +232,11 @@ class LogTab(QWidget):
         self.endian_combo = _enum_combo(Endianness)
         self.header_spin = QSpinBox()
         self.header_spin.setRange(0, 2_000_000_000)
-        for widget in (self.dtype_combo, self.layout_combo, self.endian_combo):
+        for widget in (self.layout_combo, self.endian_combo):
             widget.currentIndexChanged.connect(self._schedule_refresh)
-        self.header_spin.valueChanged.connect(self._schedule_refresh)
+        # Sample type and header bytes change a filled-in fs (D21).
+        self.dtype_combo.currentIndexChanged.connect(self._format_changed)
+        self.header_spin.valueChanged.connect(self._format_changed)
 
         layout = QFormLayout(box)
         layout.addRow("Sample type", self.dtype_combo)
@@ -309,6 +319,7 @@ class LogTab(QWidget):
             recording_plan_ref=self.plan_edit.text(),
             remarks=self.remarks_edit.toPlainText(),
             file_duration_s=self.duration_spin.value(),
+            file_duration_inferred=self._duration_from_names,
             dtype=self.dtype_combo.currentData(),
             iq_layout=self.layout_combo.currentData(),
             endianness=self.endian_combo.currentData(),
@@ -319,6 +330,7 @@ class LogTab(QWidget):
                     band=r.band.currentText(),
                     fc_mhz=r.fc.text(),
                     fs_mhz=r.fs.text(),
+                    fs_inferred=r.fs_auto,
                 )
                 for r in self._channel_rows
             ],
@@ -341,9 +353,9 @@ class LogTab(QWidget):
         self.folder_edit.clear()
         self.folder_edit.blockSignals(False)
         self._set_location(None, None)
-        self.duration_spin.blockSignals(True)
-        self.duration_spin.setValue(1.0)
-        self.duration_spin.blockSignals(False)
+        self._set_duration(DEFAULT_FILE_DURATION_S)
+        self._duration_set_by_user = False
+        self._duration_from_names = False
         self.logged_by_edit.setText(entry.default_logged_by())
         self.site_combo.setCurrentIndex(-1)
         self.plan_edit.clear()
@@ -363,6 +375,7 @@ class LogTab(QWidget):
         self._scan = None
         self._logged_id = None
         self._duplicate_checked = False
+        self._scan_problems: tuple[str, ...] = ()
         self.scan_summary.clear()
         self.start_edit.clear()
         self.end_edit.clear()
@@ -397,10 +410,23 @@ class LogTab(QWidget):
         if folder:
             self.folder_edit.setText(str(Path(folder)))
 
+    def _set_duration(self, value: float) -> None:
+        """Set the duration field without counting it as the user's choice."""
+        self.duration_spin.blockSignals(True)
+        self.duration_spin.setValue(value)
+        self.duration_spin.blockSignals(False)
+
     def _duration_changed(self, value: float) -> None:
+        """The user changed the file duration. The file names no longer set it (D22)."""
+        self._duration_set_by_user = True
+        self._duration_from_names = False
         if self._raw_scan is not None:
             self._scan = entry.with_file_duration(self._raw_scan, value)
             self._show_scan()
+        self._schedule_refresh()
+
+    def _format_changed(self, *_: object) -> None:
+        self._fill_inferred_fs()
         self._schedule_refresh()
 
     # =====================================================================
@@ -427,9 +453,12 @@ class LogTab(QWidget):
             band.setCurrentText(inp.band)
             fc = QLineEdit(inp.fc_mhz)
             fs = QLineEdit(inp.fs_mhz)
+            row = _ChannelRow(index=index, band=band, fc=fc, fs=fs, fs_auto=inp.fs_inferred)
+            _mark_fs(row)
             band.currentTextChanged.connect(self._schedule_refresh)
             fc.textChanged.connect(self._schedule_refresh)
             fs.textChanged.connect(self._schedule_refresh)
+            fs.textEdited.connect(lambda _text, r=row: self._fs_typed(r))
             self.channel_table.insertRow(position)
             coverage = ""
             if n_files is not None and start is not None and end is not None and end > start:
@@ -451,8 +480,33 @@ class LogTab(QWidget):
             self.channel_table.setCellWidget(position, 2, band)
             self.channel_table.setCellWidget(position, 3, fc)
             self.channel_table.setCellWidget(position, 4, fs)
-            self._channel_rows.append(_ChannelRow(index=index, band=band, fc=fc, fs=fs))
+            self._channel_rows.append(row)
         self.param_table.set_channels([r.index for r in self._channel_rows])
+
+    def _fs_typed(self, row: _ChannelRow) -> None:
+        """The user typed in an fs field. It keeps that value from now on (D21)."""
+        row.fs_auto = False
+        _mark_fs(row)
+
+    def _fill_inferred_fs(self) -> None:
+        """Fill fs from the file size where the field is empty or was filled in (D21)."""
+        scan = self._scan
+        if scan is None:
+            return
+        by_index = {c.channel_index: c for c in scan.channels}
+        for row in self._channel_rows:
+            channel = by_index.get(row.index)
+            if channel is None or not (row.fs_auto or not row.fs.text().strip()):
+                continue
+            result = entry.infer_fs(
+                channel,
+                dtype=self.dtype_combo.currentData(),
+                header_bytes=self.header_spin.value(),
+                file_duration_s=self.duration_spin.value(),
+            )
+            row.fs.setText("" if result.fs_hz is None else entry.format_mhz(result.fs_hz))
+            row.fs_auto = result.fs_hz is not None
+            _mark_fs(row)
 
     def _show_scan(self) -> None:
         """Fill the channel table, times and summary from the current scan."""
@@ -466,6 +520,7 @@ class LogTab(QWidget):
             ],
             self._inputs_by_index(),
         )
+        self._fill_inferred_fs()
         starts = [c.start_unix for c in scan.channels if c.start_unix is not None]
         ends = [c.end_unix for c in scan.channels if c.end_unix is not None]
         self.start_edit.setText(utc_text(min(starts)) if starts else "")
@@ -500,6 +555,7 @@ class LogTab(QWidget):
             logged_id=self._logged_id,
             duplicate_checked=self._duplicate_checked,
             original=self._original,
+            scan_problems=self._scan_problems,
         )
         self.checklist.set_items(items)
         self.state_note.setText(entry.state_note(self._location, self._original))
@@ -616,6 +672,8 @@ class LogTab(QWidget):
     def _scan_finished(self, outcome: ScanOutcome) -> None:
         self._scan_task = None
         self._raw_scan = outcome.scan
+        if self._original is None and not self._duration_set_by_user:
+            self._duration_from_file_names(outcome.scan)
         self._scan = entry.with_file_duration(outcome.scan, self.duration_spin.value())
         self._logged_id = outcome.logged_id
         self._duplicate_checked = outcome.duplicate_checked
@@ -647,6 +705,19 @@ class LogTab(QWidget):
             "confirmation."
         )
 
+    def _duration_from_file_names(self, scan: ScanResult) -> None:
+        """Set the file duration to the spacing of the file names (D22).
+
+        The default, 1 s, gets no information line. A spacing outside the field's
+        range leaves the field as it is, and the checklist reports the mismatch.
+        """
+        spacing = entry.typical_spacing(scan)
+        low, high = self.duration_spin.minimum(), self.duration_spin.maximum()
+        if spacing is None or not low <= spacing <= high:
+            return
+        self._set_duration(spacing)
+        self._duration_from_names = spacing != DEFAULT_FILE_DURATION_S
+
     def _scan_failed(self, exc: Exception) -> None:
         self._scan_task = None
         self._clear_scan()
@@ -655,8 +726,10 @@ class LogTab(QWidget):
         if isinstance(exc, ScanCancelled):
             self.scan_summary.setText("Scan cancelled.")
         elif isinstance(exc, ScanError):
+            self._scan_problems = exc.problems
             self.scan_summary.setText("Scan stopped:\n" + "\n".join(exc.problems))
         else:
+            self._scan_problems = (str(exc),)
             self.scan_summary.setText(f"Scan failed: {exc}")
         self.refresh_checklist()
 
@@ -670,7 +743,7 @@ class LogTab(QWidget):
         if not db or self._saving or self._scan_task is not None:
             return
         if not entry.can_save(self.checklist.items):
-            self.show_message("Fix the items marked in the checklist first.")
+            self.show_message("Complete or fix the items in the checklist first.")
             return
         try:
             rec = entry.build_recording(
@@ -777,9 +850,9 @@ class LogTab(QWidget):
         self.folder_edit.setReadOnly(True)
         self.browse_button.setEnabled(False)
         self._set_location(location, None)
-        self.duration_spin.blockSignals(True)
-        self.duration_spin.setValue(form.file_duration_s)
-        self.duration_spin.blockSignals(False)
+        self._set_duration(form.file_duration_s)
+        self._duration_set_by_user = True  # the stored duration stays (D16, D22)
+        self._duration_from_names = False
         self.logged_by_edit.setText(form.logged_by)
         self.site_combo.setCurrentIndex(self.site_combo.findData(form.site_id))
         self.plan_edit.setText(form.recording_plan_ref)
@@ -838,6 +911,12 @@ def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness])
     for member in enum_type:
         combo.addItem(member.value, member)
     return combo
+
+
+def _mark_fs(row: _ChannelRow) -> None:
+    """Italic text and a tooltip on an fs value filled in from the file size (D21)."""
+    row.fs.setStyleSheet("font-style: italic;" if row.fs_auto else "")
+    row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else "")
 
 
 def _cell(text: str) -> QTableWidgetItem:

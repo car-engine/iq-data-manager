@@ -166,6 +166,21 @@ Validation before save (shown as a checklist):
   that names the channel and the expected and actual sizes.
 - Required fields present; fc and fs positive.
 - Gaps are reported as information, not errors.
+- File duration within 1 % of the median step between file timestamps (D22).
+- Channel coverage at most 100.0 % (D22).
+
+Each checklist item is ok, information, to do or error (D23). To do marks a field
+still to fill in. Error marks a wrong value or a folder that cannot be logged as it
+stands. Saving needs no to-do item and no error.
+
+Values filled in after a scan:
+
+- **fs** for each channel, from the typical file size, the sample type, the header
+  bytes and the file duration (D21). The header is never guessed and defaults to 0.
+  A filled-in fs is shown in italics and follows the format fields until the user
+  types in it.
+- **File duration**, from the median step between file timestamps (D22), until the
+  user changes the field. Edit mode keeps the stored duration.
 
 Save writes the recording, channels and params in one transaction. Edit mode loads an
 existing recording into the same form and updates it.
