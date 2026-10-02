@@ -50,9 +50,10 @@ python -m iqdm --db dev/m3.db # uses this database instead of db_path in the con
 python -m iqdm --config my.toml
 ```
 
-The app reads `%APPDATA%\IQDataManager\config.toml` and never writes it (DECISIONS.md
-D15). Without the file, the app has no database, and the Log tab cannot save. Create
-the file by hand. The keys are in `docs/SPEC.md` section 4. A minimal file:
+The app reads `%APPDATA%\IQDataManager\config.toml`. Until the Settings tab exists
+(Milestone 3a), the app never writes it (DECISIONS.md D15). Without the file, the
+app has no database, and the Log tab cannot save. Create the file by hand. The keys
+are in `docs/SPEC.md` section 4. A minimal file:
 
 ```toml
 db_path = 'D:\iq\catalog.db'

@@ -38,7 +38,9 @@ this document is the source of truth where they differ.
   PC. Practically one writer at a time; occasional concurrent readers. No
   authentication beyond network access.
 - **Storage**: NAS shares reached over gigabit Ethernet, usually as mapped drives.
-  The app stores and uses UNC paths, not drive letters.
+  For NAS folders the app stores and uses UNC paths: it replaces a mapped drive letter
+  with the share's UNC path (DECISIONS.md D14). A folder on a laptop's own disk keeps
+  its drive path.
 - **Data**: raw complex IQ, typically int16 interleaved I then Q, little-endian.
   Allowed sample types are `int8`, `int16` and `float32` (DECISIONS.md D1). Some
   recordings have a fixed-size header at the start of every file. Sample rates from
@@ -195,12 +197,13 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    D18). "Scan folder" runs the scanner (section 7) in a worker thread. The tab shows
    the number of files found so far and has a Cancel button.
 2. **Recording fields**: start and end (from scan, read-only, at the display offset,
-   UTC+8 by default; D24), file
-   duration (default 1.0 s), logged by (pre-filled with the Windows login name,
-   editable), site (dropdown plus "Add site"), recording plan reference, storage root
-   and relative path (derived from the folder, read-only), archive state (derived:
-   `local` unless the folder is under a configured NAS root, then `archived`; see
-   DECISIONS.md D2 for the `transfer_log` row written in that case), remarks.
+   UTC+8 by default; D24), file duration (default 1.0 s), logged by (pre-filled with
+   the Windows login name, editable), site (dropdown plus "Add site"), recording plan
+   reference, storage root and relative path (derived from the folder, read-only),
+   archive state (derived: `local` unless the folder is under a configured NAS root,
+   then `archived`; see DECISIONS.md D2 for the `transfer_log` row written in that
+   case), remarks. Read-only fields look different from editable ones in the light and
+   the dark theme.
 
    Storage root and relative path follow D14. A mapped drive letter is replaced by
    its UNC path. Under a NAS root, the root is the configured NAS root and the
@@ -211,12 +214,11 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    (`interleaved_iq` default, `interleaved_qi`, `planar_iq`), endianness (little
    default), header bytes (0, at the start of every file).
 4. **Channels**: one row per detected channel with folder, start, end, files and
-   coverage from the scan; band, fc (MHz in the UI, Hz in the DB) and fs entered by
-   the user. Band is an optional editable dropdown that lists the bands already in
-   the DB. fc is entered in MHz (D19). fs takes a number with an optional unit:
-   none or `Hz`, `k` or `kHz`, `M` or `MHz`, `G` or `GHz`, with or without a space
-   (D25). Both convert to Hz through `Decimal`. Read-only fields have a grey
-   background.
+   coverage from the scan; band, fc and fs from the user. Band is an optional editable
+   dropdown that lists the bands already in the DB. fc is entered in MHz (D19). fs
+   takes a number with an optional unit: none or `Hz`, `k` or `kHz`, `M` or `MHz`,
+   `G` or `GHz`, with or without a space (D25); the app fills it in after a scan (see
+   below). Both are stored in Hz, converted through `Decimal`.
 5. **RF chain**: editable rows of applies-to (Recording / Ch N), parameter, value,
    unit. Parameter names autocomplete from values already in the DB.
 
@@ -261,13 +263,13 @@ plan reference and remarks stay.
 A folder named like a channel folder (1 to 3 digits, such as `0`) gets an
 information line and a "Use parent folder" button. It does not block saving (D27).
 
-Save writes the recording, channels and params in one transaction. Edit mode loads an
-existing recording into the same form and updates it.
+Save writes the recording, channels and params in one transaction and confirms it in a
+pop-up. Edit mode loads an existing recording into the same form and updates it.
 
 Edit mode (DECISIONS.md D16):
 
-- It opens from the "already logged" item of the checklist, and from the Viewer in
-  Milestone 4.
+- It opens from the "Edit existing entry" button, shown when a scanned folder is
+  already logged, and from the Viewer in Milestone 4 (`LogTab.load_recording()`).
 - The folder, storage root, relative path, archive state and `archived_at` stay as
   stored. A save in edit mode writes no `transfer_log` row.
 - Logged by, site, plan reference, remarks, IQ layout, endianness, band, fc and the
@@ -385,10 +387,10 @@ iq-data-manager/
     mockup/                   # exported GUI mockups
   src/iqdm/
     __main__.py               # python -m iqdm
-    app.py                    # QApplication, main window with three tabs
-    config.py                 # TOML config load/save, defaults
+    app.py                    # QApplication, main window and its tabs, --config/--db
+    config.py                 # TOML config load (save from Milestone 3a), defaults
     models.py                 # dataclasses: Recording, Channel, Param, Transfer...
-    timeutil.py               # UTC ISO 8601 text <-> Unix seconds
+    timeutil.py               # UTC ISO 8601 text <-> Unix seconds; display offset (D24)
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     db/
@@ -455,8 +457,10 @@ written to a report, not guessed. A later "Check archive" fills in counts and si
   robocopy or generated scripts.
 - `runner.py` is tested with a fake command (e.g. a tiny Python script) inside
   `tmp_path`.
-- GUI smoke tests with `pytest-qt` are optional and limited to construction and basic
-  wiring.
+- GUI tests use `pytest-qt` on Qt's offscreen platform. Logic that needs no Qt is
+  tested without it (`entry.py` for the Log tab). GUI tests drive the real widgets,
+  wait for the `TaskRunner`, and replace modal dialogs with stubs. They also check
+  colours against a light and a dark palette.
 - `tests/test_architecture.py` enforces the module rules in section 9 by reading the
   package source (DECISIONS.md D10).
 

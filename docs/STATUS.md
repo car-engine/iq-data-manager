@@ -66,9 +66,9 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
+| O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
 | O27 | Name of the Settings milestone | 3a | "Milestone 3a". Later milestones keep their numbers, so references such as "the Viewer in Milestone 4" stay true. | D29 |
 | O28 | When Settings changes apply | 3a | On Save, without a restart. The Log tab takes the new configuration and reloads its lists. If it holds input that is not saved, the app asks first. | D29 |
-| O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
 | O30 | Which keys the Settings tab shows in Milestone 3a | 3a | Only keys in use now: `db_path`, `nas_roots`, `display_utc_offset_hours`. Each later milestone adds its own keys to the tab. | D29; D30 |
 | O31 | Backup of `config.toml` on Save | 3a | Keep the previous file as `config.toml.bak`, replaced on each Save. | D29 |
 | O32 | Real file names for transfers. The database does not store the file extension, and SPEC section 8 writes manifests as `<timestamp>.dat`. | 5 | Store the extension per channel when a recording is logged (a schema change while `schema.sql` is still edited in place, D4). The fallback is a rescan of the source folder before each transfer. | D30 |
@@ -118,14 +118,16 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 
 These come from the safety configuration and from experience in this repository.
 
-- **The safety hook blocks every write outside the repository.** That includes Claude
-  Code plan files and the memory folder. Present plans in chat, and keep anything
-  that must outlast a session in `docs/`.
+- **The safety hook blocks Write and Edit outside the repository.** That includes
+  Claude Code plan files and the memory folder. Present plans in chat, and keep
+  anything that must outlast a session in `docs/`.
 - **The hook scans the full text of shell commands.** Words such as `rm`, `rmtree`,
   `robocopy`, `.unlink(`, `os.remove`, `format x:` and `shutdown` block the command,
-  even inside a commit message or a heredoc. A backslash pair followed by a name and
-  a backslash looks like a UNC path and also blocks the command. That includes
-  escaped backslashes in Python text.
+  even inside a commit message or a heredoc. A UNC path also blocks it: two
+  backslashes, a name and a backslash at the start of a word, or the same with
+  escaped backslashes. The user narrowed this pattern on 2026-10-03, so a backslash
+  pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. That
+  change to `.claude/hooks/block_destructive.py` was not committed at the time.
 - **Write and change file content only with the Write and Edit tools.** Do not use
   heredocs, `cat >>` or `python -` scripts for file content. The hook checks the
   target path of Write and Edit and does not read their content, so docs, code and
