@@ -665,6 +665,30 @@ def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
     return row[0]
 
 
+def insert_in_place_check(
+    conn: sqlite3.Connection, recording_id: int, *, source: str, performed_by: str, at: str
+) -> int:
+    """Add the row of a folder logged in place on the NAS (DECISIONS.md D2). Returns its id.
+
+    The Viewer marks the recording as not verified while this row exists (D44). The Log
+    tab writes it for a NAS folder, and the legacy import for every recording (D66).
+    """
+    return insert_transfer(
+        conn,
+        TransferEntry(
+            recording_id=recording_id,
+            operation=Operation.CHECK,
+            source=source,
+            destination=None,
+            started_at=at,
+            finished_at=at,
+            performed_by=performed_by,
+            verification=Verification.SKIPPED,
+            notes=IN_PLACE_NOTE,
+        ),
+    )
+
+
 def finish_transfer(
     conn: sqlite3.Connection,
     transfer_id: int,

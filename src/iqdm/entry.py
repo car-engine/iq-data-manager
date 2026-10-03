@@ -23,19 +23,15 @@ from iqdm.db.connection import Connection, open_db, write_transaction
 from iqdm.location import Location, join_location
 from iqdm.models import (
     BYTES_PER_SAMPLE,
-    IN_PLACE_NOTE,
     ArchiveState,
     Channel,
     Endianness,
     IqLayout,
-    Operation,
     Param,
     Recording,
     SameStart,
     SampleType,
     Site,
-    TransferEntry,
-    Verification,
     same_capture,
 )
 from iqdm.scan.scanner import (
@@ -1201,19 +1197,12 @@ def save_new(
     def work(conn: Connection) -> int:
         recording_id = repository.insert_recording(conn, rec)
         if in_place:
-            repository.insert_transfer(
+            repository.insert_in_place_check(
                 conn,
-                TransferEntry(
-                    recording_id=recording_id,
-                    operation=Operation.CHECK,
-                    source=join_location(rec.storage_root, rec.rel_path),
-                    destination=None,
-                    started_at=stamp,
-                    finished_at=stamp,
-                    performed_by=rec.logged_by,
-                    verification=Verification.SKIPPED,
-                    notes=IN_PLACE_NOTE,
-                ),
+                recording_id,
+                source=join_location(rec.storage_root, rec.rel_path),
+                performed_by=rec.logged_by,
+                at=stamp,
             )
         return recording_id
 

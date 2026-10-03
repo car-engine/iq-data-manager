@@ -10,7 +10,7 @@ These tests read the files under src/iqdm/ and parse them with ast. They write n
 - iqdm.transfer calls no function that replaces or moves a file: os.replace and the
   shutil copy and move functions. The copy engine renames without replacing (D48).
   Both rules also cover iqdm.diagnostics and check_main.py, which copy and write test
-  files (D57).
+  files (D57), and the legacy import, which writes a new database (D66).
   A Path.replace() call cannot be told from str.replace() here; review covers it.
 """
 
@@ -125,7 +125,8 @@ def test_delete_methods_only_in_delete_module():
 
 
 TRANSFER = ("transfer/",)
-FILE_WRITERS = ("transfer/", "diagnostics/", "check_main.py")  # code that copies files
+# code that copies or writes files; the legacy import writes a new database (D66)
+FILE_WRITERS = ("transfer/", "diagnostics/", "check_main.py", "legacy.py", "db/legacy.py")
 REPLACING = {"os": {"replace"}, "shutil": {"copy", "copy2", "copyfile", "copytree", "move"}}
 
 
@@ -190,6 +191,8 @@ def test_the_file_writers_are_found():
     rels = [rel for rel, _ in _file_writer_trees()]
     assert "diagnostics/copy_check.py" in rels
     assert "check_main.py" in rels
+    assert "legacy.py" in rels
+    assert "db/legacy.py" in rels
 
 
 def test_transfer_runs_no_subprocess():

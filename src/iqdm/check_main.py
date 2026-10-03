@@ -2,21 +2,23 @@
 
 The recording laptops have no Python, and the windowed IQDataManager.exe has no
 console for printed output. This program runs the diagnostics of the NAS field test
-(D54) in a console window, from the same build folder:
+(D54) and the legacy import (D66) in a console window, from the same build folder:
 
     IQDataManager-check.exe copy-check DEST_DIR --source DIR [options]
     IQDataManager-check.exe db-check create|check|hold|write PATH [--seconds N]
     IQDataManager-check.exe make-test-set OUT_DIR [--quick] [options]
+    IQDataManager-check.exe migrate-legacy LEGACY_DB NEW_DB --nas-root UNC [options]
     IQDataManager-check.exe COMMAND --help
 
-Each command is the matching module in iqdm.diagnostics; tools/ runs the same code.
-Exit codes are those of the command; 2 for a usage error.
+Each diagnostic is the matching module in iqdm.diagnostics, and migrate-legacy is
+iqdm.legacy; tools/ runs the same code. Exit codes are those of the command; 2 for a
+usage error.
 """
 
 import sys
 from collections.abc import Callable
 
-from iqdm import __version__
+from iqdm import __version__, legacy
 from iqdm.diagnostics import copy_check, db_check, testset
 
 PROG = "IQDataManager-check.exe"
@@ -33,6 +35,10 @@ COMMANDS: dict[str, tuple[Command, str]] = {
     "make-test-set": (
         lambda argv, prog: testset.main(argv, prog),
         "write the synthetic recordings of the NAS field test",
+    ),
+    "migrate-legacy": (
+        lambda argv, prog: legacy.main(argv, prog),
+        "import a copy of the legacy catalogue into a new database",
     ),
 }
 

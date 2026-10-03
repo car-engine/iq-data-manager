@@ -30,7 +30,7 @@ def test_without_a_command_it_prints_the_usage(capsys):
     assert main([]) == 2
     out = capsys.readouterr().out
     assert out.startswith(f"usage: {PROG} COMMAND")
-    for name in ("copy-check", "db-check", "make-test-set"):
+    for name in ("copy-check", "db-check", "make-test-set", "migrate-legacy"):
         assert name in out
     assert main(["--help"]) == 0
     assert capsys.readouterr().out.strip() == usage()
@@ -43,7 +43,9 @@ def test_an_unknown_command_is_a_usage_error(capsys):
     assert "unknown command 'copy'" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", ["copy-check", "db-check", "make-test-set"])
+@pytest.mark.parametrize(
+    "command", ["copy-check", "db-check", "make-test-set", "migrate-legacy"]
+)
 def test_each_command_has_help_under_its_own_name(capsys, command):
     assert main([command, "--help"]) == 0
     assert capsys.readouterr().out.startswith(f"usage: {PROG} {command}")
