@@ -58,7 +58,7 @@ from iqdm.transfer.pathcheck import (
 )
 from iqdm.transfer.power import keep_awake
 from iqdm.transfer.selection import Selection, select_files
-from iqdm.transfer.verify import VerifyProgress, VerifyResult, hash_targets, verify_copy
+from iqdm.transfer.verify import VerifyProgress, VerifyResult, hashed_paths, verify_copy
 from iqdm.viewer import recording_folder, scan_differences
 
 NAMES_IN_NOTES = 10  # file names listed in a transfer_log note
@@ -237,7 +237,9 @@ def preview_transfer(
     )
     errors += check.errors
     sizes = {f.rel_path: f.size for f in selection.files}
-    targets = hash_targets(list(sizes), request.hash_mode, config.hash_sample_fraction)
+    targets = hashed_paths(
+        list(sizes), request.hash_mode, config.hash_sample_fraction, check.existing
+    )
     est = estimate(
         bytes_to_copy=check.bytes_to_copy,
         hashed_bytes=sum(sizes[p] for p in targets),
@@ -356,6 +358,7 @@ def run_transfer(
             hash_mode=request.hash_mode,
             sample_fraction=preview.sample_fraction,
             source_hashes=copy.source_hashes,
+            skipped=copy.skipped,
             progress=verify_progress,
             cancelled=cancelled,
         )

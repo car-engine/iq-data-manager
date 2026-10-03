@@ -8,23 +8,29 @@ mode it also compares SHA-256 values of source and destination:
   check of the same selection hashes the same files;
 - all: every file.
 
+When the hash mode is not none, every file in `skipped` is hashed as well: files the
+copy found already in place with the right size and did not copy (D63).
+
 Source hashes computed by the copy engine are used where they exist; other source
 files are read. Files in the destination's folders that the selection does not list
 are reported in `extra` and do not fail the verification.
 
-Note: reading a file straight after writing it to a network share may be served from
-the PC's cache. A later "Check archive" reads the files again.
+Reading a file straight after writing it to a network share may be served from the
+PC's cache. uncached=True reads the destination files past that cache; the check
+before delete uses it (D55).
 """
 
 import hashlib
 import math
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from contextlib import closing
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
 from iqdm.models import HashMode
 from iqdm.transfer.copier import CHUNK_BYTES, CopyItem, local_path
+from iqdm.transfer.uncached import read_chunks
 
 
 class ProblemKind(StrEnum):
@@ -43,8 +49,12 @@ class FileProblem:
 
 @dataclass(frozen=True, kw_only=True)
 class VerifyProgress:
+    """Files checked so far, and the size of the hashed files among them."""
+
     files_done: int
     files_total: int
+    bytes_done: int = 0
+    bytes_total: int = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -77,7 +87,7 @@ def sample_paths(rel_paths: Iterable[str], fraction: float) -> frozenset[str]:
 
 
 def hash_targets(rel_paths: Sequence[str], mode: HashMode, fraction: float) -> frozenset[str]:
-    """The paths that verification hashes in this mode."""
+    """The paths that the hash mode chooses."""
     if mode is HashMode.NONE:
         return frozenset()
     if mode is HashMode.ALL:
@@ -85,16 +95,31 @@ def hash_targets(rel_paths: Sequence[str], mode: HashMode, fraction: float) -> f
     return sample_paths(rel_paths, fraction)
 
 
+def hashed_paths(
+    rel_paths: Sequence[str], mode: HashMode, fraction: float, skipped: Collection[str] = ()
+) -> frozenset[str]:
+    """The paths that verification hashes: the mode's choice and, unless the mode is
+    none, every skipped file (D63)."""
+    targets = hash_targets(rel_paths, mode, fraction)
+    if mode is HashMode.NONE:
+        return targets
+    return targets | (frozenset(skipped) & frozenset(rel_paths))
+
+
 def file_sha256(
     path: Path,
     *,
     chunk_bytes: int = CHUNK_BYTES,
     cancelled: Callable[[], bool] | None = None,
+    uncached: bool = False,
 ) -> str:
-    """SHA-256 of a file, read in chunks. Raises _Cancelled between chunks."""
+    """SHA-256 of a file, read in chunks. Raises _Cancelled between chunks.
+
+    uncached=True reads past the Windows file cache (D55).
+    """
     hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        while chunk := f.read(chunk_bytes):
+    with closing(read_chunks(path, chunk_bytes, uncached=uncached)) as chunks:
+        for chunk in chunks:
             if cancelled is not None and cancelled():
                 raise _Cancelled
             hasher.update(chunk)
@@ -125,36 +150,51 @@ def verify_copy(
     hash_mode: HashMode,
     sample_fraction: float,
     source_hashes: Mapping[str, str] | None = None,
+    skipped: Collection[str] = (),
+    uncached: bool = False,
     progress: Callable[[VerifyProgress], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
     chunk_bytes: int = CHUNK_BYTES,
 ) -> VerifyResult:
     """Compare the destination with the selection. See the module text for the rules."""
     known = dict(source_hashes or {})
-    targets = hash_targets([i.rel_path for i in items], hash_mode, sample_fraction)
+    targets = hashed_paths([i.rel_path for i in items], hash_mode, sample_fraction, skipped)
     problems: list[FileProblem] = []
     hashes: dict[str, str] = {}
+    bytes_total = sum(i.size for i in items if i.rel_path in targets)
+    bytes_done = 0
 
     def report(done: int) -> None:
         if progress is not None:
-            progress(VerifyProgress(files_done=done, files_total=len(items)))
+            progress(
+                VerifyProgress(
+                    files_done=done,
+                    files_total=len(items),
+                    bytes_done=bytes_done,
+                    bytes_total=bytes_total,
+                )
+            )
 
     try:
         for done, item in enumerate(items, start=1):
             if cancelled is not None and cancelled():
                 raise _Cancelled
+            hashed = item.rel_path in targets
             problem = _check_file(
                 source,
                 destination,
                 item,
-                item.rel_path in targets,
+                hashed,
                 known,
                 hashes,
                 cancelled,
                 chunk_bytes,
+                uncached,
             )
             if problem is not None:
                 problems.append(problem)
+            if hashed:
+                bytes_done += item.size
             report(done)
     except _Cancelled:
         return VerifyResult(passed=False, problems=tuple(problems), cancelled=True)
@@ -175,6 +215,7 @@ def _check_file(
     hashes: dict[str, str],
     cancelled: Callable[[], bool] | None,
     chunk_bytes: int,
+    uncached: bool,
 ) -> FileProblem | None:
     rel = item.rel_path
     dst = local_path(destination, rel)
@@ -195,7 +236,9 @@ def _check_file(
         src_hash = known.get(rel) or file_sha256(
             local_path(source, rel), chunk_bytes=chunk_bytes, cancelled=cancelled
         )
-        dst_hash = file_sha256(dst, chunk_bytes=chunk_bytes, cancelled=cancelled)
+        dst_hash = file_sha256(
+            dst, chunk_bytes=chunk_bytes, cancelled=cancelled, uncached=uncached
+        )
     except OSError as exc:
         return FileProblem(
             rel_path=rel, kind=ProblemKind.UNREADABLE, message=f"Cannot read the file: {exc}"

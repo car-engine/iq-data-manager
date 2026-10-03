@@ -15,6 +15,7 @@ from iqdm.transfer.verify import (
     VerifyProgress,
     file_sha256,
     hash_targets,
+    hashed_paths,
     sample_paths,
     verify_copy,
 )
@@ -134,6 +135,63 @@ def test_progress_counts_the_files(copied):
     verify(copied, HashMode.NONE, progress=seen.append)
     assert seen[-1] == VerifyProgress(files_done=20, files_total=20)
     assert len(seen) == 20
+
+
+def test_progress_counts_the_hashed_bytes(copied):
+    seen: list[VerifyProgress] = []
+    verify(copied, HashMode.SAMPLE, 0.25, progress=seen.append)
+    assert seen[-1] == VerifyProgress(
+        files_done=20, files_total=20, bytes_done=5 * 4000, bytes_total=5 * 4000
+    )
+    assert [p.bytes_done for p in seen] == sorted(p.bytes_done for p in seen)
+
+
+# ---------------------------------------------------------------------------
+# Skipped files (D63) and reading past the cache (D55)
+# ---------------------------------------------------------------------------
+
+
+def outside_the_sample(items, fraction=0.05) -> CopyItem:
+    chosen = sample_paths([i.rel_path for i in items], fraction)
+    return next(i for i in items if i.rel_path not in chosen)
+
+
+def test_a_skipped_file_with_other_content_fails_in_sample_mode(copied):
+    _, dest, items = copied
+    stranger = outside_the_sample(items)
+    local_path(dest, stranger.rel_path).write_bytes(b"\xff" * stranger.size)
+    assert verify(copied, HashMode.SAMPLE).passed  # trusted by size before D63
+    result = verify(copied, HashMode.SAMPLE, skipped=[stranger.rel_path])
+    (problem,) = result.problems
+    assert (problem.rel_path, problem.kind) == (stranger.rel_path, ProblemKind.HASH)
+
+
+def test_skipped_files_are_not_hashed_in_mode_none(copied):
+    _, dest, items = copied
+    stranger = items[0]
+    local_path(dest, stranger.rel_path).write_bytes(b"\xff" * stranger.size)
+    result = verify(copied, HashMode.NONE, skipped=[stranger.rel_path])
+    assert result.passed
+    assert result.hashes == {}
+
+
+def test_hashed_paths_add_the_skipped_files():
+    paths = [f"0/{1790733600 + i}.dat" for i in range(40)]
+    sample = hash_targets(paths, HashMode.SAMPLE, 0.05)
+    extra = {p for p in paths if p not in sample}
+    skipped = sorted(extra)[:3]
+    assert hashed_paths(paths, HashMode.SAMPLE, 0.05, skipped) == sample | set(skipped)
+    assert hashed_paths(paths, HashMode.NONE, 0.05, skipped) == frozenset()
+    assert hashed_paths(paths, HashMode.SAMPLE, 0.05, ["not/listed.dat"]) == sample
+
+
+def test_uncached_verification_gives_the_same_result(copied):
+    _, dest, items = copied
+    local_path(dest, items[4].rel_path).write_bytes(b"\xff" * items[4].size)
+    cached = verify(copied, HashMode.ALL)
+    uncached = verify(copied, HashMode.ALL, uncached=True)
+    assert uncached.problems == cached.problems
+    assert uncached.hashes == cached.hashes
 
 
 # ---------------------------------------------------------------------------

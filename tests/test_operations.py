@@ -28,6 +28,7 @@ from iqdm.transfer.operations import (
     run_transfer,
 )
 from iqdm.transfer.pathcheck import DiskUsage
+from iqdm.transfer.verify import hash_targets
 
 T0 = 1790733600.0
 
@@ -270,6 +271,45 @@ def test_a_cancelled_archive_is_recorded_and_can_resume(env):
     first, second = env.transfers()
     assert (first.verification, second.verification) == (Verification.SKIPPED, Verification.PASS)
     assert env.recording().archive_state is ArchiveState.ARCHIVED
+
+
+def test_a_file_already_in_place_with_other_content_fails_the_archive(env):
+    """D63: a same-size file from outside the app is hashed, even outside the sample."""
+    request = env.request(hash_mode=HashMode.SAMPLE)
+    preview = env.preview(request)
+    files = preview.selection.files
+    sample = hash_targets([f.rel_path for f in files], HashMode.SAMPLE, 0.25)
+    stranger = next(f for f in files if f.rel_path not in sample)
+    dest = Path(preview.destination)
+    target = local_path(dest, stranger.rel_path)
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"\xff" * stranger.size)
+    again = env.preview(request)
+    assert again.ok, again.errors
+    assert again.check.existing == {stranger.rel_path}
+    out = env.run(again)
+    assert out.verification is Verification.FAIL
+    assert stranger.rel_path in out.notes
+    assert env.recording().archive_state is ArchiveState.LOCAL
+
+
+def test_the_estimate_counts_reading_the_skipped_files(env):
+    request = env.request(hash_mode=HashMode.SAMPLE)
+    preview = env.preview(request)
+    assert preview.hashed_files == 3  # ceil(0.25 * 10)
+    dest = Path(preview.destination)
+    in_place = [f.rel_path for f in preview.selection.files[:4]]
+    for rel in in_place:
+        target = local_path(dest, rel)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(local_path(env.source, rel).read_bytes())
+    again = env.preview(request)
+    paths = [f.rel_path for f in again.selection.files]
+    hashed = len(hash_targets(paths, HashMode.SAMPLE, 0.25) | set(in_place))
+    assert again.hashed_files == hashed
+    speed = env.config.network_speed_mb_s * 1e6
+    # destination reads of every hashed file, plus source reads of the files in place
+    assert again.estimate.hash_s == pytest.approx((hashed + len(in_place)) * 4000 / speed)
 
 
 # ---------------------------------------------------------------------------
