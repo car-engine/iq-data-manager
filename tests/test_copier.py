@@ -332,6 +332,18 @@ def test_several_workers_give_the_same_copy(make_recording, tmp_path, workers):
     assert len(result.source_hashes) == 60
 
 
+@pytest.mark.parametrize(("fsync", "expected"), [(True, 8), (False, 0)])
+def test_each_file_is_flushed_unless_turned_off(rec, tmp_path, monkeypatch, fsync, expected):
+    from iqdm.transfer import copier
+
+    calls: list[int] = []
+    monkeypatch.setattr(copier.os, "fsync", calls.append)
+    result = copy_files(Path(rec.root), tmp_path / "out", items_of(rec), fsync=fsync)
+    assert result.ok
+    assert len(calls) == expected
+    assert tree(tmp_path / "out") == tree(Path(rec.root))
+
+
 def test_workers_must_be_positive(rec, tmp_path):
     with pytest.raises(ValueError, match="workers"):
         copy_files(Path(rec.root), tmp_path / "out", items_of(rec), workers=0)

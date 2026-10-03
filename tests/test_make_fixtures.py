@@ -171,6 +171,15 @@ def test_zeros_content(make_recording):
     assert data[8:] == bytes(4000)
 
 
+def test_random_content_keeps_the_header_and_size(make_recording):
+    info = make_recording(content="random", n_slots=2, header_bytes=8)
+    first, second = ((Path(info.root) / "0" / f"{START + i}.dat").read_bytes() for i in range(2))
+    assert len(first) == len(second) == 4008
+    assert first[:8] == second[:8]  # the same header
+    assert first[8:] != second[8:]
+    assert first[8:] != bytes(4000)
+
+
 def test_bin_extension(make_recording):
     info = make_recording(ext=".bin", n_slots=2)
     assert data_files(Path(info.root) / "0") == [f"{START}.bin", f"{START + 1}.bin"]
@@ -283,9 +292,23 @@ def test_cli_json_round_trip(tmp_path, capsys):
     out = tmp_path / "demo"
     code = mf.main(
         [
-            str(out), "--channels", "2", "--files", "6", "--gap", "2-3",
-            "--gap", "1:5", "--span", "0:0-4", "--wrong-size", "1:1=10",
-            "--header-bytes", "16", "--junk", "--json",
+            str(out),
+            "--channels",
+            "2",
+            "--files",
+            "6",
+            "--gap",
+            "2-3",
+            "--gap",
+            "1:5",
+            "--span",
+            "0:0-4",
+            "--wrong-size",
+            "1:1=10",
+            "--header-bytes",
+            "16",
+            "--junk",
+            "--json",
         ]
     )
     assert code == 0

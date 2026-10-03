@@ -6,6 +6,9 @@ Rules (SPEC section 8, "Copy engine"):
   rename never replaces an existing file, so a file under its real name is always
   complete. On Windows Path.rename() refuses an existing target; the engine also
   checks for one first, because other systems would replace it.
+- The flush (os.fsync, FlushFileBuffers on Windows) waits until the destination has
+  the data on its disks, so a crash there cannot leave a file with its real name but
+  without its data. fsync=False skips it, for timing comparisons only (D54).
 - A target that already exists with the source's size counts as copied (resume,
   D51). A target with another size is a failure, and the engine leaves it alone.
 - A source file whose size or modification time changes during the copy is a
@@ -133,6 +136,7 @@ class _Engine:
     source: Path
     destination: Path
     hash_source: bool
+    fsync: bool
     retries: int
     retry_pause_s: float
     sleep: Callable[[float], None]
@@ -209,8 +213,9 @@ class _Engine:
                     hasher.update(chunk)
                 written += len(chunk)
                 counted(len(chunk))
-            fout.flush()
-            os.fsync(fout.fileno())
+            fout.flush()  # Python's buffer to the operating system
+            if self.fsync:
+                os.fsync(fout.fileno())  # the operating system's cache to the disks
         after = src.stat()
         if written != item.size or (after.st_size, after.st_mtime_ns) != (
             before.st_size,
@@ -231,6 +236,7 @@ def copy_files(
     *,
     hash_source: bool = False,
     workers: int = 1,
+    fsync: bool = True,
     progress: Callable[[CopyProgress], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
     retries: int = RETRIES,
@@ -243,6 +249,8 @@ def copy_files(
 
     progress is called from the worker threads. With hash_source, the SHA-256 of each
     copied file is computed from the bytes read and returned in source_hashes.
+    fsync=False skips the flush to the destination's disks; it exists for timing
+    comparisons (D54), and the app keeps the default.
     """
     if workers < 1:
         raise ValueError(f"workers must be at least 1, got {workers}")
@@ -259,6 +267,7 @@ def copy_files(
         source=source,
         destination=destination,
         hash_source=hash_source,
+        fsync=fsync,
         retries=retries,
         retry_pause_s=retry_pause_s,
         sleep=sleep,

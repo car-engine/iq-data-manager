@@ -23,6 +23,7 @@ import argparse
 import array
 import json
 import math
+import os
 import re
 import sys
 from dataclasses import asdict, dataclass, field
@@ -40,7 +41,7 @@ DTYPES: dict[str, tuple[str, int, float]] = {
     "int32": ("i", 4, 2147483647),
     "float32": ("f", 4, 1.0),
 }
-CONTENTS = ("tone", "zeros", "empty")
+CONTENTS = ("tone", "zeros", "random", "empty")  # random: incompressible bytes, for timings
 EXTENSIONS = (".dat", ".bin")
 
 
@@ -230,6 +231,8 @@ def _payload(spec: RecordingSpec, period: list[float], slot: int, spf: int) -> b
     typecode, bytes_per_sample, _ = DTYPES[spec.dtype]
     if spec.content == "zeros":
         return bytes(spf * 2 * bytes_per_sample)
+    if spec.content == "random":
+        return os.urandom(spf * 2 * bytes_per_sample)
     offset = 2 * ((slot * spf) % TONE_PERIOD)
     rotated = period[offset:] + period[:offset]
     values = (rotated * (spf // TONE_PERIOD + 1))[: 2 * spf]
