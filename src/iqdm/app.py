@@ -4,6 +4,7 @@ import argparse
 import sys
 from collections.abc import Mapping
 from dataclasses import replace
+from enum import StrEnum
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -50,6 +51,42 @@ CLOSE_QUESTION = (
     "stopped copy or archive can be resumed later."
 )
 TRANSFER_TAB = "Archive / copy"
+SETTINGS_TAB = "Settings"
+SETTINGS_UNSAVED_TAB = "Settings (not saved)"
+UNSAVED_QUESTION = "The Settings tab has changes that are not saved.\n\nSave them now?"
+UNSAVED_WRONG_VALUE = (
+    "The Settings tab has changes that are not saved. A field holds a wrong value, so "
+    "the changes cannot be saved.\n\nStay and correct the field, or drop the changes?"
+)
+
+
+class UnsavedChoice(StrEnum):
+    """The answer to the question about unsaved settings (D70)."""
+
+    SAVE = "save"
+    DISCARD = "discard"
+    STAY = "stay"
+
+
+def ask_unsaved_settings(parent: QWidget, *, can_save: bool, closing: bool) -> UnsavedChoice:
+    """Ask what to do with unsaved settings before leaving the tab or closing (D70)."""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setWindowTitle("Settings not saved")
+    box.setText(UNSAVED_QUESTION if can_save else UNSAVED_WRONG_VALUE)
+    buttons = {}
+    if can_save:
+        buttons[box.addButton("Save", QMessageBox.ButtonRole.AcceptRole)] = UnsavedChoice.SAVE
+    discard_text = "Close without saving" if closing else "Leave without saving"
+    buttons[box.addButton(discard_text, QMessageBox.ButtonRole.DestructiveRole)] = (
+        UnsavedChoice.DISCARD
+    )
+    stay = box.addButton("Stay", QMessageBox.ButtonRole.RejectRole)
+    buttons[stay] = UnsavedChoice.STAY
+    box.setDefaultButton(next(iter(buttons)) if can_save else stay)
+    box.setEscapeButton(stay)
+    box.exec()
+    return buttons.get(box.clickedButton(), UnsavedChoice.STAY)
 
 
 def drop_log_input_question(recording_id: int) -> str:
@@ -113,12 +150,47 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.viewer_tab, "Viewer")
         self.tabs.addTab(self.log_tab, "Log recording")
         self.tabs.addTab(self.transfer_tab, TRANSFER_TAB)
-        self.tabs.addTab(self.settings_tab, "Settings")
+        self.tabs.addTab(self.settings_tab, SETTINGS_TAB)
         self.setCentralWidget(self.tabs)
         if config_error is not None:
             self.tabs.setCurrentWidget(self.settings_tab)  # correct the file there
+        self.settings_tab.unsaved_changed.connect(self._settings_title)
+        self._settings_title(self.settings_tab.has_changes())
+        self._previous_tab = self.tabs.currentIndex()
+        self.tabs.currentChanged.connect(self._tab_changed)
 
         self.statusBar().showMessage(status_text(self.config, config_error))
+
+    def _settings_title(self, unsaved: bool) -> None:
+        index = self.tabs.indexOf(self.settings_tab)
+        self.tabs.setTabText(index, SETTINGS_UNSAVED_TAB if unsaved else SETTINGS_TAB)
+
+    def _resolve_unsaved_settings(self, *, closing: bool) -> bool:
+        """Ask about unsaved settings (D70). True when the user may leave the tab."""
+        if not self.settings_tab.has_changes():
+            return True
+        choice = ask_unsaved_settings(
+            self, can_save=self.settings_tab.can_save, closing=closing
+        )
+        if choice is UnsavedChoice.SAVE:
+            return self.settings_tab.save()
+        if choice is UnsavedChoice.DISCARD:
+            if not closing:  # the window stays open, so the fields show the file again
+                self.settings_tab.discard_changes()
+            return True
+        return False
+
+    def _tab_changed(self, index: int) -> None:
+        """Leaving the Settings tab with unsaved changes asks first (D70)."""
+        settings = self.tabs.indexOf(self.settings_tab)
+        previous, self._previous_tab = self._previous_tab, index
+        if previous != settings or index == settings:
+            return
+        if not self._resolve_unsaved_settings(closing=False):
+            self.tabs.blockSignals(True)
+            self.tabs.setCurrentIndex(settings)
+            self.tabs.blockSignals(False)
+            self._previous_tab = settings
 
     def _effective(self, config: Config) -> Config:
         """`config` with the --db path in place of db_path, when --db is in force."""
@@ -172,7 +244,13 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(status_text(self.config, None))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802  (Qt override)
-        """Ask before closing while an operation runs; Yes stops it and waits for it."""
+        """Ask about unsaved settings (D70), then before closing while an operation runs.
+
+        Yes to the second question stops the operation and waits for it.
+        """
+        if not self._resolve_unsaved_settings(closing=True):
+            event.ignore()
+            return
         if self.transfer_tab.is_busy:
             answer = QMessageBox.question(
                 self,

@@ -90,6 +90,11 @@ NEW_DB_TOOLTIP = "Create a new, empty database file, for example for a private p
 NEW_DB_SUFFIX = ".db"
 
 
+def info_note(text: str) -> str:
+    """A note with the information mark, shown in amber (D69)."""
+    return f"{MARKS[ItemState.INFO]} {text}"
+
+
 def new_database_question(path: Path) -> str:
     """The Yes/No question before "New database..." creates a file (D67)."""
     return (
@@ -233,6 +238,7 @@ class SettingsTab(QWidget):
     """Form for config.toml, with the state of the configured database."""
 
     saved = Signal(object)  # the Config now in the file, without --db
+    unsaved_changed = Signal(bool)  # True while the fields differ from the file (D70)
 
     def __init__(
         self,
@@ -263,6 +269,7 @@ class SettingsTab(QWidget):
         self._hidden_error: str | None = None  # a wrong key that the tab does not show
         self._check_id = 0
         self._checked_path: str | None = None
+        self._unsaved = False  # as last reported by unsaved_changed
         self._db_state = NO_DB_PATH
 
         self._build()
@@ -583,9 +590,11 @@ class SettingsTab(QWidget):
         self.config_path_label.setText(str(path) if path is not None else "None")
         self.open_folder_button.setEnabled(path is not None and path.parent.is_dir())
         self.defaults_note.setText(
-            "This PC has no settings file yet. The values shown come from the defaults "
-            f"file in the program folder ({self._source}). Save writes them to the "
-            "settings file above."
+            info_note(
+                "This PC has no settings file yet. The values shown come from the defaults "
+                f"file in the program folder ({self._source}). Save writes them to the "
+                "settings file above."
+            )
             if self.reads_defaults
             else ""
         )
@@ -595,15 +604,23 @@ class SettingsTab(QWidget):
             notes.append("Started with --config: this run reads and writes the file above.")
         if self.db_override is not None:
             notes.append(f"Started with --db: this run uses {self.db_override}.")
-        self.override_note.setText(" ".join(notes))
+        self.override_note.setText(info_note(" ".join(notes)) if notes else "")
         self.override_note.setVisible(bool(notes))
         if self.db_override is not None:
             self.db_override_note.setText(
-                f"Started with --db: this run uses {self.db_override}. Save writes the "
-                "path above to the file. The --db path stays in force until the app "
-                "restarts."
+                info_note(
+                    f"Started with --db: this run uses {self.db_override}. Save writes the "
+                    "path above to the file. The --db path stays in force until the app "
+                    "restarts."
+                )
             )
         self.db_override_note.setVisible(self.db_override is not None)
+
+    def _style_notes(self, colours: dict[ItemState, QColor]) -> None:
+        """Amber for the notes about where the values come from (D69)."""
+        style = f"color: {colours[ItemState.INFO].name()};"
+        for label in (self.defaults_note, self.override_note, self.db_override_note):
+            label.setStyleSheet(style)
 
     def _problem(self) -> tuple[str, str]:
         """The line about the settings file, and its technical detail for the tooltip.
@@ -707,13 +724,18 @@ class SettingsTab(QWidget):
         self.problem_label.setVisible(bool(problem))
 
         self._show_db_status(colours)
+        self._style_notes(colours)
 
+        unsaved = self.has_changes()
         self.save_button.setEnabled(
             self.config_path is not None
             and not errors
             and self._hidden_error is None
-            and (self.has_changes() or self._read_error is not None or self._file_error is not None)
+            and (unsaved or self._read_error is not None or self._file_error is not None)
         )
+        if unsaved != self._unsaved:
+            self._unsaved = unsaved
+            self.unsaved_changed.emit(unsaved)
         self.reload_button.setEnabled(self.config_path is not None)
 
     # =====================================================================
@@ -882,24 +904,38 @@ class SettingsTab(QWidget):
     # Saving
     # =====================================================================
 
-    def save(self) -> None:
-        """Write config.toml and emit `saved` (SPEC section 4; O28, O31)."""
+    @property
+    def can_save(self) -> bool:
+        """True when Save can run now: no wrong value, and a settings file to write."""
+        return self.save_button.isEnabled()
+
+    def save(self) -> bool:
+        """Write config.toml and emit `saved` (SPEC section 4; O28, O31).
+
+        Returns True when the file was written.
+        """
         if self.config_path is None or not self.save_button.isEnabled():
-            return
+            return False
         data = merge_settings(self._data or {}, self.current_settings())
         try:
             new_config = parse_config(data, str(self.config_path))
         except ConfigError as exc:
             self.show_message(f"Not saved: {exc}")
-            return
+            return False
         if self.confirm_apply is not None and not self.confirm_apply(new_config):
             self.show_message("Not saved.")
-            return
+            return False
         try:
             config = save_config(self.config_path, data)
         except ConfigError as exc:
             self.show_message(f"Not saved: {exc}")
-            return
+            return False
         self.reload()
         self.show_message(f"Saved {self.config_path}.")
         self.saved.emit(config)
+        return True
+
+    def discard_changes(self) -> None:
+        """Drop the changes that are not saved: the fields show the file again (D70)."""
+        self.reload()
+        self.show_message("The changes were not saved. The fields show the saved settings.")

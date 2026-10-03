@@ -20,6 +20,7 @@ from iqdm.entry import ItemState
 from iqdm.gui import settings_tab
 from iqdm.gui.settings_tab import (
     COVERAGE_MESSAGE,
+    FILE_NOTE,
     NO_CONFIG_PATH,
     NO_DB_PATH,
     OFFSET_MESSAGE,
@@ -318,14 +319,12 @@ def test_without_a_settings_file_the_tab_shows_the_defaults_file(
     assert roots(tab) == [NAS]
     assert not tab.defaults_note.isHidden()
     assert str(defaults_file) in tab.defaults_note.text()
-    assert tab.defaults_note.text().startswith("This PC has no settings file yet.")
+    assert tab.defaults_note.text().startswith("\N{CIRCLED LATIN SMALL LETTER I} This PC has no")
     assert tab.problem_label.isHidden()
     assert not tab.save_button.isEnabled()  # nothing changed
 
 
-def test_save_writes_the_defaults_to_the_settings_file(
-    qtbot, make_tab, config_file, defaults_file
-):
+def test_save_writes_the_defaults_to_the_settings_file(qtbot, make_tab, config_file, defaults_file):
     before = defaults_file.read_bytes()
     tab = make_tab(config_file, defaults_path=defaults_file)
     tab.offset_spin.setValue(5.5)
@@ -353,9 +352,7 @@ def test_a_wrong_hidden_key_in_the_defaults_file(make_tab, config_file, tmp_path
     assert tab.problem_label.text().startswith(
         "The defaults file in the program folder has a wrong value that this tab does not show"
     )
-    assert tab.problem_label.text().endswith(
-        "Ask the person who set up the program to correct it."
-    )
+    assert tab.problem_label.text().endswith("Ask the person who set up the program to correct it.")
     assert not tab.save_button.isEnabled()
 
 
@@ -912,3 +909,59 @@ def test_database_status_is_green_amber_or_red_in_both_themes(
     app_palette(DARK)
     qapp.processEvents()
     assert DARK_COLOURS[state].name() in tab.db_status.styleSheet()
+
+
+def test_notes_on_where_the_values_come_from_are_amber_with_a_mark(
+    qapp, make_tab, config_file, defaults_file, app_palette
+):
+    """D69: the defaults, --config and --db notes stand out in both themes."""
+    app_palette(LIGHT)
+    tab = make_tab(
+        config_file, defaults_path=defaults_file, db_override="other.db", config_override=True
+    )
+    notes = (tab.defaults_note, tab.override_note, tab.db_override_note)
+    for note in notes:
+        assert not note.isHidden()
+        assert note.text().startswith("\N{CIRCLED LATIN SMALL LETTER I} ")
+        assert LIGHT_COLOURS[ItemState.INFO].name() in note.styleSheet()
+    app_palette(DARK)
+    qapp.processEvents()
+    for note in notes:
+        assert DARK_COLOURS[ItemState.INFO].name() in note.styleSheet()
+
+
+def test_the_backup_note_stays_plain(make_tab, config_file):
+    tab = make_tab(config_file)
+    assert tab.file_note.styleSheet() == ""
+    assert tab.file_note.text() == FILE_NOTE
+
+
+def test_unsaved_changes_are_reported(make_tab, config_file, qtbot):
+    """D70: the window names the tab "Settings (not saved)" from this signal."""
+    write(config_file, "display_utc_offset_hours = 8\n")
+    tab = make_tab(config_file)
+    reports: list[bool] = []
+    tab.unsaved_changed.connect(reports.append)
+    tab.offset_spin.setValue(5.5)
+    tab.offset_spin.setValue(6)
+    assert reports == [True]
+    tab.offset_spin.setValue(8)
+    assert reports == [True, False]
+    tab.offset_spin.setValue(6)
+    assert tab.save()
+    assert reports == [True, False, True, False]
+    assert not tab.save()  # nothing to save
+
+
+def test_discard_changes_shows_the_file_again(make_tab, config_file):
+    write(config_file, f"nas_roots = ['{NAS}']\n")
+    tab = make_tab(config_file)
+    tab.roots_list.setCurrentRow(0)
+    tab.remove_root()
+    assert tab.has_changes()
+    tab.discard_changes()
+    assert roots(tab) == [NAS]
+    assert not tab.has_changes()
+    assert tab.message_label.text() == (
+        "The changes were not saved. The fields show the saved settings."
+    )

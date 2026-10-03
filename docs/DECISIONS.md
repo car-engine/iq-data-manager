@@ -86,6 +86,8 @@ Rules for this file:
 | D66 | Legacy import | 2026-10-04, Milestone 7 | Active |
 | D67 | New database in the Settings tab | 2026-10-04, Milestone 7 | Active |
 | D68 | Defaults file in the program folder | 2026-10-04, Milestone 7 | Active |
+| D69 | Information notes in the Settings tab | 2026-10-04, Milestone 7 | Active |
+| D70 | Unsaved settings | 2026-10-04, Milestone 7 | Active |
 
 ## D1. Sample types
 
@@ -1316,3 +1318,40 @@ The user chose this on 2026-10-04.
 
 Affects: SPEC sections 4 and 9, `config.py`, `app.py`, `gui/settings_tab.py`,
 `build/iqdm.spec`, `build/defaults.example.toml`.
+
+## D69. Information notes in the Settings tab
+
+The user asked for this on 2026-10-04, after the Milestone 7 build check.
+
+- Three notes in the Settings tab tell the user that the values in use do not come
+  from the settings file alone:
+  - the values come from the defaults file (D68);
+  - the app was started with `--config` or `--db` (About section);
+  - the app was started with `--db` (under "Database file").
+- They were plain text and easy to miss. Each is now amber with the ⓘ mark, in the
+  checklist colours for the light or dark theme (D38). The mark keeps the meaning
+  when the colour cannot be seen.
+- The note about `config.toml.bak` above Save stays plain.
+
+Affects: SPEC section 4, `gui/settings_tab.py`.
+
+## D70. Unsaved settings
+
+The user asked for this on 2026-10-04, after the Milestone 7 build check.
+
+- Changes in the Settings tab apply only on Save (D33). A user who left the tab
+  without saving had no sign that the changes were not written.
+- While the fields differ from the file, the tab's title is "Settings (not saved)".
+- Leaving the tab with unsaved changes asks first, with three buttons:
+  - **Save** saves and moves on. If the save fails or is cancelled, the Settings tab
+    stays open.
+  - **Leave without saving** reads the file again, so the fields show the saved
+    values, and moves on.
+  - **Stay** keeps the Settings tab open with the changes.
+- When a field holds a wrong value, Save cannot run. The question then says so and
+  offers only "Leave without saving" and "Stay".
+- Closing the window with unsaved settings asks the same question, with "Close
+  without saving" in place of "Leave without saving". It comes before the question
+  about a running operation.
+
+Affects: SPEC section 4, `app.py`, `gui/settings_tab.py`.

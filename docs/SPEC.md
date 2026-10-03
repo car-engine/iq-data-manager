@@ -180,9 +180,14 @@ Behaviour:
   recording, the Settings tab does not save. The Viewer takes a new offset,
   threshold or `db_path` at once and asks nothing, because it holds no input
   (section 5).
+- **Unsaved changes** (D70). While the fields differ from the file, the tab's title is
+  "Settings (not saved)". Leaving the tab asks first: Save, Leave without saving
+  (the fields return to the saved values) or Stay. With a wrong value in a field,
+  only Leave without saving and Stay are offered. Closing the window asks the same
+  question, with "Close without saving".
 - **Overrides.** `--config` and `--db` keep working. With `--db`, Save writes
   `db_path` to the file, and the `--db` path stays in force for the current run. The
-  tab says so.
+  tab says so in amber with the ⓘ mark, as it does for the defaults file (D69).
 - **Startup errors.** A configuration file that cannot be read opens the app on the
   Settings tab with the error shown, so the user can correct it there. A file that is
   not valid TOML can be replaced by Save.

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from iqdm.app import SETTINGS_UNSAVED_TAB, UNSAVED_QUESTION, UNSAVED_WRONG_VALUE
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
@@ -133,6 +134,11 @@ def test_settings_tab_text_from_the_defaults_file_is_plain(qtbot, tmp_path):
 def test_new_database_question_is_plain(tmp_path):
     """The Yes/No question of "New database..." is shown outside the tab (D67)."""
     assert offending([new_database_question(tmp_path / "project.db")]) == []
+
+
+def test_unsaved_settings_text_is_plain():
+    """The tab title and the question about unsaved settings (D70)."""
+    assert offending([SETTINGS_UNSAVED_TAB, UNSAVED_QUESTION, UNSAVED_WRONG_VALUE]) == []
 
 
 def test_log_tab_text_is_plain(qtbot, db_path):

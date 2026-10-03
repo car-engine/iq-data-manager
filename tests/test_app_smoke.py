@@ -1,17 +1,25 @@
 """Construction and wiring of the main window."""
 
 import pytest
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from iqdm import __version__
+from iqdm import app as app_module
 from iqdm.app import (
     CLOSE_QUESTION,
     LOG_TAB_SAVING,
     LOG_TAB_SAVING_EDIT,
+    SETTINGS_TAB,
+    SETTINGS_UNSAVED_TAB,
     TRANSFER_BUSY,
     TRANSFER_RUNNING,
+    UNSAVED_QUESTION,
+    UNSAVED_WRONG_VALUE,
     MainWindow,
+    UnsavedChoice,
     _parse_args,
+    ask_unsaved_settings,
     config_path_for,
     defaults_path_for,
     drop_log_input_question,
@@ -23,6 +31,29 @@ from iqdm.config import Config, load_config
 from iqdm.db import repository as repo
 from iqdm.db.connection import schema_sql, write_transaction
 from iqdm.models import Channel, Recording
+
+
+class UnsavedAnswers:
+    """Stands in for the unsaved-settings question (D70). A real box would block.
+
+    Records (can_save, closing) for each question and answers `answer`. Tests that
+    leave settings unsaved get "drop the changes" at teardown, when the window closes.
+    """
+
+    def __init__(self) -> None:
+        self.asked: list[tuple[bool, bool]] = []
+        self.answer = UnsavedChoice.DISCARD
+
+    def __call__(self, parent, *, can_save: bool, closing: bool) -> UnsavedChoice:
+        self.asked.append((can_save, closing))
+        return self.answer
+
+
+@pytest.fixture(autouse=True)
+def unsaved(monkeypatch) -> UnsavedAnswers:
+    answers = UnsavedAnswers()
+    monkeypatch.setattr(app_module, "ask_unsaved_settings", answers)
+    return answers
 
 
 @pytest.fixture
@@ -219,6 +250,157 @@ def wait_window(qtbot, window: MainWindow) -> None:
 def save_settings(qtbot, window: MainWindow) -> None:
     window.settings_tab.save_button.click()
     wait_window(qtbot, window)
+
+
+# ---------------------------------------------------------------------------
+# Unsaved settings (D70)
+# ---------------------------------------------------------------------------
+
+
+def settings_title(window: MainWindow) -> str:
+    return window.tabs.tabText(window.tabs.indexOf(window.settings_tab))
+
+
+def window_on_settings(qtbot, tmp_path, text: str = "display_utc_offset_hours = 8\n"):
+    path = tmp_path / "config.toml"
+    path.write_text(text, encoding="utf-8")
+    window = make_window(qtbot, path)
+    window.tabs.setCurrentWidget(window.settings_tab)
+    return window, path
+
+
+def test_the_tab_title_shows_unsaved_settings(qtbot, tmp_path, unsaved):
+    window, _ = window_on_settings(qtbot, tmp_path)
+    assert settings_title(window) == SETTINGS_TAB
+    window.settings_tab.offset_spin.setValue(5.5)
+    assert settings_title(window) == SETTINGS_UNSAVED_TAB
+    save_settings(qtbot, window)
+    assert settings_title(window) == SETTINGS_TAB
+    assert unsaved.asked == []
+
+
+def test_leaving_without_changes_asks_nothing(qtbot, tmp_path, unsaved):
+    window, _ = window_on_settings(qtbot, tmp_path)
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    window.tabs.setCurrentWidget(window.log_tab)
+    assert unsaved.asked == []
+
+
+def test_stay_keeps_the_settings_tab_and_the_changes(qtbot, tmp_path, unsaved):
+    window, path = window_on_settings(qtbot, tmp_path)
+    window.settings_tab.offset_spin.setValue(5.5)
+    unsaved.answer = UnsavedChoice.STAY
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    assert unsaved.asked == [(True, False)]
+    assert window.tabs.currentWidget() is window.settings_tab
+    assert window.settings_tab.offset_spin.value() == 5.5
+    assert path.read_text(encoding="utf-8") == "display_utc_offset_hours = 8\n"
+    window.tabs.setCurrentWidget(window.log_tab)  # asks again
+    assert len(unsaved.asked) == 2
+
+
+def test_leave_without_saving_restores_the_saved_values(qtbot, tmp_path, unsaved):
+    window, path = window_on_settings(qtbot, tmp_path)
+    window.settings_tab.offset_spin.setValue(5.5)
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    wait_window(qtbot, window)
+    assert unsaved.asked == [(True, False)]
+    assert window.tabs.currentWidget() is window.viewer_tab
+    assert path.read_text(encoding="utf-8") == "display_utc_offset_hours = 8\n"
+    assert window.config.display_utc_offset_hours == 8.0
+    window.tabs.setCurrentWidget(window.settings_tab)
+    assert window.settings_tab.offset_spin.value() == 8.0
+    assert settings_title(window) == SETTINGS_TAB
+
+
+def test_save_writes_the_settings_and_moves_on(qtbot, tmp_path, unsaved):
+    window, path = window_on_settings(qtbot, tmp_path)
+    window.settings_tab.offset_spin.setValue(5.5)
+    unsaved.answer = UnsavedChoice.SAVE
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    wait_window(qtbot, window)
+    assert window.tabs.currentWidget() is window.viewer_tab
+    assert load_config(path).display_utc_offset_hours == 5.5
+    assert window.config.display_utc_offset_hours == 5.5
+
+
+def test_a_save_that_is_refused_stays_on_the_settings_tab(
+    qtbot, tmp_path, db_path, unsaved, questions
+):
+    window, path = window_on_settings(qtbot, tmp_path, f"db_path = '{db_path}'\n")
+    window.log_tab.remarks_edit.setPlainText("not saved yet")
+    window.settings_tab.db_edit.setText(str(tmp_path / "other.db"))
+    unsaved.answer = UnsavedChoice.SAVE
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    assert len(questions) == 1  # "clear the Log tab form?" answered No
+    assert window.tabs.currentWidget() is window.settings_tab
+    assert path.read_text(encoding="utf-8") == f"db_path = '{db_path}'\n"
+
+
+def test_a_wrong_value_offers_no_save(qtbot, tmp_path, unsaved):
+    window, _ = window_on_settings(qtbot, tmp_path)
+    window.settings_tab.coverage_spin.setValue(0)
+    unsaved.answer = UnsavedChoice.STAY
+    window.tabs.setCurrentWidget(window.viewer_tab)
+    assert unsaved.asked == [(False, False)]
+
+
+def test_closing_with_unsaved_settings_asks_first(qtbot, tmp_path, unsaved):
+    window, path = window_on_settings(qtbot, tmp_path)
+    window.show()
+    window.settings_tab.offset_spin.setValue(5.5)
+    unsaved.answer = UnsavedChoice.STAY
+    assert not window.close()
+    assert unsaved.asked == [(True, True)]
+    unsaved.answer = UnsavedChoice.SAVE
+    assert window.close()
+    assert load_config(path).display_utc_offset_hours == 5.5
+
+
+def test_close_without_saving_writes_nothing(qtbot, tmp_path, unsaved):
+    window, path = window_on_settings(qtbot, tmp_path)
+    window.show()
+    window.settings_tab.offset_spin.setValue(5.5)
+    assert window.close()
+    assert unsaved.asked == [(True, True)]
+    assert path.read_text(encoding="utf-8") == "display_utc_offset_hours = 8\n"
+
+
+def answer_box(button_text: str, seen: list[list[str]]) -> None:
+    """Click a button of the next modal box, and record the box's buttons."""
+
+    def click() -> None:
+        box = QApplication.activeModalWidget()
+        if not isinstance(box, QMessageBox):
+            QTimer.singleShot(10, click)  # the box is not open yet
+            return
+        seen.append([b.text() for b in box.buttons()] + [box.text()])
+        next(b for b in box.buttons() if b.text() == button_text).click()
+
+    QTimer.singleShot(0, click)
+
+
+@pytest.mark.parametrize(
+    ("can_save", "closing", "click", "choice"),
+    [
+        (True, False, "Save", UnsavedChoice.SAVE),
+        (True, False, "Leave without saving", UnsavedChoice.DISCARD),
+        (True, True, "Close without saving", UnsavedChoice.DISCARD),
+        (True, False, "Stay", UnsavedChoice.STAY),
+        (False, False, "Stay", UnsavedChoice.STAY),
+    ],
+)
+def test_the_unsaved_settings_question(qtbot, can_save, closing, click, choice):
+    parent = QMessageBox()  # any widget
+    qtbot.addWidget(parent)
+    seen: list[list[str]] = []
+    answer_box(click, seen)
+    assert ask_unsaved_settings(parent, can_save=can_save, closing=closing) is choice
+    [texts] = seen
+    discard = "Close without saving" if closing else "Leave without saving"
+    expected = (["Save"] if can_save else []) + [discard, "Stay"]
+    assert sorted(texts[:-1]) == sorted(expected)
+    assert texts[-1] == (UNSAVED_QUESTION if can_save else UNSAVED_WRONG_VALUE)
 
 
 @pytest.fixture
