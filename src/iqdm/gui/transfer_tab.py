@@ -152,6 +152,7 @@ class TransferTab(QWidget):
         self._unfinished: list[TransferEntry] = []
         self._channel_boxes: dict[int, QCheckBox] = {}
         self._time_errors: dict[str, str] = {}
+        self._message_text = ""  # the line above the preview, without its mark
 
         self._build()
         self._clear_recording()
@@ -1441,6 +1442,7 @@ class TransferTab(QWidget):
         self.result_label.setVisible(True)
 
     def _set_message(self, state: ItemState, text: str, tooltip: str = "") -> None:
+        self._message_text = text
         self.message_label.setText(f"{MARKS[state]}  {text}" if text else "")
         self.message_label.setToolTip(tooltip)
         self.message_label.setStyleSheet(f"color: {self._colours()[state].name()};")
@@ -1507,3 +1509,5 @@ class TransferTab(QWidget):
         self.forget_button.setEnabled(not busy and selected)
         if not has_db:
             self._set_message(ItemState.TODO, NO_DATABASE)
+        elif self._message_text == NO_DATABASE:  # a path was saved since
+            self._set_message(ItemState.OK, "")

@@ -158,6 +158,20 @@ def test_without_a_database_the_tab_says_where_to_set_it(qtbot, tmp_path):
     assert not tab.load_recording(1)
 
 
+def test_a_saved_database_path_clears_the_no_database_line(env):
+    """Found in the user's manual test: the line stayed after Save in Settings."""
+    tab = env.tab(manifests_dir=env.manifests)
+    tab.apply_config(Config())
+    assert not tab.message_label.isHidden()
+    tab.apply_config(env.config)
+    env.idle(tab)
+    assert tab.message_label.isHidden()
+    assert tab.message_label.text() == ""
+    assert tab.load_recording(env.rid)
+    env.idle(tab)
+    assert tab.recording is not None
+
+
 def test_loading_a_local_recording_prepares_an_archive(env):
     tab = env.loaded(env.tab())
     assert tab.archive_radio.isChecked()
