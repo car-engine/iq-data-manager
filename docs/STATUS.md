@@ -2,19 +2,18 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-03 (D54, NAS field test with the Milestone 6 build).
+report. Last updated: 2026-10-03 (Milestone 5 merged).
 
 ## Current state
 
-- Milestones 0 to 4 are merged into `main`. The last is Milestone 4 (Viewer tab),
-  report [reports/M4.md](reports/M4.md).
-- **Milestone 5 (Transfer core) is done on branch `m5-transfer-core`, not merged.**
-  Report: [reports/M5.md](reports/M5.md). Decisions D48–D53 close O6, O7, O8, O9,
+- Milestones 0 to 5 are merged into `main`.
+- **Milestone 5 (Transfer core) is merged into `main`** (fast-forward, 2026-10-03,
+  not pushed). Report: [reports/M5.md](reports/M5.md). Decisions D48–D53 close O6, O7, O8, O9,
   O13 and O32. The app copies files itself (D48); there are no transfer scripts.
 - D54: the first test on the NAS runs with the Milestone 6 build, on the test set
   from `tools/make_nas_testset.py`. The copy engine is not tested on the NAS before
   then.
-- 1,202 tests pass and 4 skip on `m5-transfer-core`. Three skips need the
+- 1,202 tests pass and 4 skip on `main`. Three skips need the
   symbolic-link privilege; the other runs only off Windows. `ruff check` is clean.
 - **Next: Milestone 6, Move / copy tab.** Open items for its plan: O1, O10, O11,
   O12, O25, O34, O35 and O36. It ends with the NAS field test (D54).
@@ -35,7 +34,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
-| 5. Transfer core | Done, not merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), plus the commit that records D54 | [M5](reports/M5.md) |
+| 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
 
