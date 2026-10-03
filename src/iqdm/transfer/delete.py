@@ -5,7 +5,9 @@ verification. prepare_delete() refuses unless all of these hold:
 - the archive finished with verification 'pass' and has a manifest;
 - the manifest belongs to that archive, and the caller read it with
   manifest.read_manifest(path, archive.manifest_sha256), so it is unchanged;
-- the recording is archived and points at the archive's destination.
+- the recording is archived and points at the archive's destination;
+- a check before delete of that archive passed, and it started after the archive
+  finished (D55). That check read the NAS files past the PC's file cache.
 
 delete_source_files() then works file by file. Right before a source file is
 deleted, the NAS copy must be a regular file with the manifest size, and the source
@@ -15,7 +17,7 @@ deleted. Afterwards, folders that held them, and the source folder itself, are
 removed when they are empty. Nothing is deleted by pattern or by tree.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 
@@ -68,8 +70,56 @@ def _same_path(a: str, b: str) -> bool:
     return PureWindowsPath(a) == PureWindowsPath(b)
 
 
-def prepare_delete(archive: TransferEntry, manifest: Manifest, rec: Recording) -> DeletePlan:
-    """Check the preconditions and return the plan. Raises DeleteRefused."""
+NOT_CHECKED = (
+    "The NAS copy has not passed \"Check before delete\" since it was archived. "
+    "Run that check first."
+)
+
+
+def checked_before_delete(archive: TransferEntry, transfers: Iterable[TransferEntry]) -> bool:
+    """True when a check before delete of `archive` passed after the archive finished."""
+    if archive.id is None or archive.finished_at is None:
+        return False
+    return any(
+        t.operation is Operation.CHECK
+        and t.parent_id == archive.id
+        and t.verification is Verification.PASS
+        and t.finished_at is not None
+        and t.started_at >= archive.finished_at
+        for t in transfers
+    )
+
+
+def prepare_delete(
+    archive: TransferEntry,
+    manifest: Manifest,
+    rec: Recording,
+    transfers: Iterable[TransferEntry],
+) -> DeletePlan:
+    """Check the preconditions and return the plan. Raises DeleteRefused.
+
+    transfers is the recording's transfer history, which holds the check before
+    delete (D55).
+    """
+    reasons = archive_problems(archive, manifest, rec)
+    if not checked_before_delete(archive, transfers):
+        reasons.append(NOT_CHECKED)
+    if reasons or archive.id is None or archive.destination is None:
+        raise DeleteRefused(reasons)
+    return DeletePlan(
+        archive_id=archive.id,
+        recording_id=archive.recording_id,
+        source=Path(archive.source),
+        destination=Path(archive.destination),
+        files=manifest.files,
+    )
+
+
+def archive_problems(archive: TransferEntry, manifest: Manifest, rec: Recording) -> list[str]:
+    """Why the archive cannot lead to a delete, apart from the check before delete.
+
+    The check before delete itself needs the same conditions.
+    """
     reasons = []
     if archive.id is None:
         reasons.append("The archive copy has no entry in the transfer history.")
@@ -104,15 +154,7 @@ def prepare_delete(archive: TransferEntry, manifest: Manifest, rec: Recording) -
         except ValueError as exc:
             reasons.append(str(exc))
             break
-    if reasons or archive.id is None or archive.destination is None:
-        raise DeleteRefused(reasons)
-    return DeletePlan(
-        archive_id=archive.id,
-        recording_id=archive.recording_id,
-        source=Path(archive.source),
-        destination=Path(archive.destination),
-        files=manifest.files,
-    )
+    return reasons
 
 
 def _is_regular_file(path: Path) -> bool:

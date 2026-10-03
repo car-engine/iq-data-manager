@@ -14,12 +14,31 @@ from iqdm.models import ArchiveState, HashMode, Operation, TransferEntry, Verifi
 from iqdm.scan.scanner import scan_recording
 from iqdm.transfer.copier import CopyItem, copy_files, local_path
 from iqdm.transfer.delete import (
+    NOT_CHECKED,
     DeleteRefused,
+    checked_before_delete,
     delete_source_files,
     prepare_delete,
 )
 from iqdm.transfer.manifest import Manifest, ManifestFile
 from iqdm.transfer.selection import select_from_scan
+
+
+def check_of(archive: TransferEntry, **kw) -> TransferEntry:
+    """A passed check before delete of `archive`, started after it finished (D55)."""
+    values = {
+        "id": 9,
+        "recording_id": archive.recording_id,
+        "operation": Operation.CHECK,
+        "parent_id": archive.id,
+        "source": archive.source,
+        "destination": archive.destination,
+        "started_at": "2026-10-03T09:00:00Z",
+        "finished_at": "2026-10-03T09:10:00Z",
+        "performed_by": "tester",
+        "verification": Verification.PASS,
+    } | kw
+    return TransferEntry(**values)
 
 
 @dataclasses.dataclass
@@ -29,9 +48,11 @@ class Scenario:
     manifest: Manifest
     archive: TransferEntry
     rec: object
+    history: list[TransferEntry] | None = None
 
     def plan(self):
-        return prepare_delete(self.archive, self.manifest, self.rec)
+        history = [check_of(self.archive)] if self.history is None else self.history
+        return prepare_delete(self.archive, self.manifest, self.rec, history)
 
 
 @pytest.fixture
@@ -284,3 +305,52 @@ def test_an_unsafe_manifest_path_is_refused(archived):
     s.manifest = dataclasses.replace(s.manifest, files=(*s.manifest.files, bad))
     with pytest.raises(DeleteRefused, match="not a relative path"):
         s.plan()
+
+
+# ---------------------------------------------------------------------------
+# Check before delete (D55)
+# ---------------------------------------------------------------------------
+
+
+def test_no_check_before_delete_is_refused(archived):
+    s = archived()
+    s.history = []
+    with pytest.raises(DeleteRefused, match="Check before delete") as refused:
+        s.plan()
+    assert refused.value.reasons == (NOT_CHECKED,)
+    assert len(files_under(s.source)) == 10
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"verification": Verification.FAIL},
+        {"verification": Verification.SKIPPED},
+        {"finished_at": None},
+        {"parent_id": 6},  # another archive
+        {"parent_id": None},  # a Check archive, which reads no file contents
+        {"operation": Operation.COPY, "parent_id": None},
+        {"started_at": "2026-10-03T07:59:59Z"},  # before the archive finished
+    ],
+)
+def test_only_a_passed_later_check_of_this_archive_counts(archived, change):
+    s = archived()
+    s.history = [check_of(s.archive, **change)]
+    with pytest.raises(DeleteRefused, match="Check before delete"):
+        s.plan()
+    assert not checked_before_delete(s.archive, s.history)
+
+
+def test_a_check_at_the_finish_time_counts(archived):
+    s = archived()
+    s.history = [check_of(s.archive, started_at=s.archive.finished_at)]
+    assert s.plan().files == s.manifest.files
+
+
+def test_one_passed_check_among_failed_ones_counts(archived):
+    s = archived()
+    s.history = [
+        check_of(s.archive, verification=Verification.FAIL),
+        check_of(s.archive, id=10),
+    ]
+    assert checked_before_delete(s.archive, s.history)

@@ -508,7 +508,11 @@ def list_recordings(
         " r.archive_state, r.logged_by, s.name AS site_name,"
         " (r.archive_state = 'archived' AND EXISTS (SELECT 1 FROM transfer_log t"
         "  WHERE t.recording_id = r.id AND t.operation = 'check'"
-        "  AND t.verification = 'skipped' AND t.notes = ?)) AS unverified"
+        "  AND t.verification = 'skipped' AND t.notes = ?"
+        "  AND NOT EXISTS (SELECT 1 FROM transfer_log c"  # a later passed comparison (D56)
+        "   WHERE c.recording_id = r.id AND c.id > t.id AND c.operation = 'check'"
+        "   AND c.verification = 'pass' AND c.destination IS NOT NULL"
+        "   AND c.parent_id IS NULL))) AS unverified"
         " FROM recordings r JOIN sites s ON s.id = r.site_id"
         f" WHERE {where}"
         " ORDER BY r.start_unix DESC, r.id DESC",

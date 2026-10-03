@@ -15,14 +15,23 @@ from iqdm import viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
-from iqdm.models import ArchiveState, HashMode, Operation, Verification
-from iqdm.transfer.copier import CopyProgress, local_path
+from iqdm.models import (
+    IN_PLACE_NOTE,
+    ArchiveState,
+    HashMode,
+    Operation,
+    TransferEntry,
+    Verification,
+)
+from iqdm.transfer.copier import CopyItem, CopyProgress, copy_files, local_path
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.manifest import read_manifest
 from iqdm.transfer.operations import (
     TransferError,
     TransferRequest,
     check_archive,
+    check_before_delete,
+    compare_with_laptop,
     delete_laptop_copy,
     preview_transfer,
     run_transfer,
@@ -317,26 +326,52 @@ def test_the_estimate_counts_reading_the_skipped_files(env):
 # ---------------------------------------------------------------------------
 
 
-def archived(env) -> int:
-    out = env.run(env.preview(env.request()))
+def archived(env, hash_mode=HashMode.ALL) -> int:
+    out = env.run(env.preview(env.request(hash_mode=hash_mode)))
     assert out.passed
     return out.transfer_id
 
 
-def test_delete_after_a_passed_archive(env):
+def check(env, archive_id, hash_mode=HashMode.ALL, **kw):
+    return check_before_delete(
+        env.db,
+        archive_id,
+        hash_mode=hash_mode,
+        sample_fraction=0.25,
+        performed_by="userB",
+        now=env.now,
+        **kw,
+    )
+
+
+def archived_and_checked(env) -> int:
     archive_id = archived(env)
+    assert check(env, archive_id).verification is Verification.PASS
+    return archive_id
+
+
+def test_delete_after_a_passed_archive(env):
+    archive_id = archived_and_checked(env)
     out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert out.result.complete
     assert not env.source.exists()
-    _, delete = env.transfers()
+    *_, delete = env.transfers()
     assert delete.operation is Operation.DELETE
     assert delete.parent_id == archive_id
     assert delete.verification is Verification.PASS
     assert (delete.n_files, delete.total_bytes) == (10, 40_000)
     assert delete.notes == "Deleted 10 files from the laptop."
     rows = viewer.transfer_rows(env.transfers(), 8.0)
-    assert [r.operation for r in rows] == ["Archive", "Delete laptop copy"]
-    assert rows[1].result.endswith("deleted")
+    assert [r.operation for r in rows] == ["Archive", "Check before delete", "Delete laptop copy"]
+    assert rows[2].result.endswith("deleted")
+
+
+def test_delete_needs_a_check_before_delete(env):
+    archive_id = archived(env)
+    with pytest.raises(DeleteRefused, match="Check before delete"):
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert len(tree(env.source)) == 10
+    assert len(env.transfers()) == 1
 
 
 def test_an_archive_typed_with_a_mapped_drive_uses_the_nas_location(env):
@@ -350,12 +385,13 @@ def test_an_archive_typed_with_a_mapped_drive_uses_the_nas_location(env):
     (row,) = env.transfers()
     assert row.destination == nas_folder
     assert read_manifest(Path(row.manifest_path)).destination == nas_folder
+    assert check(env, archive_id).verification is Verification.PASS
     out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert out.result.complete
 
 
 def test_delete_keeps_files_whose_nas_copy_changed(env):
-    archive_id = archived(env)
+    archive_id = archived_and_checked(env)
     rec = env.recording()
     nas_folder = Path(rec.storage_root) / rec.rel_path
     (nas_folder / "1" / f"{int(T0)}.dat").write_bytes(b"x")
@@ -405,6 +441,199 @@ def test_delete_refuses_when_the_recording_points_elsewhere(env):
     with pytest.raises(DeleteRefused, match="no longer points at the archive copy"):
         delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert len(tree(env.source)) == 10
+
+
+def test_a_stopped_delete_finishes_on_a_second_run(env):
+    archive_id = archived_and_checked(env)
+    calls = itertools.count()
+    first = delete_laptop_copy(
+        env.db, archive_id, performed_by="userB", now=env.now, cancelled=lambda: next(calls) >= 4
+    )
+    assert first.result.cancelled
+    assert len(first.result.deleted) == 4
+    assert env.transfers()[-1].verification is Verification.FAIL
+    second = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert second.result.complete
+    assert len(second.result.already_gone) == 4
+    assert not env.source.exists()
+
+
+# ---------------------------------------------------------------------------
+# Check before delete (D55)
+# ---------------------------------------------------------------------------
+
+
+def test_check_before_delete_records_its_archive(env):
+    archive_id = archived(env)
+    out = check(env, archive_id)
+    assert out.verification is Verification.PASS
+    assert out.notes == "The NAS copy matches the file list: 10 files. 10 files hashed and equal."
+    row = env.transfers()[-1]
+    assert row.operation is Operation.CHECK
+    assert row.parent_id == archive_id
+    assert row.destination == env.transfers()[0].destination
+    assert row.hash_mode is HashMode.ALL
+    assert (row.n_files, row.total_bytes) == (10, 40_000)
+    assert len(tree(env.source)) == 10  # a check deletes nothing
+
+
+def test_check_before_delete_finds_changed_content(env):
+    archive_id = archived(env)
+    rec = env.recording()
+    nas_file = Path(rec.storage_root) / rec.rel_path / "0" / f"{int(T0)}.dat"
+    nas_file.write_bytes(b"\xff" * nas_file.stat().st_size)
+    out = check(env, archive_id)
+    assert out.verification is Verification.FAIL
+    assert "0/1790733600.dat" in out.notes
+    with pytest.raises(DeleteRefused, match="Check before delete"):
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert len(tree(env.source)) == 10
+
+
+def test_check_before_delete_uses_the_copy_time_hashes(env):
+    """With every hash in the manifest, the laptop files are not read."""
+    archive_id = archived(env)
+    laptop_file = env.source / "1" / f"{int(T0)}.dat"
+    laptop_file.write_bytes(b"\xff" * laptop_file.stat().st_size)
+    assert check(env, archive_id).verification is Verification.PASS
+
+
+def test_check_before_delete_reads_the_laptop_files_without_copy_time_hashes(env):
+    archive_id = archived(env, HashMode.NONE)
+    rec = env.recording()
+    nas_file = Path(rec.storage_root) / rec.rel_path / "1" / f"{int(T0) + 1}.dat"
+    nas_file.write_bytes(b"\xff" * nas_file.stat().st_size)
+    out = check(env, archive_id)
+    assert out.verification is Verification.FAIL
+    assert "content differs" in out.notes
+
+
+def test_a_cancelled_check_before_delete_does_not_count(env):
+    archive_id = archived(env)
+    calls = itertools.count()
+    out = check(env, archive_id, cancelled=lambda: next(calls) > 3)
+    assert out.verification is Verification.SKIPPED
+    assert out.notes == "Cancelled during the check."
+    with pytest.raises(DeleteRefused, match="Check before delete"):
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+
+
+def test_check_before_delete_needs_a_passed_archive(env):
+    copy_id = env.run(env.preview(env.request(Operation.COPY, env.tmp / "pc" / "rec"))).transfer_id
+    with pytest.raises(DeleteRefused, match="Only the laptop copy"):
+        check(env, copy_id)
+    assert len(env.transfers()) == 1
+
+
+# ---------------------------------------------------------------------------
+# Compare with laptop copy (D56)
+# ---------------------------------------------------------------------------
+
+
+def logged_in_place(env) -> int:
+    """A copy of the laptop recording on the "NAS", logged there as in D2."""
+    folder = env.nas / "in-place"
+    items = [CopyItem(rel_path=p, size=len(b)) for p, b in tree(env.source).items()]
+    assert copy_files(env.source, folder, items).ok
+
+    def insert(conn):
+        rec = recording_from(
+            env.info,
+            site_id=1,
+            storage_root=str(env.nas),
+            rel_path="in-place",
+            archive_state=ArchiveState.ARCHIVED,
+            archived_at="2026-10-03T07:00:00Z",
+        )
+        rid = repo.insert_recording(conn, rec)
+        repo.insert_transfer(
+            conn,
+            TransferEntry(
+                recording_id=rid,
+                operation=Operation.CHECK,
+                source=str(folder),
+                started_at="2026-10-03T07:00:00Z",
+                finished_at="2026-10-03T07:00:00Z",
+                performed_by="userA",
+                notes=IN_PLACE_NOTE,
+            ),
+        )
+        return rid
+
+    return write_transaction(env.db, insert)
+
+
+def compare(env, rid, laptop=None, hash_mode=HashMode.ALL):
+    return compare_with_laptop(
+        env.db,
+        rid,
+        env.source if laptop is None else laptop,
+        hash_mode=hash_mode,
+        sample_fraction=0.25,
+        performed_by="userB",
+        now=env.now,
+    )
+
+
+def unverified(env, rid) -> bool:
+    with open_db(env.db, readonly=True) as conn:
+        rec = repo.get_recording(conn, rid)
+        transfers = repo.list_transfers(conn, rid)
+        (summary,) = [s for s in repo.list_recordings(conn) if s.id == rid]
+    assert summary.unverified == viewer.is_unverified(rec, transfers)
+    return summary.unverified
+
+
+def test_a_passed_comparison_clears_the_mark(env):
+    rid = logged_in_place(env)
+    assert unverified(env, rid)
+    out = compare(env, rid)
+    assert out.verification is Verification.PASS
+    assert not unverified(env, rid)
+    row = env_rows(env, rid)[-1]
+    assert (row.source, row.destination) == (str(env.source), str(env.nas / "in-place"))
+    assert row.parent_id is None
+    assert viewer.operation_text(row) == "Compare with laptop copy"
+    assert len(tree(env.source)) == 10  # a comparison deletes nothing
+
+
+def test_a_failed_comparison_keeps_the_mark(env):
+    rid = logged_in_place(env)
+    nas_file = env.nas / "in-place" / "0" / f"{int(T0)}.dat"
+    nas_file.write_bytes(b"\xff" * nas_file.stat().st_size)
+    out = compare(env, rid)
+    assert out.verification is Verification.FAIL
+    assert unverified(env, rid)
+
+
+def test_a_file_only_on_one_side_fails_the_comparison(env):
+    rid = logged_in_place(env)
+    (env.nas / "in-place" / "0" / f"{int(T0) + 3}.dat").write_bytes(bytes(4000))
+    out = compare(env, rid, hash_mode=HashMode.NONE)
+    assert out.verification is Verification.FAIL
+    assert out.notes == "Only on the NAS: 1 file: 0/1790733603.dat."
+    assert unverified(env, rid)
+
+
+def test_a_check_archive_does_not_clear_the_mark(env):
+    rid = logged_in_place(env)
+    assert check_archive(env.db, rid, performed_by="userC", now=env.now).verification is (
+        Verification.PASS
+    )
+    assert unverified(env, rid)
+
+
+def test_comparison_needs_an_archived_recording_and_another_folder(env):
+    with pytest.raises(TransferError, match="Only an archived recording"):
+        compare(env, env.rid)
+    rid = logged_in_place(env)
+    with pytest.raises(TransferError, match="NAS folder itself"):
+        compare(env, rid, laptop=env.nas / "in-place")
+
+
+def env_rows(env, rid):
+    with open_db(env.db, readonly=True) as conn:
+        return repo.list_transfers(conn, rid)
 
 
 # ---------------------------------------------------------------------------

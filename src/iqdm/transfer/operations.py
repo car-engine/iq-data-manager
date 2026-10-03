@@ -17,7 +17,7 @@ its own connection, never while files are being copied:
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from iqdm.config import Config
 from iqdm.db import repository
@@ -40,7 +40,13 @@ from iqdm.models import (
 from iqdm.scan.scanner import ScanError, scan_recording
 from iqdm.timeutil import utc_now_iso
 from iqdm.transfer.copier import CopyItem, CopyProgress, CopyResult, copy_files
-from iqdm.transfer.delete import DeleteRefused, DeleteResult, delete_source_files, prepare_delete
+from iqdm.transfer.delete import (
+    DeleteRefused,
+    DeleteResult,
+    archive_problems,
+    delete_source_files,
+    prepare_delete,
+)
 from iqdm.transfer.estimate import Estimate, estimate
 from iqdm.transfer.manifest import (
     Manifest,
@@ -440,6 +446,186 @@ def _delete_notes(result: DeleteResult) -> str:
     return " ".join(parts)
 
 
+def _load_archive(
+    db_path: Path | str, archive_id: int
+) -> tuple[TransferEntry, Recording, list[TransferEntry], Manifest]:
+    """The archive row, its recording and history, and its manifest read unchanged.
+
+    Raises DeleteRefused when the archive has no manifest or the manifest cannot be used.
+    """
+    with open_db(db_path, readonly=True) as conn:
+        archive = repository.get_transfer(conn, archive_id)
+        rec = repository.get_recording(conn, archive.recording_id)
+        transfers = repository.list_transfers(conn, archive.recording_id)
+    if archive.manifest_path is None or archive.manifest_sha256 is None:
+        raise DeleteRefused(["The archive copy has no file list."])
+    try:
+        manifest = read_manifest(Path(archive.manifest_path), archive.manifest_sha256)
+    except ManifestError as exc:
+        raise DeleteRefused([f"The file list cannot be used: {exc}"]) from exc
+    return archive, rec, transfers, manifest
+
+
+def _check_notes(result: VerifyResult, what: str) -> str:
+    if result.cancelled:
+        return "Cancelled during the check."
+    if not result.passed:
+        return _verify_failure_notes(result)
+    hashed = len(result.hashes)
+    return f"{what} {files_text(hashed)} hashed and equal." if hashed else what
+
+
+def _finish_check(
+    db_path: Path | str,
+    tid: int,
+    now: Clock,
+    result: VerifyResult,
+    items: list[CopyItem],
+    notes: str,
+) -> CheckOutcome:
+    if result.cancelled:
+        verification = Verification.SKIPPED
+    else:
+        verification = Verification.PASS if result.passed else Verification.FAIL
+    write_transaction(
+        db_path,
+        lambda conn: repository.finish_transfer(
+            conn,
+            tid,
+            finished_at=now(),
+            verification=verification,
+            n_files=len(items),
+            total_bytes=sum(i.size for i in items),
+            notes=notes,
+        ),
+    )
+    return CheckOutcome(transfer_id=tid, verification=verification, notes=notes)
+
+
+def check_before_delete(
+    db_path: Path | str,
+    archive_id: int,
+    *,
+    hash_mode: HashMode,
+    sample_fraction: float,
+    performed_by: str,
+    now: Clock = utc_now_iso,
+    progress: Callable[[VerifyProgress], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> CheckOutcome:
+    """Read the NAS copy of a passed archive past the PC's file cache (D55).
+
+    Each NAS file must have its manifest size. Hashed files are compared with the
+    manifest's copy-time hash, or with a hash of the laptop file where the manifest
+    holds none. The check is logged as a 'check' row with the archive in parent_id;
+    a pass allows "Delete laptop copy". Raises DeleteRefused when the archive cannot
+    lead to a delete at all.
+    """
+    archive, rec, _, manifest = _load_archive(db_path, archive_id)
+    problems = archive_problems(archive, manifest, rec)
+    if problems or archive.destination is None:
+        raise DeleteRefused(problems)
+    items = [CopyItem(rel_path=f.path, size=f.size) for f in manifest.files]
+    entry = TransferEntry(
+        recording_id=archive.recording_id,
+        operation=Operation.CHECK,
+        parent_id=archive_id,
+        source=archive.source,
+        destination=archive.destination,
+        hash_mode=hash_mode,
+        started_at=now(),
+        performed_by=performed_by,
+    )
+    tid = write_transaction(db_path, lambda conn: repository.insert_transfer(conn, entry))
+    with keep_awake():
+        result = verify_copy(
+            Path(archive.source),
+            Path(archive.destination),
+            items,
+            hash_mode=hash_mode,
+            sample_fraction=sample_fraction,
+            source_hashes={f.path: f.sha256 for f in manifest.files if f.sha256},
+            uncached=True,
+            progress=progress,
+            cancelled=cancelled,
+        )
+    notes = _check_notes(result, f"The NAS copy matches the file list: {files_text(len(items))}.")
+    return _finish_check(db_path, tid, now, result, items, notes)
+
+
+def compare_with_laptop(
+    db_path: Path | str,
+    recording_id: int,
+    laptop_folder: Path,
+    *,
+    hash_mode: HashMode,
+    sample_fraction: float,
+    performed_by: str,
+    now: Clock = utc_now_iso,
+    scan_progress: Callable[[int], None] | None = None,
+    progress: Callable[[VerifyProgress], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> CheckOutcome:
+    """Compare an archived recording's NAS folder with a laptop folder (D56).
+
+    Both folders are scanned. They must hold the same files with the same sizes;
+    hashed files must have the same SHA-256. NAS files are read past the PC's file
+    cache. The comparison is logged as a 'check' row with the laptop folder as source
+    and the NAS folder as destination. A pass clears the "not verified" mark.
+    Raises TransferError for a recording that is not archived, or for a laptop folder
+    that is the NAS folder; the scanner's ScanError and ScanCancelled; SelectionError.
+    """
+    rec = _load_recording(db_path, recording_id)
+    if rec.archive_state is not ArchiveState.ARCHIVED:
+        raise TransferError("Only an archived recording can be compared with a laptop copy.")
+    nas_folder = recording_folder(rec)
+    if PureWindowsPath(laptop_folder) == PureWindowsPath(nas_folder):
+        raise TransferError("Choose the laptop folder. This is the NAS folder itself.")
+    laptop = select_files(rec, folder=laptop_folder, progress=scan_progress, cancelled=cancelled)
+    nas = select_files(rec, progress=scan_progress, cancelled=cancelled)
+    started_at = now()
+    laptop_files = {f.rel_path: f.size for f in laptop.files}
+    nas_files = {f.rel_path for f in nas.files}
+    only_laptop = sorted(set(laptop_files) - nas_files)
+    only_nas = sorted(nas_files - set(laptop_files))
+    entry = TransferEntry(
+        recording_id=recording_id,
+        operation=Operation.CHECK,
+        source=str(laptop_folder),
+        destination=str(nas_folder),
+        hash_mode=hash_mode,
+        started_at=started_at,
+        performed_by=performed_by,
+    )
+    tid = write_transaction(db_path, lambda conn: repository.insert_transfer(conn, entry))
+    items = [CopyItem(rel_path=p, size=s) for p, s in laptop_files.items() if p in nas_files]
+    with keep_awake():
+        result = verify_copy(
+            laptop_folder,
+            nas_folder,
+            items,
+            hash_mode=hash_mode,
+            sample_fraction=sample_fraction,
+            uncached=True,
+            progress=progress,
+            cancelled=cancelled,
+        )
+    if (only_laptop or only_nas) and not result.cancelled:
+        parts = []
+        for where, names in (("the laptop", only_laptop), ("the NAS", only_nas)):
+            if names:
+                parts.append(f"Only on {where}: {files_text(len(names))}: {_names(names)}.")
+        if not result.passed:
+            parts.append(_verify_failure_notes(result))
+        result = VerifyResult(passed=False, problems=result.problems, hashes=result.hashes)
+        notes = " ".join(parts)
+    else:
+        notes = _check_notes(
+            result, f"The NAS folder matches the laptop folder: {files_text(len(items))}."
+        )
+    return _finish_check(db_path, tid, now, result, items, notes)
+
+
 def delete_laptop_copy(
     db_path: Path | str,
     archive_id: int,
@@ -453,16 +639,8 @@ def delete_laptop_copy(
 
     Raises DeleteRefused when a precondition does not hold; nothing is deleted then.
     """
-    with open_db(db_path, readonly=True) as conn:
-        archive = repository.get_transfer(conn, archive_id)
-        rec = repository.get_recording(conn, archive.recording_id)
-    if archive.manifest_path is None or archive.manifest_sha256 is None:
-        raise DeleteRefused(["The archive copy has no file list."])
-    try:
-        manifest = read_manifest(Path(archive.manifest_path), archive.manifest_sha256)
-    except ManifestError as exc:
-        raise DeleteRefused([f"The file list cannot be used: {exc}"]) from exc
-    plan = prepare_delete(archive, manifest, rec)
+    archive, rec, transfers, manifest = _load_archive(db_path, archive_id)
+    plan = prepare_delete(archive, manifest, rec, transfers)
     entry = TransferEntry(
         recording_id=rec.id or archive.recording_id,
         operation=Operation.DELETE,

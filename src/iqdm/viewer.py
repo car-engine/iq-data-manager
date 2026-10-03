@@ -181,17 +181,36 @@ def state_text(state: ArchiveState, unverified: bool) -> str:
     return str(state)
 
 
+def is_laptop_comparison(t: TransferEntry) -> bool:
+    """True for a "Compare with laptop copy" row (D56).
+
+    A check with a destination and no parent. A Check archive has no destination, and a
+    check before delete names its archive in parent_id.
+    """
+    return t.operation is Operation.CHECK and t.destination is not None and t.parent_id is None
+
+
 def is_unverified(rec: Recording, transfers: Iterable[TransferEntry]) -> bool:
-    """True for an archived recording with the logged-in-place row (D2, D44).
+    """True for an archived recording with the logged-in-place row (D2, D44) and no
+    later comparison with a laptop copy that passed (D56).
 
     The same rule as RecordingSummary.unverified in repository.list_recordings().
     """
-    return rec.archive_state is ArchiveState.ARCHIVED and any(
-        t.operation is Operation.CHECK
-        and t.verification is Verification.SKIPPED
-        and t.notes == IN_PLACE_NOTE
-        for t in transfers
-    )
+    if rec.archive_state is not ArchiveState.ARCHIVED:
+        return False
+    rows = sorted(transfers, key=lambda t: t.id or 0)
+    for i, t in enumerate(rows):
+        if (
+            t.operation is Operation.CHECK
+            and t.verification is Verification.SKIPPED
+            and t.notes == IN_PLACE_NOTE
+            and not any(
+                is_laptop_comparison(c) and c.verification is Verification.PASS
+                for c in rows[i + 1 :]
+            )
+        ):
+            return True
+    return False
 
 
 NOT_VERIFIED_NOTE = (
@@ -317,6 +336,15 @@ def iso_display(text: str, offset_hours: float) -> str:
         return text
 
 
+def operation_text(e: TransferEntry) -> str:
+    """The name of a transfer_log row's operation, as the user knows it."""
+    if e.operation is Operation.CHECK and e.parent_id is not None:
+        return "Check before delete"  # D55
+    if is_laptop_comparison(e):
+        return "Compare with laptop copy"  # D56
+    return _OPERATIONS[e.operation]
+
+
 def transfer_rows(entries: Iterable[TransferEntry], offset_hours: float) -> list[TransferRow]:
     rows = []
     for e in entries:
@@ -344,7 +372,7 @@ def transfer_rows(entries: Iterable[TransferEntry], offset_hours: float) -> list
         rows.append(
             TransferRow(
                 when=iso_display(e.started_at, offset_hours),
-                operation=_OPERATIONS[e.operation],
+                operation=operation_text(e),
                 scope=scope,
                 result=DOT.join(parts),
                 by=e.performed_by,
