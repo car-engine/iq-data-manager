@@ -3,8 +3,9 @@
 Windows desktop app (Python 3.12, PySide6) that logs RF IQ recordings into a shared
 SQLite database and runs safe copy and archive operations between recording laptops,
 the NAS and local PCs. The app copies files itself (`docs/DECISIONS.md` D48). Full
-requirements: `docs/SPEC.md`. Read it before starting any task. Database schema: `src/iqdm/db/schema.sql`. Decision log:
-`docs/DECISIONS.md`. Progress, open questions and notes for agents: `docs/STATUS.md`.
+requirements: `docs/SPEC.md`. Read it before starting any task. Database schema:
+`src/iqdm/db/schema.sql`. Decision log: `docs/DECISIONS.md`. Progress, open questions
+and notes for agents: `docs/STATUS.md`.
 
 ## Safety rules (non-negotiable)
 
@@ -71,7 +72,7 @@ The app itself will move and delete real data, so its code must follow these rul
   closed as soon as the operation finishes.
 - All timestamps are UTC. Store ISO 8601 text (`2026-09-30T08:15:00Z`) and Unix
   seconds as REAL. Never use local time.
-- Business logic (scanning, selection, manifests, script generation, verification)
+- Business logic (scanning, selection, manifests, copying, verification, deletion)
   must not import PySide6, so it stays unit-testable and portable to Linux later.
 - GUI work that can take more than ~100 ms (scans, transfers, verification) runs in a
   worker thread, never on the Qt main thread.

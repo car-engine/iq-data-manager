@@ -65,7 +65,7 @@ Rules for this file:
 | D45 | Edit entry with unsaved input in the Log tab | 2026-10-03, Milestone 4 | Active |
 | D46 | The Viewer refreshes after a Log tab save | 2026-10-03, Milestone 4 | Active |
 | D47 | When a recording last changed | 2026-10-03, Milestone 4 | Active |
-| D48 | The app copies files itself | 2026-10-03, Milestone 5 | Active |
+| D48 | The app copies files itself | 2026-10-03, Milestone 5 | Active; D54 moves the NAS measurement |
 | D49 | Files in a time range | 2026-10-03, Milestone 5 | Active |
 | D50 | Archiving needs the whole recording | 2026-10-03, Milestone 5 | Active |
 | D51 | Destination folders and resuming | 2026-10-03, Milestone 5 | Active |
@@ -874,10 +874,9 @@ engine in the app, and the engine with a script export.
   robocopy's `/R:3 /W:5` did. Progress counts files and bytes. Cancel stops between
   chunks and leaves the `.partial` file in place.
 - The engine can hash the source while it reads it, and can copy several files at
-  once. The number of files at once is a parameter. Milestone 6 sets it from the
-  results of `tools/copy_check.py`.
-- Throughput on the NAS is not measured yet. `tools/copy_check.py` measures it, and
-  the user runs it before Milestone 6.
+  once. The number of files at once is a parameter; O35 proposes a setting.
+- Throughput on the NAS is not measured yet. `tools/copy_check.py` measures it. D54
+  moved that measurement to the NAS field test with the Milestone 6 build.
 - A copy made by hand outside the app is still covered by "Check archive".
 - The safety rules for agents in CLAUDE.md are unchanged.
 
@@ -923,8 +922,10 @@ Closes O8. The user chose this on 2026-10-03: the proposed default, with resumin
 - A copy also accepts a destination that holds other files.
 - A target file that already exists with the source file's size counts as copied.
   The engine skips it, and verification checks it like every other file.
-- A target file that exists with another size stops the transfer before anything is
-  written. The engine never replaces it.
+- A target file that exists with another size makes the destination check refuse the
+  transfer, before anything is written. If such a file appears after the check, the
+  engine leaves it alone and the transfer is logged as failed. The engine never
+  replaces it.
 - A free-space margin is kept on the destination. A new key, `free_space_margin_gb`
   (default 10), sets it. Milestone 5 reads the key; the Settings tab shows it from
   Milestone 6 (D34).
@@ -1001,8 +1002,8 @@ recording laptop and reporting back the next day.
   flush to the destination's disks on and off (`--fsync both`), on a test-set
   recording (`--source`).
 - `copy_files()` takes `fsync=False` for that comparison only. The app keeps the
-  flush. It ensures that a crash on the NAS cannot leave a file with its real name
-  and size but without its data, which a size check would pass.
+  flush. The flush ensures that a crash on the NAS cannot leave a file with its real
+  name and size but without its data, which a size check would pass.
 - Risks the user accepted:
   - throughput to the NAS, above all for many small files, is unknown until then;
   - a check straight after a copy may read from the PC's cache;

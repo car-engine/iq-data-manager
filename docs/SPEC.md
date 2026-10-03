@@ -382,7 +382,8 @@ builds the tab over it.
 - **Check archive**: compare an archived recording's folder with its database entry:
   channels, and file count and total size per channel. It is logged with
   `operation = 'check'`. Counts the database does not hold (legacy entries) are
-  filled in from the folder, and that check is logged as `'skipped'`.
+  filled in from the folder, and that check is logged as `'skipped'`. A folder that
+  cannot be scanned is a failed check.
 
 Each copy or move first writes its `transfer_log` row with `started_at`. A row with no
 `finished_at` is a transfer that never completed, for example after a crash. A
@@ -412,8 +413,9 @@ from the database entry.
   modification time and is renamed to its real name. The rename never replaces an
   existing file.
 - A target file that already exists with the source's size counts as copied and is
-  skipped (resume, D51). A target file with another size stops the transfer before
-  anything is written.
+  skipped (resume, D51). A target file with another size makes the destination check
+  refuse the transfer. If one appears after the check, the engine leaves it alone and
+  the transfer is logged as failed.
 - Before the rename, each file is flushed to the destination's disks (`os.fsync`).
   A crash at the destination then cannot leave a file with its real name and size
   but without its data. `copy_files(fsync=False)` exists for timing comparisons
@@ -487,7 +489,7 @@ iq-data-manager/
     __main__.py               # python -m iqdm
     app.py                    # QApplication, main window and its tabs, --config/--db
     config.py                 # TOML config load and save (Settings tab, D31), defaults
-    models.py                 # dataclasses: Recording, Channel, Param, Transfer...
+    models.py                 # dataclasses: Recording, Channel, Param, TransferEntry...
     timeutil.py               # UTC ISO 8601 text <-> Unix seconds; display offset (D24)
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
@@ -550,7 +552,9 @@ written to a report, not guessed. A later "Check archive" fills in counts and si
 
 - `tools/make_fixtures.py` creates synthetic recordings in a given folder: N channels,
   duration, fs (small, e.g. 1 kS/s so files are tiny), gaps at chosen seconds,
-  optional header, optional wrong-size file. Used by pytest fixtures via `tmp_path`.
+  optional header, optional wrong-size file, and tone, zero, random or empty content.
+  Used by pytest fixtures via `tmp_path`. `tools/make_nas_testset.py` builds the NAS
+  field test set from it (D54).
 - Unit tests for scanner, selection, gap detection, manifest, path validation,
   estimates, the copy engine, verification, deletion, repository and migrations.
 - The copy engine, verification and deletion run on synthetic recordings under
@@ -596,9 +600,9 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
 
 ## 13. Scope
 
-Out of scope for v1: Linux build, transfer scripts (D48), file-level gap storage in the DB,
-user accounts, editing RF chain templates, deleting catalogue entries from the GUI
-(D41).
+Out of scope for v1: Linux build, transfer scripts (D48), file-level gap storage in
+the DB, user accounts, editing RF chain templates, deleting catalogue entries from the
+GUI (D41).
 
 Open questions and assumptions that may still change are listed in `docs/STATUS.md`.
 Resolved decisions are in `docs/DECISIONS.md`.

@@ -1,7 +1,7 @@
 # IQ Data Manager
 
 A Windows desktop app that logs RF IQ recordings into a shared SQLite database and
-generates verified copy and archive operations. Requirements are in `docs/SPEC.md`,
+copies and archives them with verification. Requirements are in `docs/SPEC.md`,
 decisions in `docs/DECISIONS.md`, and progress and open questions in
 `docs/STATUS.md`. Development rules are in `CLAUDE.md`.
 
@@ -40,6 +40,17 @@ python tools/make_fixtures.py --help
 ```
 
 The tool only creates files. It refuses an output folder that exists and is not empty.
+
+## Check tools
+
+Each tool prints its usage with `--help` and deletes nothing. Use them only on scratch
+databases and folders.
+
+| Tool | Use |
+| --- | --- |
+| `tools/db_check.py` | Create a scratch database; check opening, writing and locking (O21). |
+| `tools/copy_check.py` | Time the copy engine with 1, 4 and 8 files at once, flush on and off. |
+| `tools/make_nas_testset.py` | Write the synthetic recordings for the NAS field test (D54). |
 
 ## Run
 

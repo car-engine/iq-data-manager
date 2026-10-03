@@ -6,15 +6,15 @@ report. Last updated: 2026-10-03 (Milestone 5 merged).
 
 ## Current state
 
-- Milestones 0 to 5 are merged into `main`.
-- **Milestone 5 (Transfer core) is merged into `main`** (fast-forward, 2026-10-03,
-  not pushed). Report: [reports/M5.md](reports/M5.md). Decisions D48–D53 close O6, O7, O8, O9,
-  O13 and O32. The app copies files itself (D48); there are no transfer scripts.
+- Milestones 0 to 5 are merged into `main` and pushed. The last is Milestone 5
+  (Transfer core), report [reports/M5.md](reports/M5.md). Decisions D48–D53 close
+  O6, O7, O8, O9, O13 and O32. The app copies files itself (D48); there are no
+  transfer scripts. The transfer core has no GUI yet.
 - D54: the first test on the NAS runs with the Milestone 6 build, on the test set
   from `tools/make_nas_testset.py`. The copy engine is not tested on the NAS before
   then.
-- 1,202 tests pass and 4 skip on `main`. Three skips need the
-  symbolic-link privilege; the other runs only off Windows. `ruff check` is clean.
+- 1,202 tests pass and 4 skip on `main`. Three skips need the symbolic-link
+  privilege; the other runs only off Windows. `ruff check` is clean.
 - **Next: Milestone 6, Move / copy tab.** Open items for its plan: O1, O10, O11,
   O12, O25, O34, O35 and O36. It ends with the NAS field test (D54).
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
@@ -40,8 +40,10 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
-`68fb49c` (D29, D30), `257244c` (documentation review) and `77ed32c` (the user's
-narrower UNC pattern in the safety hook).
+`68fb49c` (D29, D30), `257244c` (documentation review), `77ed32c` (the user's
+narrower UNC pattern in the safety hook), `a9079d5` (documents for the next agent
+after Milestone 4) and the documentation review after Milestone 5 (branch
+`docs-review-m5`).
 
 ## Open items
 
@@ -57,15 +59,15 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O10 | Copy-to-PC destination layout: keep `rel_path` under `default_local_copy_root`, or a folder the user picks | 6 | None yet | M0 review 19 |
 | O11 | "Verify against source" for recordings logged in place on the NAS, and how a later verification clears the unverified mark. The Viewer shows the mark while the D2 row exists (D44). | 6 | None yet | D2 |
 | O12 | `finish_transfer` replaces `notes`; source deletion is recorded in `notes` | 6 | Add to the existing text instead of replacing it. | M1 review |
-| O34 | The recording laptops have no Python, so the NAS field test (D54) needs `copy_check`, `db_check` and the test set inside the packaged app. | 6 | Command-line options of the app, such as `--copy-check`, `--db-check` and `--make-test-set`, with the code moved from `tools/` into the package. | D54 |
-| O35 | Files copied at once, and the flush, as settings. A slow NAS could then be handled without a new build. | 6 | Files at once: a setting, default 4 (local timings in the Milestone 5 report). The flush: on, and changed only after the NAS test shows the need. | D54; Milestone 5 report |
-| O36 | A check straight after a copy may read from the PC's cache, and deleting the laptop copy relies on that check. | 6 | Offer "Delete laptop copy" only after a separate "Check archive" run, made at least some minutes after the copy or after a restart of the app. | Milestone 5 report |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
 | O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
 | O33 | Long paths in the packaged app. `transfer/pathcheck.py` allows paths above the Windows limits when long paths are enabled in the registry. The executable also needs a manifest that declares `longPathAware`. | 7 | Check the PyInstaller build's manifest. Until then, keep destination paths short. | Milestone 5 |
+| O34 | The recording laptops have no Python, so the NAS field test (D54) needs `copy_check`, `db_check` and the test set inside the packaged app. | 6 | Command-line options of the app, such as `--copy-check`, `--db-check` and `--make-test-set`, with the code moved from `tools/` into the package. | D54 |
+| O35 | Files copied at once, and the flush, as settings. A slow NAS could then be handled without a new build. | 6 | Files at once: a setting, default 4 (local timings in the Milestone 5 report). The flush: on, and changed only after the NAS test shows the need. | D54; Milestone 5 report |
+| O36 | A check straight after a copy may read from the PC's cache, and deleting the laptop copy relies on that check. | 6 | Offer "Delete laptop copy" only after a separate "Check archive" run, made at least some minutes after the copy or after a restart of the app. | Milestone 5 report |
 
 ## Closed items
 
@@ -150,13 +152,13 @@ These come from the safety configuration and from experience in this repository.
   backslashes, a name and a backslash at the start of a word, or the same with
   escaped backslashes. The user narrowed this pattern on 2026-10-02, so a backslash
   pair inside a word (such as `%APPDATA%\\IQDataManager`) no longer blocks. Commit
-  `77ed32c` holds that change.
+  `77ed32c` holds that change. A text search for such a word in the shell is blocked
+  too. The user approved the Grep tool for those searches on 2026-10-03.
 - **Write and change file content only with the Write and Edit tools.** Do not use
   heredocs, `cat >>`, `sed -i` or `python -` scripts for file content, even where the
   harness suggests shell edits. For a rename across a file, use Edit with
-  `replace_all`. The hook checks the
-  target path of Write and Edit and does not read their content, so docs, code and
-  tests can hold example UNC strings.
+  `replace_all`. The hook checks the target path of Write and Edit and does not read
+  their content, so docs, code and tests can hold example UNC strings.
 - **Large tables sort in their own model.** A `QSortFilterProxyModel` over a Python
   model calls `data()` for every comparison: 0.5 s for 5,000 rows on the main thread
   in Milestone 4. See `gui/widgets/recording_model.py` (D40).
@@ -192,6 +194,14 @@ These come from the safety configuration and from experience in this repository.
   "NAS" in them is a `tmp_path` folder passed to `Config(nas_roots=...)` directly;
   `resolve_drive=None` and a stubbed `disk_usage` keep the tests off real drives. See
   `tests/test_operations.py`.
+- **Code that deletes or overwrites a file** is listed in the Milestone 5 report,
+  section "Code paths that delete or overwrite a file". Update that list in the
+  milestone report when such code changes, as `docs/KICKOFF.md` asks for
+  Milestones 5 and 6.
+- **A test module must not import a class named `Test...`.** Pytest tries to collect
+  it, and a dataclass then raises a collection warning, which the configuration
+  turns into an error. Tool classes are named accordingly (`SetSizes` in
+  `tools/make_nas_testset.py`).
 - **Reports:** every milestone ends with a report in `docs/reports/` that follows
   `docs/REPORT_TEMPLATE.md`, and an update to this file.
 - **`ruff format` only on the files you change.** Several files on `main` are not in
