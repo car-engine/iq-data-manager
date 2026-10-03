@@ -56,6 +56,7 @@ from iqdm.config import (
     save_config,
     settings_errors,
     settings_from_data,
+    settings_source,
 )
 from iqdm.db.connection import (
     DatabaseInfo,
@@ -237,6 +238,7 @@ class SettingsTab(QWidget):
         self,
         config_path: Path | None,
         *,
+        defaults_path: Path | None = None,
         db_override: str | None = None,
         config_override: bool = False,
         confirm_apply: Callable[[Config], bool] | None = None,
@@ -246,6 +248,7 @@ class SettingsTab(QWidget):
     ) -> None:
         super().__init__(parent)
         self.config_path = config_path
+        self.defaults_path = defaults_path  # read while config_path does not exist (D68)
         self.db_override = db_override
         self.config_override = config_override
         self.confirm_apply = confirm_apply  # asked before Save writes; False cancels
@@ -253,6 +256,7 @@ class SettingsTab(QWidget):
         self.runner = TaskRunner(self) if runner is None else runner
 
         self._data: dict[str, Any] | None = {}  # None when the file cannot be read
+        self._source: Path | None = config_path  # the file the values were read from
         self._baseline = SettingsInput()
         self._read_error: str | None = None  # the file is not valid TOML
         self._file_error: str | None = None  # valid TOML that load_config() refuses
@@ -468,6 +472,8 @@ class SettingsTab(QWidget):
         self.version_label = QLabel(f"IQ Data Manager {__version__}")
         self.override_note = QLabel()
         self.override_note.setWordWrap(True)
+        self.defaults_note = QLabel()
+        self.defaults_note.setWordWrap(True)
 
         row = QHBoxLayout()
         row.addWidget(self.config_path_label, 1)
@@ -475,6 +481,7 @@ class SettingsTab(QWidget):
         layout = QVBoxLayout(box)
         layout.addWidget(QLabel("Settings file"))
         layout.addLayout(row)
+        layout.addWidget(self.defaults_note)
         layout.addWidget(self.override_note)
         layout.addWidget(self.version_label)
         return box
@@ -519,10 +526,12 @@ class SettingsTab(QWidget):
     def reload(self) -> None:
         """Read the configuration file again and show its values."""
         self._data, self._read_error, self._file_error, self._hidden_error = {}, None, None, None
+        self._source = None
         if self.config_path is not None:
-            where = str(self.config_path)
+            self._source = settings_source(self.config_path, self.defaults_path)
+            where = str(self._source)
             try:
-                self._data = read_config_data(self.config_path)
+                self._data = read_config_data(self._source)
             except ConfigError as exc:
                 self._data = None
                 self._read_error = str(exc)
@@ -564,10 +573,23 @@ class SettingsTab(QWidget):
         self._update_root_buttons()
         self._validate()
 
+    @property
+    def reads_defaults(self) -> bool:
+        """True when the values come from the defaults file (D68)."""
+        return self._source is not None and self._source != self.config_path
+
     def _show_about(self) -> None:
         path = self.config_path
         self.config_path_label.setText(str(path) if path is not None else "None")
         self.open_folder_button.setEnabled(path is not None and path.parent.is_dir())
+        self.defaults_note.setText(
+            "This PC has no settings file yet. The values shown come from the defaults "
+            f"file in the program folder ({self._source}). Save writes them to the "
+            "settings file above."
+            if self.reads_defaults
+            else ""
+        )
+        self.defaults_note.setVisible(self.reads_defaults)
         notes = []
         if self.config_override:
             notes.append("Started with --config: this run reads and writes the file above.")
@@ -591,6 +613,8 @@ class SettingsTab(QWidget):
         """
         if self.config_path is None:
             return NO_CONFIG_PATH, ""
+        if self.reads_defaults:
+            return self._defaults_problem()
         if self._read_error is not None:
             return (
                 "The settings file cannot be read. Save replaces it with the values shown "
@@ -607,6 +631,28 @@ class SettingsTab(QWidget):
         if self._file_error is not None:
             return (
                 "The settings file has a wrong value. Correct the field marked in red and save.",
+                self._file_error,
+            )
+        return "", ""
+
+    def _defaults_problem(self) -> tuple[str, str]:
+        """The line about the defaults file, which the user cannot correct here (D68)."""
+        where = "The defaults file in the program folder"
+        if self._read_error is not None:
+            return (
+                f"{where} cannot be read. Save writes the values shown here to the "
+                "settings file above.",
+                self._read_error,
+            )
+        if self._hidden_error is not None:
+            return (
+                f"{where} has a wrong value that this tab does not show: "
+                f"{self._hidden_error}. Ask the person who set up the program to correct it.",
+                self._hidden_error,
+            )
+        if self._file_error is not None:
+            return (
+                f"{where} has a wrong value. Correct the field marked in red and save.",
                 self._file_error,
             )
         return "", ""

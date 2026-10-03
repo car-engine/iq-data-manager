@@ -11,7 +11,14 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QTabWidget, QWidget
 
 from iqdm import __version__
-from iqdm.config import Config, ConfigError, default_config_path, load_config
+from iqdm.config import (
+    DEFAULTS_FILE_NAME,
+    Config,
+    ConfigError,
+    default_config_path,
+    load_config,
+    settings_source,
+)
 from iqdm.db.connection import verify_schema_in_memory
 from iqdm.db.version import LATEST_VERSION
 from iqdm.gui.log_tab import LogTab
@@ -56,8 +63,9 @@ class MainWindow(QMainWindow):
     """Top-level window holding the Viewer, Log recording, Archive / copy and Settings tabs.
 
     config_path is the configuration file the Settings tab reads and writes. None means
-    there is none (APPDATA not set). db_override is the --db path, which stays in force
-    after a Save (SPEC section 4).
+    there is none (APPDATA not set). defaults_path is the defaults file the tab reads
+    while config_path does not exist (D68). db_override is the --db path, which stays
+    in force after a Save (SPEC section 4).
     """
 
     def __init__(
@@ -66,6 +74,7 @@ class MainWindow(QMainWindow):
         *,
         config_error: str | None = None,
         config_path: Path | None = None,
+        defaults_path: Path | None = None,
         db_override: str | None = None,
         config_override: bool = False,
         parent: QWidget | None = None,
@@ -93,6 +102,7 @@ class MainWindow(QMainWindow):
         self.transfer_tab.status_changed.connect(self._transfer_status)
         self.settings_tab = SettingsTab(
             config_path,
+            defaults_path=defaults_path,
             db_override=db_override,
             config_override=config_override,
             confirm_apply=self.confirm_apply,
@@ -241,18 +251,28 @@ def config_path_for(
         return None
 
 
+def defaults_path_for(frozen: bool | None = None, executable: str | None = None) -> Path | None:
+    """defaults.toml in the folder of the packaged program; None when run from source (D68)."""
+    if not (getattr(sys, "frozen", False) if frozen is None else frozen):
+        return None
+    return Path(sys.executable if executable is None else executable).parent / DEFAULTS_FILE_NAME
+
+
 def resolve_config(
-    args: argparse.Namespace, environ: Mapping[str, str] | None = None
+    args: argparse.Namespace,
+    environ: Mapping[str, str] | None = None,
+    defaults_path: Path | None = None,
 ) -> tuple[Config, str | None]:
     """The configuration for this run, and an error message if reading it failed.
 
-    A failed read gives the defaults. --db overrides db_path in both cases
+    The settings file is read, or defaults_path while the settings file does not exist
+    (D68). A failed read gives the defaults. --db overrides db_path in both cases
     (DECISIONS.md D15).
     """
     error = None
     try:
         path = args.config if args.config is not None else default_config_path(environ)
-        config = load_config(path)
+        config = load_config(settings_source(path, defaults_path))
     except ConfigError as exc:
         config, error = Config(), str(exc)
     if args.db is not None:
@@ -300,11 +320,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.smoke_test:
         return _smoke_test(app)
 
-    config, config_error = resolve_config(args)
+    defaults_path = defaults_path_for()
+    config, config_error = resolve_config(args, defaults_path=defaults_path)
     window = MainWindow(
         config,
         config_error=config_error,
         config_path=config_path_for(args),
+        defaults_path=defaults_path,
         db_override=args.db,
         config_override=args.config is not None,
     )

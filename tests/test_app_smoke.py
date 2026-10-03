@@ -13,6 +13,7 @@ from iqdm.app import (
     MainWindow,
     _parse_args,
     config_path_for,
+    defaults_path_for,
     drop_log_input_question,
     main,
     resolve_config,
@@ -113,6 +114,61 @@ def test_bad_config_gives_defaults_and_an_error(tmp_path):
     assert config == Config(db_path="x.db")
     assert error is not None
     assert "not valid TOML" in error
+
+
+def test_defaults_path_only_for_the_packaged_app(tmp_path):
+    """D68: the packaged app reads defaults.toml from its own folder."""
+    assert defaults_path_for(frozen=False) is None
+    assert defaults_path_for() is None  # the tests run from source
+    exe = tmp_path / "IQDataManager" / "IQDataManager.exe"
+    assert defaults_path_for(frozen=True, executable=str(exe)) == exe.parent / "defaults.toml"
+
+
+def write_defaults(tmp_path, text: str):
+    path = tmp_path / "program" / "defaults.toml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_defaults_file_is_read_without_a_settings_file(tmp_path):
+    defaults = write_defaults(tmp_path, "db_path = 'shared.db'\nnas_roots = ['\\\\nas\\iq']")
+    args = _parse_args(["--config", str(tmp_path / "config.toml")])
+    config, error = resolve_config(args, defaults_path=defaults)
+    assert error is None
+    assert (config.db_path, config.nas_roots) == ("shared.db", ("\\\\nas\\iq",))
+    config, _ = resolve_config(_parse_args([]), {"APPDATA": str(tmp_path)}, defaults)
+    assert config.db_path == "shared.db"
+    args = _parse_args(["--config", str(tmp_path / "config.toml"), "--db", "mine.db"])
+    assert resolve_config(args, defaults_path=defaults)[0].db_path == "mine.db"
+
+
+def test_a_settings_file_hides_the_defaults_file(tmp_path):
+    defaults = write_defaults(tmp_path, "db_path = 'shared.db'")
+    path = tmp_path / "config.toml"
+    path.write_text("network_speed_mb_s = 50", encoding="utf-8")
+    config, error = resolve_config(_parse_args(["--config", str(path)]), defaults_path=defaults)
+    assert error is None
+    assert (config.db_path, config.network_speed_mb_s) == (None, 50.0)
+
+
+def test_a_wrong_defaults_file_names_itself(tmp_path):
+    defaults = write_defaults(tmp_path, "copy_workers = 99")
+    args = _parse_args(["--config", str(tmp_path / "config.toml")])
+    config, error = resolve_config(args, defaults_path=defaults)
+    assert config == Config()
+    assert error is not None
+    assert str(defaults) in error
+
+
+def test_the_window_passes_the_defaults_file_to_the_settings_tab(qtbot, tmp_path):
+    defaults = write_defaults(tmp_path, "display_utc_offset_hours = 5.5")
+    window = MainWindow(config_path=tmp_path / "config.toml", defaults_path=defaults)
+    qtbot.addWidget(window)
+    assert window.settings_tab.defaults_path == defaults
+    assert window.settings_tab.reads_defaults
+    assert window.settings_tab.offset_spin.value() == 5.5
+    wait_window(qtbot, window)
 
 
 def test_status_bar_names_the_database(qtbot, db_path):

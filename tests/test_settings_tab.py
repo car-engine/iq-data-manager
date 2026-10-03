@@ -297,6 +297,93 @@ def test_a_late_result_of_an_earlier_check_is_dropped(make_tab, config_file):
 
 
 # ---------------------------------------------------------------------------
+# Defaults file (D68)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def defaults_file(tmp_path) -> Path:
+    return write(
+        tmp_path / "program" / "defaults.toml",
+        f"db_path = 'shared.db'\nnas_roots = ['{NAS}']\nstorage_roots = {{}}\n",
+    )
+
+
+def test_without_a_settings_file_the_tab_shows_the_defaults_file(
+    make_tab, config_file, defaults_file
+):
+    tab = make_tab(config_file, defaults_path=defaults_file)
+    assert tab.reads_defaults
+    assert tab.db_edit.text() == "shared.db"
+    assert roots(tab) == [NAS]
+    assert not tab.defaults_note.isHidden()
+    assert str(defaults_file) in tab.defaults_note.text()
+    assert tab.defaults_note.text().startswith("This PC has no settings file yet.")
+    assert tab.problem_label.isHidden()
+    assert not tab.save_button.isEnabled()  # nothing changed
+
+
+def test_save_writes_the_defaults_to_the_settings_file(
+    qtbot, make_tab, config_file, defaults_file
+):
+    before = defaults_file.read_bytes()
+    tab = make_tab(config_file, defaults_path=defaults_file)
+    tab.offset_spin.setValue(5.5)
+    config = save_and_get_config(qtbot, tab)
+    assert (config.db_path, config.nas_roots) == ("shared.db", (NAS,))
+    assert config.display_utc_offset_hours == 5.5
+    assert read_config_data(config_file)["storage_roots"] == {}  # hidden keys come along
+    assert defaults_file.read_bytes() == before
+    assert not tab.reads_defaults
+    assert tab.defaults_note.isHidden()
+
+
+def test_a_settings_file_hides_the_defaults_file(make_tab, config_file, defaults_file):
+    write(config_file, "db_path = 'mine.db'")
+    tab = make_tab(config_file, defaults_path=defaults_file)
+    assert not tab.reads_defaults
+    assert tab.db_edit.text() == "mine.db"
+    assert roots(tab) == []
+    assert tab.defaults_note.isHidden()
+
+
+def test_a_wrong_hidden_key_in_the_defaults_file(make_tab, config_file, tmp_path):
+    defaults = write(tmp_path / "defaults.toml", "storage_roots = 5")
+    tab = make_tab(config_file, defaults_path=defaults)
+    assert tab.problem_label.text().startswith(
+        "The defaults file in the program folder has a wrong value that this tab does not show"
+    )
+    assert tab.problem_label.text().endswith(
+        "Ask the person who set up the program to correct it."
+    )
+    assert not tab.save_button.isEnabled()
+
+
+def test_an_unreadable_defaults_file_can_be_replaced_by_save(
+    qtbot, make_tab, config_file, tmp_path
+):
+    defaults = write(tmp_path / "defaults.toml", "db_path = ")
+    tab = make_tab(config_file, defaults_path=defaults)
+    assert tab.problem_label.text().startswith(
+        "The defaults file in the program folder cannot be read."
+    )
+    assert tab.save_button.isEnabled()
+    save_and_get_config(qtbot, tab)
+    assert config_file.is_file()
+    assert defaults.read_text(encoding="utf-8") == "db_path = "
+
+
+def test_a_wrong_value_in_the_defaults_file_is_marked(make_tab, config_file, tmp_path):
+    defaults = write(tmp_path / "defaults.toml", "coverage_highlight_percent = 0")
+    tab = make_tab(config_file, defaults_path=defaults)
+    assert tab.problem_label.text() == (
+        "The defaults file in the program folder has a wrong value. Correct the field "
+        "marked in red and save."
+    )
+    assert tab.coverage_error.text() == COVERAGE_MESSAGE
+
+
+# ---------------------------------------------------------------------------
 # New database (D67)
 # ---------------------------------------------------------------------------
 

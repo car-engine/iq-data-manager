@@ -19,6 +19,7 @@ from iqdm.config import (
     save_config,
     settings_errors,
     settings_from_data,
+    settings_source,
 )
 from iqdm.models import HashMode
 
@@ -27,6 +28,23 @@ def write(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "config.toml"
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def test_settings_source_prefers_the_settings_file(tmp_path):
+    """D68: the defaults file is read only while the settings file does not exist."""
+    config = tmp_path / "AppData" / "config.toml"
+    defaults = tmp_path / "program" / "defaults.toml"
+    assert settings_source(config, None) == config
+    assert settings_source(config, defaults) == config  # neither file exists
+    defaults.parent.mkdir()
+    defaults.write_text("db_path = 'shared.db'", encoding="utf-8")
+    assert settings_source(config, defaults) == defaults
+    config.parent.mkdir()
+    config.write_text("", encoding="utf-8")
+    assert settings_source(config, defaults) == config  # even an empty settings file
+    folder = tmp_path / "folder.toml"
+    folder.mkdir()
+    assert settings_source(tmp_path / "absent.toml", folder) == tmp_path / "absent.toml"
 
 
 def test_missing_file_gives_defaults(tmp_path):

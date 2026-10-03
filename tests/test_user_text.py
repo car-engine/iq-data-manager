@@ -116,6 +116,20 @@ def test_settings_tab_text_is_plain(settings_tab):
     assert "New database..." in texts
 
 
+def test_settings_tab_text_from_the_defaults_file_is_plain(qtbot, tmp_path):
+    """The note and the problem line shown while the defaults file is read (D68)."""
+    defaults = tmp_path / "defaults.toml"
+    defaults.write_text("storage_roots = 5", encoding="utf-8")
+    tab = SettingsTab(tmp_path / "config.toml", defaults_path=defaults)
+    qtbot.addWidget(tab)
+    qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
+    texts = visible_texts(tab, skip_tooltips=(tab.db_status, tab.problem_label))
+    assert offending([t for t in texts if t != tab.problem_label.text()]) == []
+    assert tab.defaults_note.text() in texts
+    # The problem line names the wrong key, which only the file's owner can correct (D36).
+    assert "storage_roots" in tab.problem_label.text()
+
+
 def test_new_database_question_is_plain(tmp_path):
     """The Yes/No question of "New database..." is shown outside the tab (D67)."""
     assert offending([new_database_question(tmp_path / "project.db")]) == []

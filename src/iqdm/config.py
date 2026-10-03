@@ -23,6 +23,7 @@ from iqdm.models import HashMode
 
 CONFIG_DIR_NAME = "IQDataManager"
 CONFIG_FILE_NAME = "config.toml"
+DEFAULTS_FILE_NAME = "defaults.toml"  # next to the packaged program (D68)
 NEW_SUFFIX = ".new"  # written first, then renamed over config.toml
 BACKUP_SUFFIX = ".bak"  # the file as it was before the last Save (O31)
 SETTINGS_KEYS = (  # shown in the Settings tab
@@ -223,6 +224,17 @@ def read_config_data(path: Path) -> dict[str, Any]:
 def load_config(path: Path) -> Config:
     """Read a configuration file. A missing file gives the defaults."""
     return parse_config(read_config_data(path), str(path))
+
+
+def settings_source(config_path: Path, defaults_path: Path | None) -> Path:
+    """The file to read the settings from (DECISIONS.md D68).
+
+    That is config_path, unless config_path does not exist and defaults_path is a
+    file. The settings are always written to config_path.
+    """
+    if config_path.exists() or defaults_path is None or not defaults_path.is_file():
+        return config_path
+    return defaults_path
 
 
 # =========================================================================
