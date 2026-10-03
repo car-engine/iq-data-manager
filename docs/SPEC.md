@@ -104,6 +104,14 @@ A missing file gives the defaults, which have no `db_path`. Unknown keys are ign
 when the file is read, and kept when the Settings tab writes it (DECISIONS.md D15).
 `--config PATH` reads and writes another file, and `--db PATH` overrides `db_path`.
 
+**Defaults file** (D68). The packaged app looks for `defaults.toml` in the folder of
+`IQDataManager.exe`. While the settings file in use does not exist, the app reads its
+settings from `defaults.toml`, which has the same format and rules. The Settings tab
+names the defaults file, and Save writes the values to the settings file. From then
+on that PC ignores the defaults file. The app never writes `defaults.toml`. The build
+folder holds `defaults.example.toml`, which whoever prepares the build fills in and
+saves as `defaults.toml`. The app run from source has no defaults file.
+
 ```toml
 db_path = '\\192.168.1.50\recordings\iq_catalog.db'
 default_local_copy_root = 'D:\work\iq'
@@ -129,7 +137,7 @@ text": no key names, decision numbers or database internals on screen (D38).
 
 | Section | Fields and actions |
 | --- | --- |
-| Database | "Database file" (`db_path`), with Browse for an existing `.db` file. A status line in green, amber or red with a mark (D38): ready to use; no path, checking, or a newer database the app can only read; missing, a folder, unreadable, not an IQ Data Manager database, or an older database. The tooltip holds the schema version and connection settings (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
+| Database | "Database file" (`db_path`), with Browse for an existing `.db` file and "New database..." for a new, empty one (D67). New database asks for a file that does not exist, asks Yes/No first (default No), creates the file in a worker and puts its path in the field; Save switches to it. A status line in green, amber or red with a mark (D38): ready to use; no path, checking, or a newer database the app can only read; missing, a folder, unreadable, not an IQ Data Manager database, or an older database. The tooltip holds the schema version and connection settings (`connection.inspect_database()`). The check runs when the tab opens, after Browse, when the path field loses focus, and on "Check connection". It uses a read-only connection. |
 | NAS locations | The `nas_roots` list, with Add, Edit and Remove. Each entry must pass `config.is_unc_path()`. A line explains the rule in plain words: folders under these locations count as already archived on the NAS (D14, D2). |
 | Display | "Show times at UTC offset" (`display_utc_offset_hours`), from −12 to 14 in steps of 0.25 (D24), with an example such as "2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8)." "Highlight coverage below" (`coverage_highlight_percent`), from 0.0 to 100.0 % with one decimal place; 0 is an error (Milestone 4, D39). |
 | About | The path of the settings file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
@@ -148,9 +156,8 @@ Not in the Settings tab (D30):
 - **Data-file extensions.** They stay fixed in code as `.dat` and `.bin`
   (`scanner.DEFAULT_EXTENSIONS`, any letter case), so every PC scans a folder the same
   way. A new extension comes with a new release.
-- **Creating a database.** The real catalogue comes from the legacy migration tool
-  (Milestone 7). An empty database comes from `tools/db_check.py create`. Milestone 7
-  adds an admin command-line option, `--create-db PATH`, for packaged builds.
+- **Creating the shared catalogue.** It comes from the legacy import (section 10,
+  D66). "New database..." makes an empty database for a private project (D67).
 
 Behaviour:
 
@@ -179,8 +186,8 @@ Behaviour:
 - **Startup errors.** A configuration file that cannot be read opens the app on the
   Settings tab with the error shown, so the user can correct it there. A file that is
   not valid TOML can be replaced by Save.
-- **Database files.** The Settings tab never creates or changes a database (D30). It
-  opens the chosen file read-only.
+- **Database files.** The Settings tab creates a database only through "New
+  database..." (D67), and never changes one. It opens the chosen file read-only.
 - **Architecture.** The writer and its validation live in `config.py` (no Qt). The tab
   is `gui/settings_tab.py`. Database checks run in the `TaskRunner`, because a
   database on the NAS can take seconds to answer.
@@ -546,6 +553,7 @@ iq-data-manager/
     REPORT_TEMPLATE.md        # format of milestone reports
     reports/                  # one report per milestone: M0.md, M1.md, ...
     KICKOFF.md                # session start-up and resume prompts
+    USER_GUIDE.md             # short guide for users, shipped in the build folder
     mockup/                   # exported GUI mockups
   src/iqdm/
     __main__.py               # python -m iqdm
@@ -557,12 +565,14 @@ iq-data-manager/
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
     movecopy.py               # Archive / copy tab logic: time input, preview text, states (no Qt)
+    legacy.py                 # legacy import: folder rules, grouping, report (D66; no Qt, no SQL)
     db/
       schema.sql
       version.py              # LATEST_VERSION and schema_status(), shared by the two below
       connection.py           # connect(), read-only connect, retry-on-lock helper
       migrations.py           # user_version-based migrations, backup before migrate
       repository.py           # all queries and writes
+      legacy.py               # reads the legacy table read-only; writes the import (D66)
     scan/
       scanner.py
     transfer/
@@ -589,10 +599,11 @@ iq-data-manager/
     db_check.py               # create, write and locking checks on a scratch database (O21)
     copy_check.py             # copy-engine throughput, flush on and off (D48, D54)
     make_nas_testset.py       # synthetic recordings for the NAS field test (D54)
-    migrate_legacy.py         # legacy DB -> new schema (writes a NEW file)
+    migrate_legacy.py         # legacy DB -> new schema (writes a NEW file; D66)
   tests/
   build/
     iqdm.spec                 # PyInstaller spec: IQDataManager.exe and IQDataManager-check.exe
+    defaults.example.toml     # template of the defaults file, example values only (D68)
 ```
 
 Rules: nothing outside `gui/` and `app.py` imports PySide6. All SQL lives in `db/`,
@@ -602,16 +613,39 @@ place that deletes files.
 ## 10. Legacy data migration
 
 The current database has one table with columns `date, date_unix, site, band, fc_hz,
-fs_hz, duration_s, data_dir, remarks`. `tools/migrate_legacy.py` reads a copy of it
-and writes a new database file; it never modifies the original.
+fs_hz, duration_s, data_dir, remarks`. `date` is text at UTC+8; `date_unix` always
+wins over it. `fc_hz` and `fs_hz` are in Hz, `duration_s` in whole seconds. Each
+channel of a multi-channel capture is a separate row whose `data_dir` ends in the
+channel folder, for example `\\192.168.1.50\Data\IQ\recording1\0\` (D66).
 
-Mapping: distinct `site` values become `sites` rows; each row becomes one recording
-(`start_unix = date_unix`, `end_unix = date_unix + duration_s`, `archive_state =
-'archived'`, `logged_by = 'legacy-import'`, format defaults) plus one channel row
-(index 0, `band`, `fc_hz`, `fs_hz`, same times, `n_files` and `total_bytes` NULL).
-`data_dir` is split into `storage_root` and `rel_path` using configured UNC roots and
-a drive-letter-to-UNC mapping supplied as arguments. Rows that cannot be mapped are
-written to a report, not guessed. A later "Check archive" fills in counts and sizes.
+`IQDataManager-check.exe migrate-legacy LEGACY_DB NEW_DB --nas-root UNC [--nas-root
+UNC ...] [--drive Z:=UNC ...] [--table NAME] [--dry-run]` reads a copy of the legacy
+file read-only and writes a new database file; it never modifies the original. It
+refuses a `NEW_DB` that exists. `tools/migrate_legacy.py` runs the same code (D57).
+
+Mapping (D66):
+
+- A last folder named by a canonical decimal number (D11) is a channel folder: it gives
+  `channel_index` and `sub_path`, and its parent is the recording folder. Any other
+  `data_dir` is the recording folder, with channel 0.
+- The recording folder is split into `storage_root` and `rel_path` by D14, using the
+  `--nas-root` UNC roots and the `--drive` letter-to-UNC mapping.
+- Rows with the same recording folder, compared without letter case, become one
+  recording. A repeated channel index, a mix of channel folders and the bare folder,
+  or two sites in one group send the group to the report. Different remarks are
+  joined with " | ".
+- Each row becomes one channel (`band`, `fc_hz`, `fs_hz`, `start_unix = date_unix`,
+  `end_unix = date_unix + duration_s`, `n_files` and `total_bytes` NULL).
+- Distinct `site` values, compared without letter case, become `sites` rows.
+- Each recording gets `archive_state = 'archived'`, `logged_by = 'legacy-import'`,
+  the format defaults (`int16`, interleaved I/Q, little-endian, no header,
+  1 s files) and the in-place row of D2, so it shows "archived, not verified".
+- A `date` more than 1 s from `date_unix`, or one that cannot be read, gives a warning.
+- Rows that cannot be mapped are written to a report, not guessed. A real run writes
+  the report as `<NEW_DB>.report.txt`; a dry run only prints it. All recordings are
+  written in one transaction.
+
+A later "Check archive" fills in counts and sizes.
 
 ## 11. Testing
 
@@ -660,9 +694,10 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    with the change of term from "move" to "archive" (D64), and ends with the first
    test on the NAS, with the test set from `tools/make_nas_testset.py` (D54).
 7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
-   it runs without Python), an admin option `--create-db PATH` for an empty database,
-   short user guide (D30). The settings dialog and the config writer moved to
-   Milestone 3a (D29).
+   it runs without Python; D66), "New database..." in the Settings tab (D67, in place
+   of the admin option `--create-db PATH` that D30 planned), the defaults file in the
+   program folder (D68), long paths in the packaged app (D65), short user guide. The
+   settings dialog and the config writer moved to Milestone 3a (D29).
 
 ## 13. Scope
 

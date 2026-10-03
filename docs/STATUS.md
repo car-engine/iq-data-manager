@@ -2,13 +2,19 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-04 (Milestone 6 merged; NAS field test pending).
+report. Last updated: 2026-10-04 (Milestone 7 started; Milestone 6 NAS field test
+pending).
 
 ## Current state
 
-- Milestones 0 to 5 are merged into `main` and pushed.
+- **Milestone 7, Packaging and migration, is in progress on branch
+  `m7-packaging-migration`**, from `main` at `283d8a8`. The user approved the plan on
+  2026-10-04. D65–D68 record its decisions: long paths (closes O33), the legacy
+  import, "New database..." in the Settings tab (replaces D30's `--create-db`), and
+  the defaults file in the program folder.
+- Milestones 0 to 6 are merged into `main` and pushed.
 - **Milestone 6, Archive / copy tab, is merged into `main`** (fast-forward,
-  2026-10-04, not pushed). Report: [reports/M6.md](reports/M6.md). The user passed the
+  2026-10-04, pushed). Report: [reports/M6.md](reports/M6.md). The user passed the
   manual test on this PC on 2026-10-04 with no issues. 1,410 tests pass and 4 skip on
   `main`; three skips need the symbolic-link privilege, the other runs only off
   Windows. `ruff check` is clean.
@@ -42,7 +48,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Archive / copy tab | Done, merged; NAS field test pending | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
-| 7. Packaging and migration | Not started | | | |
+| 7. Packaging and migration | In progress | `m7-packaging-migration` | | |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
@@ -65,11 +71,10 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
-| O33 | Long paths in the packaged app. `transfer/pathcheck.py` allows paths above the Windows limits when long paths are enabled in the registry. The executable also needs a manifest that declares `longPathAware`. | 7 | Check the PyInstaller build's manifest. Until then, keep destination paths short. | Milestone 5 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D64). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D68). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -104,6 +109,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D64). The M0 review table in
 | O10 | Copy-to-PC destination layout | D60 (2026-10-03) |
 | O25 | One capture logged twice | D61 (2026-10-03) |
 | O12 | `finish_transfer` replaces `notes` | D62 (2026-10-03) |
+| O33 | Long paths in the packaged app (`longPathAware`) | D65 (2026-10-04) |
 
 ## Pending checks for the user
 

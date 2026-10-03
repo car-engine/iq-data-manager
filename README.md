@@ -93,5 +93,12 @@ dist/<name>/IQDataManager/IQDataManager.exe --smoke-test
 dist/<name>/IQDataManager/IQDataManager-check.exe --help
 ```
 
+Both executables must declare long-path support in their manifest (D65). This
+command prints one line for each executable, ending in `true</longPathAware>`:
+
+```
+grep -a -o "<longPathAware[^<]*</longPathAware>" dist/<name>/IQDataManager/*.exe
+```
+
 `PYINSTALLER_CONFIG_DIR` keeps PyInstaller's cache inside the repository. Git ignores
 `build/` (except the spec) and `dist/`. Remove old build output by hand.

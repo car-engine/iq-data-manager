@@ -47,7 +47,7 @@ Rules for this file:
 | D27 | Warning for a folder named like a channel folder | 2026-10-02, Milestone 3 | Active |
 | D28 | RF chain repeats, overrides and conflicts | 2026-10-02, Milestone 3 | Active |
 | D29 | Settings tab before the Viewer | 2026-10-02, after Milestone 3 | Active; scope narrowed by D30 |
-| D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-02, after Milestone 3 | Active |
+| D30 | Settings scope: no upgrade button, fixed extensions, no database creation | 2026-10-02, after Milestone 3 | Active; D67 replaces its point on database creation |
 | D31 | Writing config.toml with tomli-w | 2026-10-02, Milestone 3a | Active |
 | D32 | Name of the Settings milestone | 2026-10-02, Milestone 3a | Active |
 | D33 | Applying settings without a restart | 2026-10-02, Milestone 3a | Active |
@@ -82,6 +82,10 @@ Rules for this file:
 | D62 | Transfer notes are appended | 2026-10-03, Milestone 6 | Active |
 | D63 | Skipped files are hashed | 2026-10-03, Milestone 6 | Active |
 | D64 | "Archive" in place of "move" | 2026-10-03, Milestone 6 | Active |
+| D65 | Long paths in the packaged app | 2026-10-04, Milestone 7 | Active |
+| D66 | Legacy import | 2026-10-04, Milestone 7 | Active |
+| D67 | New database in the Settings tab | 2026-10-04, Milestone 7 | Active |
+| D68 | Defaults file in the program folder | 2026-10-04, Milestone 7 | Active |
 
 ## D1. Sample types
 
@@ -1191,3 +1195,124 @@ The user decided on 2026-10-03, while planning Milestone 6.
 
 Affects: CLAUDE.md, SPEC sections 1, 3, 5, 8, 9 and 12, `schema.sql`, `models.py`,
 `db/repository.py`, `transfer/`, `viewer.py`, `entry.py`, `app.py`.
+
+## D65. Long paths in the packaged app
+
+Closes O33. Found while planning Milestone 7, in the plan the user approved on
+2026-10-04.
+
+- PyInstaller 6.22.3 writes a manifest into each executable, and that manifest
+  declares `longPathAware` as true. Both programs in `dist/m6-3` hold
+  `<longPathAware ...>true</longPathAware>`.
+- The packaged app therefore uses paths above the Windows limits on a PC where long
+  paths are enabled in the registry (`LongPathsEnabled`). `transfer/pathcheck.py`
+  already reads that setting.
+- `build/iqdm.spec` sets no manifest of its own. A build check finds the declaration
+  in both executables (README, "Build").
+- The user guide explains the registry setting.
+
+Affects: README.md, `docs/USER_GUIDE.md`.
+
+## D66. Legacy import
+
+Settles the details of SPEC section 10. The user described the legacy columns on
+2026-10-04 and approved the plan.
+
+- The legacy table has the columns `date`, `date_unix`, `site`, `band`, `fc_hz`,
+  `fs_hz`, `duration_s`, `data_dir` and `remarks`.
+  - `date` is text at UTC+8. `date_unix` is Unix seconds, and it always wins over
+    `date`.
+  - `fc_hz` and `fs_hz` are in Hz. `duration_s` is whole seconds.
+  - Each channel of a multi-channel capture is a separate row. Its `data_dir` ends in
+    the channel folder, for example `\\192.168.1.50\Data\IQ\recording1\0\` and
+    `\\192.168.1.50\Data\IQ\recording1\1\`.
+  - All legacy recordings are on the NAS. All are `int16`, interleaved I then Q, with
+    no header.
+- The import opens a copy of the legacy file read-only and writes a new database. It
+  refuses an output file that exists and the legacy file itself as output.
+- Folder rules:
+  - A trailing separator is removed. A mapped drive letter is replaced by the UNC
+    path given with `--drive`. The import makes no network call for this.
+  - A last folder whose name is a canonical decimal number (D11) is a channel folder.
+    It gives `channel_index` and `sub_path`, and its parent is the recording folder.
+    Any other folder is the recording folder, with channel 0 and an empty `sub_path`.
+  - The recording folder splits into `storage_root` and `rel_path` by D14, under the
+    NAS roots given with `--nas-root`. A folder outside every NAS root, a NAS root
+    itself and a share root cannot be mapped.
+- Rows with the same recording folder, compared without letter case, form one
+  recording. A group cannot be mapped in three cases:
+  - a channel index appears twice;
+  - the group mixes channel folders with the bare recording folder;
+  - its rows name different sites, compared without letter case.
+- Different remarks within one group are joined with " | ".
+- Each row gives one channel: `fc_hz`, `fs_hz` above 0, `start_unix = date_unix` and
+  `end_unix = date_unix + duration_s`. An empty band gives NULL. `n_files` and
+  `total_bytes` stay NULL until a Check archive fills them in.
+- `date` is read as UTC+8 and compared with `date_unix`. A difference above 1 s, or a
+  `date` that cannot be read, gives a warning. The import uses `date_unix`.
+- There is one site per name, compared without letter case. The first spelling in row
+  order is kept.
+- Each recording gets `logged_by = 'legacy-import'`, `archive_state = 'archived'`,
+  `archived_at` = the import time, `int16`, `interleaved_iq`, little-endian, no header
+  and `file_duration_s = 1.0`.
+- Each recording also gets the D2 row, so the Viewer shows "archived, not verified".
+  The user runs Check archive or Compare with laptop copy (D56) afterwards.
+- Rows that cannot be mapped go to a report, with the warnings. The import guesses
+  nothing. The report is printed, and a real run also writes it next to the new
+  database as `<new database>.report.txt`. A dry run writes nothing.
+- All recordings are written in one transaction. If it fails, the new file stays with
+  the empty schema, and the message names it.
+- The command is `IQDataManager-check.exe migrate-legacy` (D57). The same code runs as
+  `tools/migrate_legacy.py`.
+- Known limit: a legacy recording with files shorter than 1 s keeps
+  `file_duration_s = 1.0`. Check archive does not change that value.
+
+Affects: SPEC sections 9, 10 and 12, `legacy.py`, `db/legacy.py`, `check_main.py`,
+`tools/migrate_legacy.py`.
+
+## D67. New database in the Settings tab
+
+Replaces the D30 point "The app does not create databases from the GUI", with its
+admin option `--create-db PATH`. The user chose this on 2026-10-04.
+
+- Some users want a private database for a project. Most users do not use a console,
+  so a command-line option or a console command would not serve them.
+- The Settings tab's Database section gets a "New database..." button. It opens a
+  save dialog for a new `.db` file. A file that exists is refused.
+- A Yes/No dialog asks first and defaults to No. It says that the new database is
+  empty and separate from the shared catalogue, and that its recordings do not appear
+  in the shared catalogue.
+- The app creates the database from `schema.sql` with `connection.create_database()`,
+  in a worker thread. The path then goes into "Database file", and the status check
+  runs. Save switches the app to the new database, as after Browse.
+- The status bar names the database in use, so a user sees which catalogue receives
+  a new recording.
+- The shared catalogue comes only from the legacy import (D66). `db-check create`
+  stays for development and the field test.
+- The other points of D30 stand.
+
+Affects: SPEC sections 4 and 12, `gui/settings_tab.py`.
+
+## D68. Defaults file in the program folder
+
+The user chose this on 2026-10-04.
+
+- Each PC keeps its own settings file, `%APPDATA%\IQDataManager\config.toml`. Without
+  one, the app has no database and no NAS roots, and each user has to enter both.
+- The packaged app looks for `defaults.toml` in the folder of `IQDataManager.exe`.
+  While the settings file in use does not exist, the app reads its settings from
+  `defaults.toml`. The settings file in use is `config.toml`, or the file given with
+  `--config`.
+- The Settings tab shows those values and names the defaults file. Save writes them,
+  with any change, to the settings file. From then on that PC ignores the defaults
+  file. A later change to `defaults.toml` does not reach a PC that has a settings
+  file.
+- The defaults file has the format and rules of `config.toml`. A wrong value in it is
+  shown in the same way as a wrong value in `config.toml`.
+- The app never writes `defaults.toml`. The app run from source has no defaults file.
+- The build folder holds `defaults.example.toml` with example values. Whoever prepares
+  the build for the team fills it in and saves it as `defaults.toml`. The repository
+  holds no real path.
+
+Affects: SPEC sections 4 and 9, `config.py`, `app.py`, `gui/settings_tab.py`,
+`build/iqdm.spec`, `build/defaults.example.toml`.
