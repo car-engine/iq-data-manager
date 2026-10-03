@@ -603,8 +603,8 @@ def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
         "INSERT INTO transfer_log (recording_id, operation, parent_id, source, destination,"
         " range_start_unix, range_end_unix, channels, hash_mode, started_at, finished_at,"
         " n_files, total_bytes, verification, performed_by, notes, manifest_path,"
-        " manifest_sha256)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        " manifest_sha256, dismissed_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
         (
             entry.recording_id,
             str(entry.operation),
@@ -624,6 +624,7 @@ def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
             entry.notes,
             entry.manifest_path,
             entry.manifest_sha256,
+            entry.dismissed_at,
         ),
     ).fetchone()
     return row[0]
@@ -643,13 +644,18 @@ def finish_transfer(
 ) -> None:
     """Record the end of a transfer. Refused if the row is already finished.
 
-    None leaves n_files, total_bytes, notes and the manifest fields as stored.
+    None leaves n_files, total_bytes, notes and the manifest fields as stored. A note
+    is added after the stored text, separated by a space (D62).
     """
-    row = _one(conn, "SELECT finished_at FROM transfer_log WHERE id = ?", (transfer_id,))
+    row = _one(
+        conn, "SELECT finished_at, notes FROM transfer_log WHERE id = ?", (transfer_id,)
+    )
     if row is None:
         raise NotFoundError(f"no transfer with id {transfer_id}")
     if row["finished_at"] is not None:
         raise RepositoryError(f"transfer {transfer_id} already finished at {row['finished_at']}")
+    if notes is not None and row["notes"]:
+        notes = f"{row['notes']} {notes}"
     conn.execute(
         "UPDATE transfer_log SET finished_at = ?, verification = ?,"
         " n_files = COALESCE(?, n_files), total_bytes = COALESCE(?, total_bytes),"
@@ -735,6 +741,7 @@ def _transfer(r: sqlite3.Row) -> TransferEntry:
         notes=r["notes"],
         manifest_path=r["manifest_path"],
         manifest_sha256=r["manifest_sha256"],
+        dismissed_at=r["dismissed_at"],
     )
 
 
@@ -755,3 +762,46 @@ def list_transfers(conn: sqlite3.Connection, recording_id: int) -> list[Transfer
             (recording_id,),
         )
     ]
+
+
+def list_unfinished_transfers(
+    conn: sqlite3.Connection, performed_by: str | None = None
+) -> list[TransferEntry]:
+    """Copies and archives that the user may resume, newest first.
+
+    A row is listed when it was stopped, failed or never finished, nobody chose
+    "Forget" for it, and no later copy or archive of the same recording has the same
+    destination, range and channels. An archive is left out once its recording is
+    archived, because it cannot run again. performed_by limits the list to one user.
+    """
+    sql = (
+        "SELECT t.* FROM transfer_log t JOIN recordings r ON r.id = t.recording_id"
+        " WHERE t.operation IN ('copy', 'archive') AND t.dismissed_at IS NULL"
+        " AND (t.finished_at IS NULL OR t.verification <> 'pass')"
+        " AND NOT (t.operation = 'archive' AND r.archive_state = 'archived')"
+        " AND NOT EXISTS (SELECT 1 FROM transfer_log n WHERE n.id > t.id"
+        "   AND n.recording_id = t.recording_id AND n.operation = t.operation"
+        "   AND n.destination IS t.destination AND n.channels IS t.channels"
+        "   AND n.range_start_unix IS t.range_start_unix"
+        "   AND n.range_end_unix IS t.range_end_unix)"
+    )
+    params: list[object] = []
+    if performed_by is not None:
+        sql += " AND t.performed_by = ?"
+        params.append(performed_by)
+    sql += " ORDER BY t.started_at DESC, t.id DESC"
+    return [_transfer(r) for r in _rows(conn, sql, params)]
+
+
+def dismiss_transfer(conn: sqlite3.Connection, transfer_id: int, *, dismissed_at: str) -> None:
+    """Record "Forget" for an unfinished copy or archive. The row itself stays."""
+    entry = get_transfer(conn, transfer_id)
+    if entry.operation not in (Operation.COPY, Operation.ARCHIVE):
+        raise RepositoryError(f"transfer {transfer_id} is a {entry.operation}")
+    if entry.finished_at is not None and entry.verification is Verification.PASS:
+        raise RepositoryError(f"transfer {transfer_id} passed; there is nothing to forget")
+    if entry.dismissed_at is not None:
+        raise RepositoryError(f"transfer {transfer_id} was already forgotten")
+    conn.execute(
+        "UPDATE transfer_log SET dismissed_at = ? WHERE id = ?", (dismissed_at, transfer_id)
+    )

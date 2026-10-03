@@ -152,7 +152,8 @@ CREATE TABLE transfer_log (
     id                  INTEGER PRIMARY KEY,
     recording_id        INTEGER NOT NULL REFERENCES recordings(id),
     operation           TEXT NOT NULL CHECK (operation IN ('archive', 'copy', 'check', 'delete')),
-    parent_id           INTEGER REFERENCES transfer_log(id),  -- the passed archive a 'delete' follows
+    parent_id           INTEGER REFERENCES transfer_log(id),  -- the passed archive a 'delete',
+                                                              -- or a check before delete, follows
     source              TEXT NOT NULL,
     destination         TEXT,                               -- NULL for 'check' and 'delete'
     range_start_unix    REAL,                               -- NULL = whole recording
@@ -173,15 +174,21 @@ CREATE TABLE transfer_log (
     manifest_sha256     TEXT                                -- SHA-256 of the manifest file, lower-case hex
                             CHECK (manifest_sha256 IS NULL OR (length(manifest_sha256) = 64
                                    AND manifest_sha256 NOT GLOB '*[^0-9a-f]*')),
+    dismissed_at        TEXT,                               -- "Forget" on an unfinished copy or archive
 
     CHECK (range_end_unix IS NULL OR range_start_unix IS NULL OR range_end_unix >= range_start_unix),
-    CHECK ((operation = 'delete') = (parent_id IS NOT NULL))
+    -- parent_id: required on a 'delete', allowed on a 'check' (check before delete, D55)
+    CHECK (CASE operation WHEN 'delete' THEN parent_id IS NOT NULL
+                          WHEN 'check' THEN 1
+                          ELSE parent_id IS NULL END),
+    CHECK (dismissed_at IS NULL OR operation IN ('copy', 'archive'))
 );
 
 CREATE INDEX idx_transfer_recording ON transfer_log(recording_id);
 
--- A 'delete' row must follow an archive of the same recording that passed verification.
--- A delete row without parent_id fails the CHECK above.
+-- A row with parent_id (a 'delete', or a check before delete, D55) must follow an
+-- archive of the same recording that passed verification. A delete row without
+-- parent_id fails the CHECK above.
 CREATE TRIGGER trg_transfer_delete_insert
 BEFORE INSERT ON transfer_log
 FOR EACH ROW
@@ -190,7 +197,7 @@ WHEN NEW.parent_id IS NOT NULL
                  WHERE p.id = NEW.parent_id AND p.operation = 'archive'
                    AND p.verification = 'pass' AND p.recording_id = NEW.recording_id)
 BEGIN
-    SELECT RAISE(ABORT, 'a delete must follow a passed archive of the same recording');
+    SELECT RAISE(ABORT, 'a delete or its check must follow a passed archive of the same recording');
 END;
 
 CREATE TRIGGER trg_transfer_delete_update
@@ -201,5 +208,5 @@ WHEN NEW.parent_id IS NOT NULL
                  WHERE p.id = NEW.parent_id AND p.operation = 'archive'
                    AND p.verification = 'pass' AND p.recording_id = NEW.recording_id)
 BEGIN
-    SELECT RAISE(ABORT, 'a delete must follow a passed archive of the same recording');
+    SELECT RAISE(ABORT, 'a delete or its check must follow a passed archive of the same recording');
 END;

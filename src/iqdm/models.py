@@ -169,7 +169,9 @@ class RecordingFilter:
 class TransferEntry:
     """One transfer_log row. channels None means all channels.
 
-    parent_id is set exactly for a delete row and names the archive it follows (D52).
+    parent_id names the passed archive that a delete row follows (D52), or that a check
+    before delete checks (D55). Other rows have none. dismissed_at is set when the user
+    chose "Forget" for an unfinished copy or archive.
     """
 
     recording_id: int
@@ -190,6 +192,7 @@ class TransferEntry:
     parent_id: int | None = None
     manifest_path: str | None = None
     manifest_sha256: str | None = None
+    dismissed_at: str | None = None
     id: int | None = None
 
 

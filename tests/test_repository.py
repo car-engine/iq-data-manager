@@ -659,6 +659,26 @@ def test_get_transfer(conn, site_id):
         repo.get_transfer(conn, 999)
 
 
+@pytest.mark.parametrize(
+    ("stored", "new", "expected"),
+    [
+        (None, None, None),
+        (None, "Cancelled.", "Cancelled."),
+        ("Resumed.", None, "Resumed."),
+        ("Resumed.", "Cancelled.", "Resumed. Cancelled."),
+        ("", "Cancelled.", "Cancelled."),
+    ],
+)
+def test_finish_transfer_appends_its_note(conn, site_id, stored, new, expected):
+    """D62: a note is added after the stored text."""
+    rid = repo.insert_recording(conn, recording(site_id))
+    tid = repo.insert_transfer(conn, transfer(rid, notes=stored))
+    repo.finish_transfer(
+        conn, tid, finished_at="2026-10-02T01:10:00Z", verification=Verification.SKIPPED, notes=new
+    )
+    assert repo.get_transfer(conn, tid).notes == expected
+
+
 def test_finish_transfer_records_the_manifest(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     tid = repo.insert_transfer(conn, transfer(rid))
@@ -805,6 +825,108 @@ def test_transfers_listed_oldest_first(conn, site_id):
     repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T01:00:00Z"))
     starts = [t.started_at for t in repo.list_transfers(conn, rid)]
     assert starts == ["2026-10-02T01:00:00Z", "2026-10-02T05:00:00Z"]
+
+
+# ---------------------------------------------------------------------------
+# Unfinished transfers and "Forget"
+# ---------------------------------------------------------------------------
+
+
+def finished(conn, tid, verification, at="2026-10-02T02:00:00Z") -> int:
+    repo.finish_transfer(conn, tid, finished_at=at, verification=verification)
+    return tid
+
+
+def unfinished_ids(conn, **kw) -> list[int]:
+    return [t.id for t in repo.list_unfinished_transfers(conn, **kw)]
+
+
+def start(conn, rid, **kw) -> int:
+    return repo.insert_transfer(conn, transfer(rid, **kw))
+
+
+def test_stopped_failed_and_interrupted_transfers_are_unfinished(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    stopped = finished(conn, start(conn, rid, destination="D:/a"), Verification.SKIPPED)
+    failed = finished(conn, start(conn, rid, destination="D:/b"), Verification.FAIL)
+    interrupted = start(conn, rid, destination="D:/c")
+    finished(conn, start(conn, rid, destination="D:/d"), Verification.PASS)
+    assert sorted(unfinished_ids(conn)) == sorted([stopped, failed, interrupted])
+
+
+def test_a_later_run_of_the_same_selection_replaces_the_earlier(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    first = finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.SKIPPED)
+    second = finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.SKIPPED)
+    assert unfinished_ids(conn) == [second]
+    finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.PASS)
+    assert unfinished_ids(conn) == []
+    assert first not in unfinished_ids(conn)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"destination": "D:/elsewhere"},
+        {"channels": (0,)},
+        {"range_start_unix": T0},
+        {"range_end_unix": T0 + 5},
+    ],
+)
+def test_a_run_of_another_selection_does_not_replace(conn, site_id, change):
+    rid = repo.insert_recording(conn, recording(site_id))
+    stopped = finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.SKIPPED)
+    finished(conn, repo.insert_transfer(conn, transfer(rid, **change)), Verification.PASS)
+    assert unfinished_ids(conn) == [stopped]
+
+
+def test_an_archive_drops_out_once_the_recording_is_archived(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    tid = start(conn, rid, operation=Operation.ARCHIVE, destination="//nas/a")
+    stopped = finished(conn, tid, Verification.SKIPPED)
+    assert unfinished_ids(conn) == [stopped]
+    repo.update_archive_location(
+        conn, rid, storage_root="//nas/recordings", rel_path="b", archived_at="2026-10-02T03:00:00Z"
+    )
+    assert unfinished_ids(conn) == []
+
+
+def test_unfinished_newest_first_and_by_user(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    old = repo.insert_transfer(
+        conn, transfer(rid, destination="D:/a", started_at="2026-10-01T00:00:00Z")
+    )
+    new = repo.insert_transfer(
+        conn,
+        transfer(rid, destination="D:/b", started_at="2026-10-02T00:00:00Z", performed_by="userB"),
+    )
+    assert unfinished_ids(conn) == [new, old]
+    assert unfinished_ids(conn, performed_by="userB") == [new]
+    assert unfinished_ids(conn, performed_by="nobody") == []
+
+
+def test_forget_hides_a_row_and_keeps_it(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    tid = finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.SKIPPED)
+    repo.dismiss_transfer(conn, tid, dismissed_at="2026-10-03T08:00:00Z")
+    assert unfinished_ids(conn) == []
+    assert repo.get_transfer(conn, tid).dismissed_at == "2026-10-03T08:00:00Z"
+    with pytest.raises(repo.RepositoryError, match="already forgotten"):
+        repo.dismiss_transfer(conn, tid, dismissed_at="2026-10-03T09:00:00Z")
+
+
+def test_forget_refuses_a_passed_transfer_and_other_operations(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    passed = finished(conn, repo.insert_transfer(conn, transfer(rid)), Verification.PASS)
+    with pytest.raises(repo.RepositoryError, match="nothing to forget"):
+        repo.dismiss_transfer(conn, passed, dismissed_at="2026-10-03T08:00:00Z")
+    check = repo.insert_transfer(
+        conn, transfer(rid, operation=Operation.CHECK, destination=None)
+    )
+    with pytest.raises(repo.RepositoryError, match="is a check"):
+        repo.dismiss_transfer(conn, check, dismissed_at="2026-10-03T08:00:00Z")
+    with pytest.raises(repo.NotFoundError):
+        repo.dismiss_transfer(conn, 999, dismissed_at="2026-10-03T08:00:00Z")
 
 
 # ---------------------------------------------------------------------------

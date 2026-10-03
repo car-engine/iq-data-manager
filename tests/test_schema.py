@@ -231,7 +231,7 @@ def test_delete_parent_must_belong_to_the_same_recording(conn):
         add_delete(conn, other, passed_archive(conn, rid))
 
 
-def test_parent_id_only_on_a_delete_row(conn):
+def test_parent_id_not_on_a_copy(conn):
     rid = add_recording(conn)
     archive = passed_archive(conn, rid)
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
@@ -272,6 +272,61 @@ def test_manifest_sha256_must_be_lower_case_hex(conn, digest):
     rid = add_recording(conn)
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         add_transfer(conn, rid, manifest_sha256=digest)
+
+
+# ---------------------------------------------------------------------------
+# Check before delete (D55) and "Forget"
+# ---------------------------------------------------------------------------
+
+
+def add_check(conn, rid, parent_id=None) -> int:
+    return add_transfer(conn, rid, operation="check", parent_id=parent_id, destination=None)
+
+
+def test_a_check_may_name_a_passed_archive(conn):
+    rid = add_recording(conn)
+    archive = passed_archive(conn, rid)
+    check = add_check(conn, rid, archive)
+    row = conn.execute("SELECT parent_id FROM transfer_log WHERE id = ?", (check,)).fetchone()
+    assert row == (archive,)
+    add_check(conn, rid)  # a check without a parent stays valid (Check archive)
+
+
+@pytest.mark.parametrize(
+    "parent",
+    [
+        {"operation": "archive", "verification": "fail"},
+        {"operation": "copy", "verification": "pass"},
+    ],
+)
+def test_a_check_parent_must_be_a_passed_archive(conn, parent):
+    rid = add_recording(conn)
+    parent_id = add_transfer(conn, rid, **parent)
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
+        add_check(conn, rid, parent_id)
+
+
+def test_a_check_parent_must_belong_to_the_same_recording(conn):
+    rid = add_recording(conn)
+    other = add_recording(conn, rel_path="rec2")
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
+        add_check(conn, other, passed_archive(conn, rid))
+
+
+@pytest.mark.parametrize("operation", ["copy", "archive"])
+def test_dismissed_at_on_a_copy_or_an_archive(conn, operation):
+    rid = add_recording(conn)
+    add_transfer(conn, rid, operation=operation, dismissed_at="2026-10-03T08:00:00Z")
+
+
+def test_dismissed_at_only_on_a_copy_or_an_archive(conn):
+    rid = add_recording(conn)
+    check = add_check(conn, rid)
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        conn.execute(
+            "UPDATE transfer_log SET dismissed_at = '2026-10-03T08:00:00Z' WHERE id = ?",
+            (check,),
+        )
 
 
 # ---------------------------------------------------------------------------
