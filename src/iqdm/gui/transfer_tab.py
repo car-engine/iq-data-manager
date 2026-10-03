@@ -57,9 +57,11 @@ from iqdm.timeutil import display_time, offset_label, utc_now_iso
 from iqdm.transfer.copier import CopyProgress, RetryNotice
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import (
+    CHECK_NEEDS_HASHES,
     CheckOutcome,
     DeleteOutcome,
     Preview,
+    TransferError,
     TransferOutcome,
     TransferRequest,
     check_archive,
@@ -1069,7 +1071,7 @@ class TransferTab(QWidget):
             self._set_result(ItemState.TODO, "Stopped.")
         elif isinstance(exc, ScanError):
             self._set_result(ItemState.ERROR, "Cannot scan the folder: " + "; ".join(exc.problems))
-        elif isinstance(exc, (SelectionError, ValueError)):
+        elif isinstance(exc, (SelectionError, TransferError, ValueError)):
             self._set_result(ItemState.ERROR, str(exc))
         else:
             self._set_result(ItemState.ERROR, viewer.error_text(exc), str(exc))
@@ -1097,6 +1099,9 @@ class TransferTab(QWidget):
             return
         db, archive_id = self.config.db_path, state.archive.id
         mode = self.hash_mode()
+        if mode is HashMode.NONE:  # sizes alone read no content (D55)
+            self._set_result(ItemState.ERROR, CHECK_NEEDS_HASHES)
+            return
         fraction, user = self.config.hash_sample_fraction, self._performed_by()
         self._begin("check", "Check before delete")
         self.phase_label.setText("Reading the NAS copy")

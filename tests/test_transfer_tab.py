@@ -315,6 +315,19 @@ def test_archive_check_and_delete(env, answers):
     assert not tab.delete_button.isEnabled()
 
 
+def test_check_before_delete_needs_a_hash_mode_that_reads_content(env):
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    env.idle(tab)
+    tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(HashMode.NONE))
+    tab.check_delete_button.click()
+    env.idle(tab)
+    assert tab.result[0] is ItemState.ERROR
+    assert tab.result[1].startswith("Check before delete reads the content of the NAS files.")
+    assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
+    assert len(env.transfers()) == 1
+
+
 def test_check_archive_from_the_tab(env):
     tab = env.loaded(env.tab())
     archive_to_nas(env, tab)

@@ -70,6 +70,10 @@ from iqdm.transfer.verify import VerifyProgress, VerifyResult, hashed_paths, ver
 from iqdm.viewer import recording_folder, scan_differences
 
 NAMES_IN_NOTES = 10  # file names listed in a transfer_log note
+CHECK_NEEDS_HASHES = (
+    "Check before delete reads the content of the NAS files. Choose a check that hashes "
+    "a sample of the files or every file."
+)
 
 Clock = Callable[[], str]
 
@@ -544,8 +548,11 @@ def check_before_delete(
     manifest's copy-time hash, or with a hash of the laptop file where the manifest
     holds none. The check is logged as a 'check' row with the archive in parent_id;
     a pass allows "Delete laptop copy". Raises DeleteRefused when the archive cannot
-    lead to a delete at all.
+    lead to a delete at all, and TransferError for hash mode none: sizes come from the
+    directory entries, so such a check would read no file contents (D55).
     """
+    if hash_mode is HashMode.NONE:
+        raise TransferError(CHECK_NEEDS_HASHES)
     archive, rec, _, manifest = _load_archive(db_path, archive_id)
     problems = archive_problems(archive, manifest, rec)
     if problems or archive.destination is None:

@@ -518,6 +518,16 @@ def test_a_cancelled_check_before_delete_does_not_count(env):
         delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
 
 
+def test_check_before_delete_refuses_sizes_only(env):
+    """Hash mode none reads no file contents, so it cannot be the check of D55."""
+    archive_id = archived(env)
+    with pytest.raises(TransferError, match="reads the content of the NAS files"):
+        check(env, archive_id, hash_mode=HashMode.NONE)
+    assert len(env.transfers()) == 1  # no check row
+    with pytest.raises(DeleteRefused, match="Check before delete"):
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+
+
 def test_check_before_delete_needs_a_passed_archive(env):
     copy_id = env.run(env.preview(env.request(Operation.COPY, env.tmp / "pc" / "rec"))).transfer_id
     with pytest.raises(DeleteRefused, match="Only the laptop copy"):
