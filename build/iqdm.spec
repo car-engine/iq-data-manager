@@ -2,7 +2,11 @@
 #
 #   IQDataManager.exe        the windowed app
 #   IQDataManager-check.exe  a console program for the diagnostics of the NAS field
-#                            test: copy-check, db-check, make-test-set (DECISIONS.md D57)
+#                            test: copy-check, db-check, make-test-set (DECISIONS.md D57),
+#                            and the legacy import: migrate-legacy (D66)
+#
+# Next to the programs, the build folder also holds USER_GUIDE.md and
+# defaults.example.toml (D68), written after COLLECT.
 #
 # Build from the repository root into output folders that do not exist yet:
 #
@@ -75,3 +79,11 @@ coll = COLLECT(
     strip=False,
     upx=False,
 )
+
+# Files for the people who set up and use the app, next to the programs. PyInstaller
+# puts data files under _internal/ and refuses a destination outside it, so they are
+# written here. The output folder is new for every build (D8); "xb" never replaces a
+# file.
+for source in (ROOT / "docs" / "USER_GUIDE.md", ROOT / "build" / "defaults.example.toml"):
+    with (Path(DISTPATH) / "IQDataManager" / source.name).open("xb") as target:
+        target.write(source.read_bytes())

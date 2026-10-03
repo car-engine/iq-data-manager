@@ -9,6 +9,7 @@ __pycache__/
 # Build output
 build/*
 !build/iqdm.spec
+!build/defaults.example.toml
 dist/
 
 # Databases: never commit real or dev databases

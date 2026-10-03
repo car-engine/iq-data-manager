@@ -30,6 +30,16 @@ def write(tmp_path: Path, text: str) -> Path:
     return path
 
 
+def test_the_defaults_template_is_a_valid_settings_file():
+    """build/defaults.example.toml is shipped for the person who sets up the app (D68)."""
+    template = Path(__file__).resolve().parents[1] / "build" / "defaults.example.toml"
+    config = load_config(template)
+    assert config.db_path == "\\\\nas\\recordings\\iq_catalog.db"
+    assert config.nas_roots == ("\\\\nas\\recordings",)
+    assert config.display_utc_offset_hours == 8.0
+    assert hidden_key_error(read_config_data(template), str(template)) is None
+
+
 def test_settings_source_prefers_the_settings_file(tmp_path):
     """D68: the defaults file is read only while the settings file does not exist."""
     config = tmp_path / "AppData" / "config.toml"

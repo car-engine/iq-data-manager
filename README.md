@@ -83,7 +83,8 @@ comments. Create a development database with
 ## Build
 
 `build/iqdm.spec` makes a onedir build with two programs: the windowed
-`IQDataManager.exe` and the console program `IQDataManager-check.exe` (D57). Build
+`IQDataManager.exe` and the console program `IQDataManager-check.exe` (D57). The
+build folder also holds `USER_GUIDE.md` and `defaults.example.toml` (D68). Build
 into output folders that do not exist yet. Do not pass `--noconfirm` or `--clean`,
 because both delete existing output.
 

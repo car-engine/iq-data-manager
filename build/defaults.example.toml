@@ -1,0 +1,26 @@
+# Defaults for IQ Data Manager on a PC that has no settings file yet.
+#
+# Fill in the values below. Then save this file as defaults.toml in the same folder
+# as IQDataManager.exe.
+#
+# The app reads defaults.toml only while the PC has no settings file of its own
+# (%APPDATA%\IQDataManager\config.toml). The first Save in the Settings tab writes the
+# values to that file. From then on, that PC ignores defaults.toml.
+#
+# Every value below is an example. Replace it with the real path or value.
+# A path in single quotes keeps its backslashes as written.
+
+# The shared catalogue database.
+db_path = '\\nas\recordings\iq_catalog.db'
+
+# Network locations whose folders count as already archived on the NAS.
+# Write each one as \\server\share or \\server\share\folder.
+nas_roots = ['\\nas\recordings']
+
+# Times on screen are shown at this offset from UTC: -12 to 14, in steps of 0.25.
+display_utc_offset_hours = 8
+
+# Optional values. Remove the # at the start of a line to use it.
+# default_local_copy_root = 'D:\work\iq'   # where a copy to a PC goes by default
+# network_speed_mb_s = 110                 # for time estimates only
+# copy_workers = 4                         # files copied at once, 1 to 16
