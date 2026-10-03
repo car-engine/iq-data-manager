@@ -268,7 +268,7 @@ def test_a_cancelled_archive_is_recorded_and_can_resume(env):
     calls = itertools.count()
     out = env.run(env.preview(env.request()), cancelled=lambda: next(calls) > 8)
     assert out.verification is Verification.SKIPPED
-    assert out.notes.startswith("Cancelled after ")
+    assert out.notes.startswith("Stopped after ")
     assert env.recording().archive_state is ArchiveState.LOCAL
 
     again = env.preview(env.request())
@@ -513,7 +513,7 @@ def test_a_cancelled_check_before_delete_does_not_count(env):
     calls = itertools.count()
     out = check(env, archive_id, cancelled=lambda: next(calls) > 3)
     assert out.verification is Verification.SKIPPED
-    assert out.notes == "Cancelled during the check."
+    assert out.notes == "Stopped during the check."
     with pytest.raises(DeleteRefused, match="Check before delete"):
         delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
 

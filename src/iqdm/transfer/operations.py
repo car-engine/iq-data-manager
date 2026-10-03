@@ -375,7 +375,7 @@ def run_transfer(
         )
         if copy.cancelled:
             done = len(copy.copied) + len(copy.skipped)
-            notes = f"Cancelled after {done:,} of {len(items):,} files."
+            notes = f"Stopped after {done:,} of {len(items):,} files."
             _finish(db_path, tid, now, Verification.SKIPPED, notes)
             return outcome(Verification.SKIPPED, notes, copy)
         if copy.failed:
@@ -394,7 +394,7 @@ def run_transfer(
             cancelled=cancelled,
         )
     if result.cancelled:
-        notes = "Cancelled during the check. The files are copied but not checked."
+        notes = "Stopped during the check. The files are copied but not checked."
         _finish(db_path, tid, now, Verification.SKIPPED, notes)
         return outcome(Verification.SKIPPED, notes, copy, result)
     if not result.passed:
@@ -467,7 +467,7 @@ def _delete_notes(result: DeleteResult) -> str:
         names = [f"{k.rel_path} ({k.reason})" for k in result.kept]
         parts.append(f"Kept {files_text(len(result.kept))}: {_names(names)}")
     if result.cancelled:
-        parts.append("Cancelled before the end.")
+        parts.append("Stopped before the end.")
     return " ".join(parts)
 
 
@@ -493,7 +493,7 @@ def _load_archive(
 
 def _check_notes(result: VerifyResult, what: str) -> str:
     if result.cancelled:
-        return "Cancelled during the check."
+        return "Stopped during the check."
     if not result.passed:
         return _verify_failure_notes(result)
     hashed = len(result.hashes)

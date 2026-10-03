@@ -294,12 +294,7 @@ def _content_errors(
         )
     elif other_files:
         notes.append(f"The destination already holds other files ({files_text(len(other_files))}).")
-    if existing and not errors:
-        notes.append(
-            f"Already in the destination with the right size: {files_text(len(existing))}. "
-            "They are not copied again and are checked with the rest."
-        )
-    return errors
+    return errors  # the preview describes the files in `existing` (movecopy.py)
 
 
 def _space_errors(

@@ -161,10 +161,7 @@ def test_a_copy_resumes_files_already_in_place(selection, tmp_path):
     assert result.ok, result.errors
     assert result.existing == frozenset(done)
     assert result.bytes_to_copy == selection.total_bytes - 3 * 4000
-    assert result.notes == (
-        "Already in the destination with the right size: 3 files. They are not copied "
-        "again and are checked with the rest.",
-    )
+    assert result.notes == ()  # the preview text describes them (movecopy.preview_lines)
 
 
 def test_a_target_with_another_size_is_refused(selection, tmp_path):
