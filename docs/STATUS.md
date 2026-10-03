@@ -11,7 +11,16 @@ pending).
   `m7-packaging-migration`**, from `main` at `283d8a8`. The user approved the plan on
   2026-10-04. D65–D68 record its decisions: long paths (closes O33), the legacy
   import, "New database..." in the Settings tab (replaces D30's `--create-db`), and
-  the defaults file in the program folder.
+  the defaults file in the program folder. After the build check of `dist/m7-1`, the
+  user asked for D69 (the Settings tab's notes in amber with the ⓘ mark) and D70 (a
+  question before leaving the Settings tab or closing the window with unsaved
+  settings). 1,533 tests pass and 4 skip on the branch.
+- The user ran the packaged legacy import on a synthetic legacy file and the defaults
+  file check with `dist/m7-1` on 2026-10-04; both gave the expected results. The
+  safety hook blocks an agent's shell command that holds a UNC path, so the user runs
+  `migrate-legacy` checks by hand.
+- Still open in Milestone 7: O20 (waits for the NAS field test), the Archive / copy
+  section of the user guide (marked as a draft), the final build and the report.
 - Milestones 0 to 6 are merged into `main` and pushed.
 - **Milestone 6, Archive / copy tab, is merged into `main`** (fast-forward,
   2026-10-04, pushed). Report: [reports/M6.md](reports/M6.md). The user passed the
@@ -148,6 +157,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   (output of the packaged diagnostics, 81 MB).
 - `dev/test.db` and `dev/m3.db` were made before D64 and refuse archive rows.
 - `dev/m6-manual/` (the manual test on this PC passed on 2026-10-04).
+- `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log` (superseded by
+  `dist/m7-2`), and `dev/m7-legacy/` (the synthetic legacy file, its import and the
+  script that made it) after the Milestone 7 checks.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch

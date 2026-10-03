@@ -74,6 +74,14 @@ Open the Settings tab first on a new PC.
 Click **Save** to write the settings. They apply at once. The previous settings are
 kept as `config.toml.bak` in the same folder. **Open folder** shows that folder.
 
+While a change is not saved, the tab's title reads "Settings (not saved)". If you
+leave the tab or close the window first, the app asks whether to save the changes,
+drop them, or stay on the tab.
+
+Amber lines marked ⓘ say where the values come from when it is not the PC's own
+settings file: the shared defaults file, or a file or database given when the app
+was started.
+
 The status bar at the bottom of the window always names the database in use.
 
 ## 3. Log recording
