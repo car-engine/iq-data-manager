@@ -261,6 +261,7 @@ class TransferTab(QWidget):
         self.time_error_label = QLabel()
         self.time_error_label.setWordWrap(True)
         self.channels_row = QHBoxLayout()
+        self.channels_row.addStretch(1)  # the checkboxes go before it, on the left
         self.timeline = TimelineView()
         self.timeline_note = QLabel()
         self.timeline_note.setWordWrap(True)
@@ -695,9 +696,8 @@ class TransferTab(QWidget):
             box = QCheckBox(text)
             box.setChecked(True)
             box.toggled.connect(self._invalidate)
-            self.channels_row.addWidget(box)
+            self.channels_row.insertWidget(self.channels_row.count() - 1, box)
             self._channel_boxes[index] = box
-        self.channels_row.addStretch(0)
 
     @property
     def channel_boxes(self) -> dict[int, QCheckBox]:
