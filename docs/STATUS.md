@@ -2,19 +2,20 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-04 (Milestone 6 built; NAS field test pending).
+report. Last updated: 2026-10-04 (Milestone 6 merged; NAS field test pending).
 
 ## Current state
 
-- Milestones 0 to 5 are merged into `main` and pushed. On `main`, 1,202 tests pass and
-  4 skip.
-- **Milestone 6, Archive / copy tab, is built on branch `m6-move-copy-tab`** and not
-  merged. Report: [reports/M6.md](reports/M6.md). 1,410 tests pass and 4 skip on the
-  branch; three skips need the symbolic-link privilege, the other runs only off
+- Milestones 0 to 5 are merged into `main` and pushed.
+- **Milestone 6, Archive / copy tab, is merged into `main`** (fast-forward,
+  2026-10-04, not pushed). Report: [reports/M6.md](reports/M6.md). The user passed the
+  manual test on this PC on 2026-10-04 with no issues. 1,410 tests pass and 4 skip on
+  `main`; three skips need the symbolic-link privilege, the other runs only off
   Windows. `ruff check` is clean.
-- **The milestone ends with the NAS field test (D54)**, which the user runs with
+- **The NAS field test (D54) is still to run.** The user runs it with
   `dist/m6-3/IQDataManager/` (built from `47a7f06`). The steps are in the report.
   `dist/m6-1` and `dist/m6-2` are older and lack fixes; do not take them to the NAS.
+  Fixes from the field test go on a new branch from `main`.
 - D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
   when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
 - Scratch databases made before D64, such as `dev/test.db` and `dev/m3.db`, refuse
@@ -40,7 +41,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
-| 6. Archive / copy tab | Built, NAS field test pending, not merged | `m6-move-copy-tab` | `7f1273b`–`95c9256`, plus the commit of the report | [M6](reports/M6.md) |
+| 6. Archive / copy tab | Done, merged; NAS field test pending | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
 | 7. Packaging and migration | Not started | | | |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
@@ -106,14 +107,13 @@ Decided items are in `docs/DECISIONS.md` (D1–D64). The M0 review table in
 
 ## Pending checks for the user
 
-- A manual test of the Archive / copy tab on this PC with the quick test set. Steps in
-  [reports/M6.md](reports/M6.md), "Manual test on this PC".
 - The NAS field test (D54) with `dist/m6-3/IQDataManager/`, including O21 (`db-check`
   `check`, `hold` and `write` on a scratch database on the NAS, from two PCs). Steps in
   [reports/M6.md](reports/M6.md), "NAS field test". O21 must pass before the app
   writes to a real database on the NAS.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
+The Milestone 6 manual test on this PC passed on 2026-10-04.
 
 ## Files for the user to remove
 
@@ -141,8 +141,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `dev/m6-shots/` (screenshots and `shots.py`, 1.3 MB) and `dev/m6-exe-check/`
   (output of the packaged diagnostics, 81 MB).
 - `dev/test.db` and `dev/m3.db` were made before D64 and refuse archive rows.
-- After the tests: `dev/m6-manual/`, the test set on the laptop and the folders the
-  test writes on the NAS.
+- `dev/m6-manual/` (the manual test on this PC passed on 2026-10-04).
+- After the NAS field test: the test set on the laptop and the folders the test
+  writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
   folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.
