@@ -55,7 +55,7 @@ class Env:
 
         self.rid = write_transaction(db_path, insert)
 
-    def request(self, operation=Operation.MOVE, dest=None, hash_mode=HashMode.ALL, **kw):
+    def request(self, operation=Operation.ARCHIVE, dest=None, hash_mode=HashMode.ALL, **kw):
         if dest is None:
             dest = self.nas / "2026" / self.source.name
         return TransferRequest(
@@ -158,11 +158,11 @@ def test_a_copy_failure_is_recorded(env):
 
 
 # ---------------------------------------------------------------------------
-# Move (archive)
+# Archive
 # ---------------------------------------------------------------------------
 
 
-def test_move_archives_the_recording(env):
+def test_archive_points_the_recording_at_the_nas(env):
     dest = env.nas / "2026" / env.source.name
     out = env.run(env.preview(env.request()))
     assert out.passed
@@ -171,7 +171,7 @@ def test_move_archives_the_recording(env):
     assert (rec.storage_root, rec.rel_path) == (str(env.nas), f"2026\\{env.source.name}")
     (row,) = env.transfers()
     assert rec.archived_at == row.finished_at
-    assert row.operation is Operation.MOVE
+    assert row.operation is Operation.ARCHIVE
     assert tree(dest) == tree(env.source)  # the laptop copy stays until it is deleted
 
 
@@ -182,7 +182,7 @@ def test_move_archives_the_recording(env):
         ({"start_unix": T0 + 1}, "An archive takes the whole recording with all its channels."),
     ],
 )
-def test_move_needs_the_whole_recording(env, kw, error):
+def test_archive_needs_the_whole_recording(env, kw, error):
     preview = env.preview(env.request(**kw))
     assert error in preview.errors
     with pytest.raises(TransferError):
@@ -190,7 +190,7 @@ def test_move_needs_the_whole_recording(env, kw, error):
     assert env.transfers() == []
 
 
-def test_move_needs_a_folder_that_matches_the_entry(env):
+def test_archive_needs_a_folder_that_matches_the_entry(env):
     (env.source / "0" / f"{int(T0) + 3}.dat").write_bytes(bytes(4000))
     preview = env.preview(env.request())
     (error,) = preview.errors
@@ -198,7 +198,7 @@ def test_move_needs_a_folder_that_matches_the_entry(env):
     assert "the folder holds 6 files, the database lists 5" in error
 
 
-def test_move_refuses_a_destination_another_recording_uses(env, make_recording):
+def test_archive_refuses_a_destination_another_recording_uses(env, make_recording):
     other = recording_from(
         make_recording(n_slots=2), site_id=1, storage_root=str(env.nas), rel_path="taken"
     )
@@ -207,20 +207,20 @@ def test_move_refuses_a_destination_another_recording_uses(env, make_recording):
     assert "Recording 2 is already logged at the destination folder." in preview.errors
 
 
-def test_move_of_an_archived_recording_is_refused(env):
+def test_archive_of_an_archived_recording_is_refused(env):
     env.run(env.preview(env.request()))
     preview = env.preview(env.request(dest=env.nas / "again"))
     assert "The recording is already archived." in preview.errors
 
 
-def test_move_outside_the_nas_is_refused(env):
+def test_archive_outside_the_nas_is_refused(env):
     preview = env.preview(env.request(dest=env.tmp / "pc" / "rec"))
     assert any(
         e.startswith("An archive goes to a folder in one of the NAS") for e in preview.errors
     )
 
 
-def test_two_moves_at_once_keep_the_first_archive(env):
+def test_two_archives_at_once_keep_the_first(env):
     """Two people archive one recording to two folders; the second finish is refused."""
     first = env.preview(env.request(dest=env.nas / "first"))
     second = env.preview(env.request(dest=env.nas / "second"))
@@ -254,7 +254,7 @@ def test_a_failed_check_leaves_the_recording_local(env):
     assert not env.manifests.exists()
 
 
-def test_a_cancelled_move_is_recorded_and_can_resume(env):
+def test_a_cancelled_archive_is_recorded_and_can_resume(env):
     calls = itertools.count()
     out = env.run(env.preview(env.request()), cancelled=lambda: next(calls) > 8)
     assert out.verification is Verification.SKIPPED
@@ -277,49 +277,49 @@ def test_a_cancelled_move_is_recorded_and_can_resume(env):
 # ---------------------------------------------------------------------------
 
 
-def moved(env) -> int:
+def archived(env) -> int:
     out = env.run(env.preview(env.request()))
     assert out.passed
     return out.transfer_id
 
 
-def test_delete_after_a_passed_move(env):
-    move_id = moved(env)
-    out = delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+def test_delete_after_a_passed_archive(env):
+    archive_id = archived(env)
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert out.result.complete
     assert not env.source.exists()
     _, delete = env.transfers()
     assert delete.operation is Operation.DELETE
-    assert delete.parent_id == move_id
+    assert delete.parent_id == archive_id
     assert delete.verification is Verification.PASS
     assert (delete.n_files, delete.total_bytes) == (10, 40_000)
     assert delete.notes == "Deleted 10 files from the laptop."
     rows = viewer.transfer_rows(env.transfers(), 8.0)
-    assert [r.operation for r in rows] == ["Move", "Delete laptop copy"]
+    assert [r.operation for r in rows] == ["Archive", "Delete laptop copy"]
     assert rows[1].result.endswith("deleted")
 
 
-def test_a_move_typed_with_a_mapped_drive_uses_the_nas_location(env):
+def test_an_archive_typed_with_a_mapped_drive_uses_the_nas_location(env):
     """The log row, the manifest and the recording name one folder, so delete works."""
     request = env.request(dest=f"Z:\\2026\\{env.source.name}")
     preview = env.preview(request, resolve_drive=lambda d: str(env.nas) if d == "Z:" else None)
     assert preview.ok, preview.errors
     nas_folder = str(env.nas / "2026" / env.source.name)
     assert preview.destination == nas_folder
-    move_id = env.run(preview).transfer_id
+    archive_id = env.run(preview).transfer_id
     (row,) = env.transfers()
     assert row.destination == nas_folder
     assert read_manifest(Path(row.manifest_path)).destination == nas_folder
-    out = delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert out.result.complete
 
 
 def test_delete_keeps_files_whose_nas_copy_changed(env):
-    move_id = moved(env)
+    archive_id = archived(env)
     rec = env.recording()
     nas_folder = Path(rec.storage_root) / rec.rel_path
     (nas_folder / "1" / f"{int(T0)}.dat").write_bytes(b"x")
-    out = delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert not out.result.complete
     delete = env.transfers()[-1]
     assert delete.verification is Verification.FAIL
@@ -331,7 +331,7 @@ def test_delete_keeps_files_whose_nas_copy_changed(env):
     assert (env.source / "1" / f"{int(T0)}.dat").exists()
 
 
-def test_delete_needs_a_passed_move(env):
+def test_delete_needs_a_passed_archive(env):
     preview = env.preview(env.request(Operation.COPY, env.tmp / "pc" / "rec"))
     copy_id = env.run(preview).transfer_id
     with pytest.raises(DeleteRefused, match="Only the laptop copy"):
@@ -341,17 +341,17 @@ def test_delete_needs_a_passed_move(env):
 
 
 def test_delete_refuses_a_changed_manifest(env):
-    move_id = moved(env)
+    archive_id = archived(env)
     manifest = Path(env.transfers()[0].manifest_path)
     manifest.write_text(manifest.read_text(encoding="utf-8") + " ", encoding="utf-8")
     with pytest.raises(DeleteRefused, match="changed after it was written"):
-        delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert len(tree(env.source)) == 10
     assert len(env.transfers()) == 1
 
 
 def test_delete_refuses_when_the_recording_points_elsewhere(env):
-    move_id = moved(env)
+    archive_id = archived(env)
     write_transaction(
         env.db,
         lambda c: repo.update_archive_location(
@@ -363,7 +363,7 @@ def test_delete_refuses_when_the_recording_points_elsewhere(env):
         ),
     )
     with pytest.raises(DeleteRefused, match="no longer points at the archive copy"):
-        delete_laptop_copy(env.db, move_id, performed_by="userB", now=env.now)
+        delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
     assert len(tree(env.source)) == 10
 
 
@@ -373,7 +373,7 @@ def test_delete_refuses_when_the_recording_points_elsewhere(env):
 
 
 def test_check_of_a_good_archive_passes(env):
-    moved(env)
+    archived(env)
     out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
     assert out.verification is Verification.PASS
     check = env.transfers()[-1]
@@ -384,7 +384,7 @@ def test_check_of_a_good_archive_passes(env):
 
 
 def test_check_finds_a_difference(env):
-    moved(env)
+    archived(env)
     rec = env.recording()
     (Path(rec.storage_root) / rec.rel_path / "0" / f"{int(T0) + 3}.dat").write_bytes(bytes(4000))
     out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
@@ -393,7 +393,7 @@ def test_check_finds_a_difference(env):
 
 
 def test_check_fills_in_missing_counts(env):
-    moved(env)
+    archived(env)
     write_transaction(
         env.db, lambda c: c.execute("UPDATE channels SET n_files = NULL, total_bytes = NULL")
     )
@@ -406,7 +406,7 @@ def test_check_fills_in_missing_counts(env):
 
 
 def test_check_of_a_missing_folder_fails(env):
-    moved(env)
+    archived(env)
     write_transaction(
         env.db,
         lambda c: repo.update_archive_location(

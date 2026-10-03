@@ -1,11 +1,11 @@
 """The only module that deletes files (CLAUDE.md; SPEC section 8; DECISIONS.md D52).
 
-It deletes the laptop copy of a recording after a move to the NAS passed
+It deletes the laptop copy of a recording after an archive to the NAS passed
 verification. prepare_delete() refuses unless all of these hold:
-- the move finished with verification 'pass' and has a manifest;
-- the manifest belongs to that move, and the caller read it with
-  manifest.read_manifest(path, move.manifest_sha256), so it is unchanged;
-- the recording is archived and points at the move's destination.
+- the archive finished with verification 'pass' and has a manifest;
+- the manifest belongs to that archive, and the caller read it with
+  manifest.read_manifest(path, archive.manifest_sha256), so it is unchanged;
+- the recording is archived and points at the archive's destination.
 
 delete_source_files() then works file by file. Right before a source file is
 deleted, the NAS copy must be a regular file with the manifest size, and the source
@@ -37,7 +37,7 @@ class DeleteRefused(Exception):  # noqa: N818  (the user sees it as a refusal)
 class DeletePlan:
     """What delete_source_files() may delete: manifest files under `source`."""
 
-    move_id: int
+    archive_id: int
     recording_id: int
     source: Path
     destination: Path
@@ -68,35 +68,35 @@ def _same_path(a: str, b: str) -> bool:
     return PureWindowsPath(a) == PureWindowsPath(b)
 
 
-def prepare_delete(move: TransferEntry, manifest: Manifest, rec: Recording) -> DeletePlan:
+def prepare_delete(archive: TransferEntry, manifest: Manifest, rec: Recording) -> DeletePlan:
     """Check the preconditions and return the plan. Raises DeleteRefused."""
     reasons = []
-    if move.id is None:
+    if archive.id is None:
         reasons.append("The archive copy has no entry in the transfer history.")
-    if move.operation is not Operation.MOVE:
+    if archive.operation is not Operation.ARCHIVE:
         reasons.append("Only the laptop copy of an archived recording can be deleted.")
-    if move.finished_at is None or move.verification is not Verification.PASS:
+    if archive.finished_at is None or archive.verification is not Verification.PASS:
         reasons.append("The archive copy did not pass its check.")
-    if move.manifest_path is None or move.manifest_sha256 is None:
+    if archive.manifest_path is None or archive.manifest_sha256 is None:
         reasons.append("The archive copy has no file list.")
     if (
-        manifest.transfer_id != move.id
-        or manifest.recording_id != move.recording_id
-        or manifest.operation is not Operation.MOVE
-        or not _same_path(manifest.source, move.source)
-        or move.destination is None
-        or not _same_path(manifest.destination, move.destination)
+        manifest.transfer_id != archive.id
+        or manifest.recording_id != archive.recording_id
+        or manifest.operation is not Operation.ARCHIVE
+        or not _same_path(manifest.source, archive.source)
+        or archive.destination is None
+        or not _same_path(manifest.destination, archive.destination)
     ):
         reasons.append("The file list belongs to another transfer.")
-    if rec.id != move.recording_id:
+    if rec.id != archive.recording_id:
         reasons.append("The archive copy belongs to another recording.")
     elif (
         rec.archive_state is not ArchiveState.ARCHIVED
-        or move.destination is None
-        or not (_same_path(join_location(rec.storage_root, rec.rel_path), move.destination))
+        or archive.destination is None
+        or not (_same_path(join_location(rec.storage_root, rec.rel_path), archive.destination))
     ):
         reasons.append("The recording no longer points at the archive copy.")
-    if move.destination is not None and _same_path(move.source, move.destination):
+    if archive.destination is not None and _same_path(archive.source, archive.destination):
         reasons.append("The archive copy and the laptop copy are the same folder.")
     for f in manifest.files:
         try:
@@ -104,13 +104,13 @@ def prepare_delete(move: TransferEntry, manifest: Manifest, rec: Recording) -> D
         except ValueError as exc:
             reasons.append(str(exc))
             break
-    if reasons or move.id is None or move.destination is None:
+    if reasons or archive.id is None or archive.destination is None:
         raise DeleteRefused(reasons)
     return DeletePlan(
-        move_id=move.id,
-        recording_id=move.recording_id,
-        source=Path(move.source),
-        destination=Path(move.destination),
+        archive_id=archive.id,
+        recording_id=archive.recording_id,
+        source=Path(archive.source),
+        destination=Path(archive.destination),
         files=manifest.files,
     )
 

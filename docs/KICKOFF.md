@@ -82,7 +82,7 @@ Milestone 1 (Database layer) from docs/SPEC.md. Re-read sections 3 and 9 and
 CLAUDE.md, then propose a plan with the test list before implementing.
 ```
 
-For milestones 5 and 6 (anything that moves or deletes files), also ask Claude to list
+For milestones 5 and 6 (anything that copies or deletes files), also ask Claude to list
 every code path that can delete or overwrite a file, and review that list yourself.
 
 ## Resuming in a new session

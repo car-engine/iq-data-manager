@@ -200,16 +200,16 @@ def check_destination(
     disk_usage: DiskUsageFn = shutil.disk_usage,
     long_paths: bool | None = None,
 ) -> DestinationCheck:
-    """Check a destination folder for a copy or a move of `selection`.
+    """Check a destination folder for a copy or an archive of `selection`.
 
-    A move needs a destination that is new, is empty, or holds only target files,
-    their .partial files and their channel folders. A copy also accepts other files.
-    A target file with another size than its source is an error in both (D51).
-    A move must go to a folder under a NAS root (D50). long_paths None reads the
+    An archive needs a destination that is new, is empty, or holds only target
+    files, their .partial files and their channel folders. A copy also accepts other
+    files. A target file with another size than its source is an error in both (D51).
+    An archive must go to a folder under a NAS root (D50). long_paths None reads the
     Windows setting.
     """
-    if operation not in (Operation.COPY, Operation.MOVE):
-        raise ValueError(f"only a copy or a move has a destination, got {operation}")
+    if operation not in (Operation.COPY, Operation.ARCHIVE):
+        raise ValueError(f"only a copy or an archive has a destination, got {operation}")
     dest = Path(destination)
     dest_text = str(destination)
     errors: list[str] = []
@@ -226,7 +226,7 @@ def check_destination(
             bytes_to_copy=selection.total_bytes,
         )
     errors += _path_errors(source_win, dest_win, dest_text)
-    if operation is Operation.MOVE:
+    if operation is Operation.ARCHIVE:
         errors += _archive_errors(dest_text, nas_roots, resolve_drive)
 
     targets = {f.rel_path: f.size for f in selection.files}
@@ -287,7 +287,7 @@ def _content_errors(
     other_folders = sorted(listing.folders - channel_folders)
     if listing.links:
         errors.append(f"The destination holds links: {_names(sorted(listing.links))}.")
-    if operation is Operation.MOVE and (other_files or other_folders):
+    if operation is Operation.ARCHIVE and (other_files or other_folders):
         errors.append(
             "An archive needs a new or empty folder. The destination holds other files "
             f"or folders: {_names(other_folders + other_files)}."

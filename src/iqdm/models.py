@@ -42,10 +42,10 @@ class ArchiveState(StrEnum):
 
 
 class Operation(StrEnum):
-    MOVE = "move"
+    ARCHIVE = "archive"  # copy to the NAS, then point the recording at it (D64)
     COPY = "copy"
     CHECK = "check"
-    DELETE = "delete"  # the laptop copy after a passed move (DECISIONS.md D52)
+    DELETE = "delete"  # the laptop copy after a passed archive (DECISIONS.md D52)
 
 
 class Verification(StrEnum):
@@ -169,7 +169,7 @@ class RecordingFilter:
 class TransferEntry:
     """One transfer_log row. channels None means all channels.
 
-    parent_id is set exactly for a delete row and names the move it follows (D52).
+    parent_id is set exactly for a delete row and names the archive it follows (D52).
     """
 
     recording_id: int

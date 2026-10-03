@@ -40,7 +40,7 @@ def test_main_window_has_four_tabs_in_order(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
     labels = [window.tabs.tabText(i) for i in range(window.tabs.count())]
-    assert labels == ["Viewer", "Log recording", "Move / copy", "Settings"]
+    assert labels == ["Viewer", "Log recording", "Archive / copy", "Settings"]
     assert window.tabs.currentWidget() is window.viewer_tab
 
 

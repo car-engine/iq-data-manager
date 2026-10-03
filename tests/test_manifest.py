@@ -28,7 +28,7 @@ def manifest(**kw) -> Manifest:
     values = {
         "transfer_id": 7,
         "recording_id": 3,
-        "operation": Operation.MOVE,
+        "operation": Operation.ARCHIVE,
         "source": r"C:\captures\rec1",
         "destination": r"\\nas\recordings\2026\rec1",
         "range_start_unix": None,

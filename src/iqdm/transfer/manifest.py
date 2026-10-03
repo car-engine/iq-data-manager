@@ -1,4 +1,4 @@
-"""Per-file manifest of a copy or a move (DECISIONS.md D52, SPEC section 8).
+"""Per-file manifest of a copy or an archive (DECISIONS.md D52, SPEC section 8).
 
 The manifest lists every file a transfer copied, with its size and its SHA-256 where
 one was computed. It is a JSON file named transfer-<id>-<time>.json in the manifests folder

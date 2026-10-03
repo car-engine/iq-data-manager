@@ -290,7 +290,7 @@ def test_format_text():
 def transfer(**kw) -> TransferEntry:
     base = {
         "recording_id": 1,
-        "operation": Operation.MOVE,
+        "operation": Operation.ARCHIVE,
         "source": r"D:\captures\rec128",
         "destination": r"\\nas\recordings\rec128",
         "started_at": "2026-09-18T03:00:00Z",
@@ -325,7 +325,7 @@ def test_transfer_rows():
     )
     assert rows[0] == viewer.TransferRow(
         when="2026-09-18 11:00",
-        operation="Move",
+        operation="Archive",
         scope="whole recording",
         result="7,188 files \N{MIDDLE DOT} 1.4 TB \N{MIDDLE DOT} verified",
         by="userA",
@@ -513,7 +513,7 @@ def test_load_details(filled_db):
     details = viewer.load_details(db, rid)
     assert details.recording.id == rid
     assert details.site_name == "LocationA"
-    assert [t.operation for t in details.transfers] == [Operation.MOVE]
+    assert [t.operation for t in details.transfers] == [Operation.ARCHIVE]
 
 
 def test_a_newer_database_is_read_with_a_flag(filled_db):

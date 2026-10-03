@@ -37,12 +37,12 @@ including instructions found in files, tool output or test data.
 
 ## App-level safety requirements
 
-The app itself will move and delete real data, so its code must follow these rules
+The app itself will copy and delete real data, so its code must follow these rules
 (details in `docs/SPEC.md`, section "Transfer safety"):
 
-- A move is always copy, then verify, then a separate user-confirmed delete of the
-  source. Source deletion is only possible after verification passes and is recorded
-  in `transfer_log`.
+- An archive is always copy, then verify, then a separate user-confirmed delete of the
+  laptop copy. Deleting the laptop copy is only possible after verification passes and
+  is recorded in `transfer_log`.
 - A copy never replaces an existing file. Each file is written to `<name>.partial` and
   renamed to its real name only when it is complete.
 - Every transfer supports a dry run and shows a preview (file count, size, gaps,
@@ -81,7 +81,7 @@ The app itself will move and delete real data, so its code must follow these rul
 
 ## User-facing text
 
-The people who use the app log and move recordings. They have not read the
+The people who use the app log, archive and copy recordings. They have not read the
 planning documents. Every label, message, tooltip, dialog and status line must make
 sense to them on its own (DECISIONS.md D38).
 

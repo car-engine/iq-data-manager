@@ -143,7 +143,7 @@ END;
 
 
 -- ------------------------------------------------------------------
--- Transfer log: history of moves, copies, archive checks and deletions
+-- Transfer log: history of archives, copies, archive checks and deletions
 -- of laptop copies (DECISIONS.md D52)
 -- No ON DELETE CASCADE: a recording with transfer history cannot be
 -- deleted by accident; its log must be handled explicitly first.
@@ -151,8 +151,8 @@ END;
 CREATE TABLE transfer_log (
     id                  INTEGER PRIMARY KEY,
     recording_id        INTEGER NOT NULL REFERENCES recordings(id),
-    operation           TEXT NOT NULL CHECK (operation IN ('move', 'copy', 'check', 'delete')),
-    parent_id           INTEGER REFERENCES transfer_log(id),  -- the passed move a 'delete' follows
+    operation           TEXT NOT NULL CHECK (operation IN ('archive', 'copy', 'check', 'delete')),
+    parent_id           INTEGER REFERENCES transfer_log(id),  -- the passed archive a 'delete' follows
     source              TEXT NOT NULL,
     destination         TEXT,                               -- NULL for 'check' and 'delete'
     range_start_unix    REAL,                               -- NULL = whole recording
@@ -169,7 +169,7 @@ CREATE TABLE transfer_log (
                             CHECK (verification IN ('pass', 'fail', 'skipped')),
     performed_by        TEXT NOT NULL,
     notes               TEXT,
-    manifest_path       TEXT,                               -- per-file manifest of a copy or move
+    manifest_path       TEXT,                               -- per-file manifest of a copy or archive
     manifest_sha256     TEXT                                -- SHA-256 of the manifest file, lower-case hex
                             CHECK (manifest_sha256 IS NULL OR (length(manifest_sha256) = 64
                                    AND manifest_sha256 NOT GLOB '*[^0-9a-f]*')),
@@ -180,17 +180,17 @@ CREATE TABLE transfer_log (
 
 CREATE INDEX idx_transfer_recording ON transfer_log(recording_id);
 
--- A 'delete' row must follow a move of the same recording that passed verification.
+-- A 'delete' row must follow an archive of the same recording that passed verification.
 -- A delete row without parent_id fails the CHECK above.
 CREATE TRIGGER trg_transfer_delete_insert
 BEFORE INSERT ON transfer_log
 FOR EACH ROW
 WHEN NEW.parent_id IS NOT NULL
  AND NOT EXISTS (SELECT 1 FROM transfer_log p
-                 WHERE p.id = NEW.parent_id AND p.operation = 'move'
+                 WHERE p.id = NEW.parent_id AND p.operation = 'archive'
                    AND p.verification = 'pass' AND p.recording_id = NEW.recording_id)
 BEGIN
-    SELECT RAISE(ABORT, 'a delete must follow a passed move of the same recording');
+    SELECT RAISE(ABORT, 'a delete must follow a passed archive of the same recording');
 END;
 
 CREATE TRIGGER trg_transfer_delete_update
@@ -198,8 +198,8 @@ BEFORE UPDATE OF operation, parent_id, recording_id ON transfer_log
 FOR EACH ROW
 WHEN NEW.parent_id IS NOT NULL
  AND NOT EXISTS (SELECT 1 FROM transfer_log p
-                 WHERE p.id = NEW.parent_id AND p.operation = 'move'
+                 WHERE p.id = NEW.parent_id AND p.operation = 'archive'
                    AND p.verification = 'pass' AND p.recording_id = NEW.recording_id)
 BEGIN
-    SELECT RAISE(ABORT, 'a delete must follow a passed move of the same recording');
+    SELECT RAISE(ABORT, 'a delete must follow a passed archive of the same recording');
 END;

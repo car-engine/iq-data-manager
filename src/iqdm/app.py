@@ -38,7 +38,7 @@ def drop_log_input_question(recording_id: int) -> str:
 
 
 class MainWindow(QMainWindow):
-    """Top-level window holding the Viewer, Log recording, Move / copy and Settings tabs.
+    """Top-level window holding the Viewer, Log recording, Archive / copy and Settings tabs.
 
     config_path is the configuration file the Settings tab reads and writes. None means
     there is none (APPDATA not set). db_override is the --db path, which stays in force
@@ -77,7 +77,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.viewer_tab, "Viewer")
         self.tabs.addTab(self.log_tab, "Log recording")
-        self.tabs.addTab(self.transfer_tab, "Move / copy")
+        self.tabs.addTab(self.transfer_tab, "Archive / copy")
         self.tabs.addTab(self.settings_tab, "Settings")
         self.setCentralWidget(self.tabs)
         if config_error is not None:

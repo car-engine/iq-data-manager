@@ -447,7 +447,7 @@ def state_note(location: Location | None, original: Recording | None) -> str:
             "Archive state on save: archived. The transfer log will mark it as not verified "
             "against a source."
         )
-    return "Archive state on save: local. Archive it to the NAS later from the Move / copy tab."
+    return "Archive state on save: local. Archive it to the NAS later from the Archive / copy tab."
 
 
 # ---------------------------------------------------------------------------

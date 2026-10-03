@@ -19,7 +19,7 @@ This app replaces both with one Windows desktop tool with three tabs:
 
 1. **Viewer**: browse and filter recordings, their channels and RF chain details.
 2. **Log recording**: scan a recording folder and add it to the database.
-3. **Move / copy**: archive recordings to the NAS, or copy whole recordings or time
+3. **Archive / copy**: archive recordings to the NAS, or copy whole recordings or time
    ranges to a local PC. The app copies the files itself, with a preview before and a
    verification after each transfer (DECISIONS.md D48).
 
@@ -61,7 +61,7 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
-| `transfer_log` | History of moves, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row names the move it follows in `parent_id` (D52). |
+| `transfer_log` | History of archives, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row, and a check before delete, name the archive they follow in `parent_id` (D52, D55). |
 
 Key semantics:
 
@@ -114,6 +114,7 @@ nas_roots = ['\\192.168.1.50\recordings']   # UNC roots; a folder under one is o
 display_utc_offset_hours = 8      # displayed times only; -12 to 14 in steps of 0.25 (D24)
 coverage_highlight_percent = 99   # the Viewer marks coverage below this; above 0, at most 100 (D39)
 free_space_margin_gb = 10         # kept free on a transfer destination; 0 or more (D51)
+copy_workers = 4                  # files copied at once; 1 to 16 (D58)
 
 [storage_roots]                    # UNC root -> local path override (Linux later)
 # '\\192.168.1.50\recordings' = '/mnt/nas/recordings'
@@ -121,7 +122,7 @@ free_space_margin_gb = 10         # kept free on a transfer destination; 0 or mo
 
 ### Settings tab (Milestone 3a)
 
-A fourth tab, "Settings", after "Move / copy" (DECISIONS.md D29, D30). It edits
+A fourth tab, "Settings", after "Archive / copy" (DECISIONS.md D29, D30). It edits
 `config.toml` and shows the state of the database. Decisions D31 to D38 settle its
 details. The milestone is "Milestone 3a" (D32). Its text follows CLAUDE.md, "User-facing
 text": no key names, decision numbers or database internals on screen (D38).
@@ -133,11 +134,11 @@ text": no key names, decision numbers or database internals on screen (D38).
 | Display | "Show times at UTC offset" (`display_utc_offset_hours`), from −12 to 14 in steps of 0.25 (D24), with an example such as "2026-09-30 02:00:00 UTC is shown as 2026-09-30 10:00:00 (UTC+8)." "Highlight coverage below" (`coverage_highlight_percent`), from 0.0 to 100.0 % with one decimal place; 0 is an error (Milestone 4, D39). |
 | About | The path of the settings file in use, with "Open folder". The app version. A note when `--config` or `--db` is in force. |
 
-The tab shows these four keys only (D34). Milestone 3a added the first three, and
-Milestone 4 added the coverage threshold (D39). Keys that later milestones need are
-added to the tab by those milestones: `default_local_copy_root`,
-`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction` and
-`free_space_margin_gb` (Milestone 6; Milestone 5 reads them from the file only).
+Milestone 3a added the first three keys, and Milestone 4 added the coverage threshold
+(D34, D39). Milestone 6 adds a "Transfers" section with `default_local_copy_root`,
+`network_speed_mb_s`, `default_hash_mode`, `hash_sample_fraction`,
+`free_space_margin_gb` and `copy_workers` (D34, D58). Milestone 5 read them from the
+file only.
 
 Not in the Settings tab (D30):
 
@@ -204,7 +205,8 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
   sorts, numbers as numbers. The model sorts its own rows (D40).
 - **Marks**: coverage below `coverage_highlight_percent` is amber with the ⓘ mark
   (D39). An archived recording logged in place on the NAS shows "archived, not
-  verified" in amber (D2, D44). A coverage or size that the database does not hold
+  verified" in amber (D2, D44), until a "Compare with laptop copy" passes (D56). A
+  coverage or size that the database does not hold
   shows "unknown".
 - Selecting a recording shows its channels table (index, band, fc, fs, start, end,
   files, coverage) and the details panel for the recording. Selecting a channel
@@ -223,8 +225,9 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
 - **Actions** on the selected recording: Refresh (keeps the filter, the sort order
   and the selection), Open folder (the recording folder, or the channel folder when a
   channel is selected), Edit entry (D45: opens the Log tab in edit mode, and asks
-  first when the Log tab form holds input that is not saved). Copy / move comes with
-  the Move / copy tab in Milestone 6 (D42). The GUI does not delete recordings (D41).
+  first when the Log tab form holds input that is not saved). "Archive / copy" comes
+  with the Archive / copy tab in Milestone 6 (D42, D64). The GUI does not delete
+  recordings (D41).
 - **Database states**: no database path gives a line that points to the Settings
   tab. A database from a newer app version is shown with an amber line (D6). A file
   that is missing, older or not an IQ Data Manager database gives a red line with the
@@ -277,6 +280,8 @@ Validation before save (shown as a checklist):
 
 - Folder scanned and contains at least one channel with files.
 - Folder not already logged (`UNIQUE (storage_root, rel_path)`).
+- Another recording with the same start, end and channel indices is reported as
+  information that names it (D61). It may be the same capture in another folder.
 - File sizes consistent with fs: expected bytes per file =
   `header_bytes + fs_hz * file_duration_s * 2 * bytes_per_sample`. A channel's last
   file may be shorter than expected; that is reported as information (DECISIONS.md
@@ -359,40 +364,61 @@ list of unrecognised entries.
 - **Gap detail**: gaps are not stored in the DB. The viewer computes them on demand
   with a "Scan" action; transfer previews compute them for the selected range.
 
-## 8. Tab: Move / copy
+## 8. Tab: Archive / copy
 
 Milestone 5 builds the transfer core in `src/iqdm/transfer/` without a GUI. Milestone 6
 builds the tab over it.
+
+The app uses three terms for its transfers, in the code and on screen (D64). A
+**copy** goes to a PC and leaves the recording entry unchanged. An **archive** goes to
+the NAS, and the recording then points at it. A **delete** removes the laptop copy
+after a passed archive. The app never moves files: an archive leaves the laptop copy
+in place until the user deletes it.
 
 ### Operations
 
 - **Copy to a local PC**: source is a recording (usually archived on the NAS). The
   recording entry is unchanged; a `transfer_log` row is added with `operation =
-  'copy'`.
-- **Archive to the NAS (move)**: source is a `local` recording on the laptop, whole,
+  'copy'`. The destination field starts with `default_local_copy_root` and the
+  recording's relative path, which the user can change (D60).
+- **Archive to the NAS**: source is a `local` recording on the laptop, whole,
   with all channels, and its folder must match the database entry (D50). Steps: copy,
   verify, then on success update `storage_root`, `rel_path`,
   `archive_state = 'archived'` and `archived_at` in the same transaction that
   finishes the `transfer_log` row. A failed verification leaves the recording `local`.
-  If another move archived the recording while this one ran, this move is logged as
-  failed, and the recording keeps the first archive copy.
+  If another archive pointed the recording elsewhere while this one ran, this archive
+  is logged as failed, and the recording keeps the first archive copy. The preview
+  warns when an archived recording has the same start, end and channel indices (D61).
+- **Check before delete** (D55): reads the NAS files of a passed archive with the
+  Windows file cache bypassed, and hashes them in the chosen hash mode. Each hash is
+  compared with the copy-time hash in the manifest, or with a hash of the laptop file
+  where the manifest holds none. It is logged as a `check` row with the archive in
+  `parent_id`.
 - **Delete the laptop copy**: a separate, explicit, user-confirmed action, offered
-  only after a move passed verification. It is logged as a `transfer_log` row with
-  `operation = 'delete'` and the move in `parent_id` (D52).
+  only after an archive passed verification and a later check before delete passed
+  (D55). It is logged as a `transfer_log` row with `operation = 'delete'` and the
+  archive in `parent_id` (D52).
+- **Compare with laptop copy** (D56): for an archived recording that was logged in
+  place on the NAS (D2). The user picks the laptop folder. The app compares channels,
+  file counts, sizes and SHA-256 in the chosen hash mode, and logs a `check` row with
+  the laptop folder as `source` and the NAS folder as `destination`. A passed
+  comparison clears the "not verified" mark. It does not allow deleting the laptop
+  copy.
 - **Check archive**: compare an archived recording's folder with its database entry:
   channels, and file count and total size per channel. It is logged with
   `operation = 'check'`. Counts the database does not hold (legacy entries) are
   filled in from the folder, and that check is logged as `'skipped'`. A folder that
   cannot be scanned is a failed check.
 
-Each copy or move first writes its `transfer_log` row with `started_at`. A row with no
+Each copy or archive first writes its `transfer_log` row with `started_at`. A row with no
 `finished_at` is a transfer that never completed, for example after a crash. A
 cancelled transfer is finished with `verification = 'skipped'` and a note.
 
 ### Scope
 
 - Whole recording, or a time range. A file at time `t` is in the range when
-  `start <= t < end` (D49). Input is UTC date-time or Unix time, kept in sync.
+  `start <= t < end` (D49). Input is a date and time at the display offset, or Unix
+  time, kept in sync (D59).
 - Channel checkboxes: any subset of the recording's channels.
 - Timeline showing the selected range against each channel's available data and gaps.
 
@@ -424,19 +450,19 @@ from the database entry.
 - Progress reports files and bytes. Cancel stops between chunks and leaves the
   `.partial` file, which a later run overwrites.
 - The engine can compute the source's SHA-256 while it copies, and can copy several
-  files at once.
+  files at once. The app copies `copy_workers` files at once (D58).
 - A dry run is the preview: it computes the selection, the destination checks and the
   estimate, and writes nothing.
 - `transfer/power.py` keeps Windows from sleeping while a transfer runs.
 
 ### Manifest
 
-After each copy or move that passes verification, the app writes a manifest (D52): a
+After each copy or archive that passes verification, the app writes a manifest (D52): a
 JSON file in the `manifests` folder next to the configuration file, named
 `transfer-<id>-<finish time>.json`, for example `transfer-7-20261003T080000Z.json`.
 It lists each file's relative path (`/`-separated), size and SHA-256 where one was
 computed, with the transfer's source, destination, range and channels. It is written
-only to a new file. A move's destination is stored as its NAS location, with a mapped
+only to a new file. An archive's destination is stored as its NAS location, with a mapped
 drive letter replaced by the UNC path (D14), so the log row, the manifest and the
 recording name the same folder. `transfer_log.manifest_path` holds its path and
 `transfer_log.manifest_sha256` the SHA-256 of its bytes.
@@ -445,8 +471,8 @@ recording name the same folder. `transfer_log.manifest_path` holds its path and
 
 - **Destination validation** (`transfer/pathcheck.py`): not a drive root or a share
   root, not equal to or inside the source, source not inside the destination. Paths
-  compare without letter case. A move needs a destination that is new, empty, or
-  holds only the target files of an interrupted move of the same selection. A copy
+  compare without letter case. An archive needs a destination that is new, empty, or
+  holds only the target files of an interrupted archive of the same selection. A copy
   also accepts a destination that holds other files (D51). Free space must cover the
   bytes still to copy plus `free_space_margin_gb`. Paths must stay within the Windows
   limits (259 characters for a file, 247 for a folder) unless long paths are enabled.
@@ -459,11 +485,14 @@ recording name the same folder. `transfer_log.manifest_path` holds its path and
   size between the selection and the destination. Optional SHA-256 by `hash_mode`:
   `none`; `sample`, which hashes `ceil(hash_sample_fraction × n)` files, at least one,
   chosen as the files whose relative path has the smallest SHA-256; or `all`. Source
-  hashes come from the copy where it computed them. Files in the destination that are
-  not in the selection are reported and do not fail the verification.
+  hashes come from the copy where it computed them. When the hash mode is not `none`,
+  every file the copy skipped as already in place is also hashed on both sides (D63).
+  Files in the destination that are not in the selection are reported and do not
+  fail the verification.
 - **Deletion**: all deletion goes through `src/iqdm/transfer/delete.py` (D52). It
-  needs a move with a passed verification and a manifest whose SHA-256 matches. The
-  recording must point at the move's destination. Right before each source file is
+  needs an archive with a passed verification, a manifest whose SHA-256 matches, and
+  a check before delete of that archive that passed after it finished (D55). The
+  recording must point at the archive's destination. Right before each source file is
   deleted, its destination copy and the source file must still have the manifest
   size. It deletes only the files in the manifest, never whole trees by pattern, and
   then removes folders that are empty. The result is logged as a delete row.
@@ -494,6 +523,7 @@ iq-data-manager/
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
+    movecopy.py               # Archive / copy tab logic: time input, preview text, states (no Qt)
     db/
       schema.sql
       version.py              # LATEST_VERSION and schema_status(), shared by the two below
@@ -510,8 +540,10 @@ iq-data-manager/
       verify.py               # count/size/hash verification
       delete.py               # the only module that deletes files
       estimate.py             # size/time estimates
-      operations.py           # copy, move, check and delete flows with their log rows
+      operations.py           # copy, archive, check and delete flows with their log rows
       power.py                # keeps Windows awake during a transfer
+    diagnostics/              # copy check, database check and NAS test set (D57)
+    check_main.py             # console program IQDataManager-check.exe (D57)
     gui/
       viewer_tab.py
       log_tab.py
@@ -519,7 +551,7 @@ iq-data-manager/
       settings_tab.py         # Settings tab (section 4, D29)
       workers.py              # QThread/QRunnable wrappers
       widgets/                # timeline, checklist, param table, recordings table model
-  tools/
+  tools/                      # thin wrappers over iqdm.diagnostics from Milestone 6 (D57)
     make_fixtures.py          # synthetic IQ recordings for tests and manual testing
     db_check.py               # create, write and locking checks on a scratch database (O21)
     copy_check.py             # copy-engine throughput, flush on and off (D48, D54)
@@ -527,7 +559,7 @@ iq-data-manager/
     migrate_legacy.py         # legacy DB -> new schema (writes a NEW file)
   tests/
   build/
-    iqdm.spec                 # PyInstaller spec
+    iqdm.spec                 # PyInstaller spec: IQDataManager.exe and IQDataManager-check.exe
 ```
 
 Rules: nothing outside `gui/` and `app.py` imports PySide6. All SQL lives in `db/`,
@@ -587,12 +619,13 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    offset, applying changes without a restart, tests (scope narrowed by D30).
 4. **Viewer tab**: filters, recordings table, channels, details, actions.
 5. **Transfer core**: selection, path checks, manifest, copy engine (D48), estimates,
-   verification, delete module, and the copy, move, check and delete flows with their
-   `transfer_log` rows. No GUI. Heavily tested.
-6. **Move / copy tab**: GUI over the core, preview, run with progress and cancel,
+   verification, delete module, and the copy, archive, check and delete flows with
+   their `transfer_log` rows. No GUI. Heavily tested.
+6. **Archive / copy tab**: GUI over the core, preview, run with progress and cancel,
    post-verification delete flow, the transfer keys in the Settings tab. The
-   Viewer's Copy / move button comes with this tab (D42). The milestone ends with the
-   first test on the NAS, with the test set from `tools/make_nas_testset.py` (D54).
+   Viewer's "Archive / copy" button comes with this tab (D42). The milestone starts
+   with the change of term from "move" to "archive" (D64), and ends with the first
+   test on the NAS, with the test set from `tools/make_nas_testset.py` (D54).
 7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
    it runs without Python), an admin option `--create-db PATH` for an empty database,
    short user guide (D30). The settings dialog and the config writer moved to

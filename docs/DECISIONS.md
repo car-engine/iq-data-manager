@@ -72,6 +72,16 @@ Rules for this file:
 | D52 | Deletion record and transfer manifest | 2026-10-03, Milestone 5 | Active |
 | D53 | File names come from a rescan | 2026-10-03, Milestone 5 | Active |
 | D54 | NAS field test with the Milestone 6 build | 2026-10-03, Milestone 5 | Active |
+| D55 | Deleting the laptop copy after a check past the cache | 2026-10-03, Milestone 6 | Active |
+| D56 | Compare with laptop copy | 2026-10-03, Milestone 6 | Active |
+| D57 | Diagnostics in a console companion program | 2026-10-03, Milestone 6 | Active |
+| D58 | Files copied at once as a setting | 2026-10-03, Milestone 6 | Active |
+| D59 | Time input at the display offset | 2026-10-03, Milestone 6 | Active |
+| D60 | Destination of a copy to a PC | 2026-10-03, Milestone 6 | Active |
+| D61 | One capture logged twice | 2026-10-03, Milestone 6 | Active |
+| D62 | Transfer notes are appended | 2026-10-03, Milestone 6 | Active |
+| D63 | Skipped files are hashed | 2026-10-03, Milestone 6 | Active |
+| D64 | "Archive" in place of "move" | 2026-10-03, Milestone 6 | Active |
 
 ## D1. Sample types
 
@@ -1014,3 +1024,167 @@ recording laptop and reporting back the next day.
 
 Affects: SPEC sections 8, 9 and 12, `transfer/copier.py`, `tools/copy_check.py`,
 `tools/make_nas_testset.py`, `tools/make_fixtures.py`.
+
+## D55. Deleting the laptop copy after a check past the cache
+
+Closes O36. The user chose this on 2026-10-03, while planning Milestone 6.
+
+- A check straight after a copy to the NAS may read the files from the PC's file
+  cache (Milestone 5 report, "Untested"). Its hashes may then compare the PC's memory
+  with the source.
+- The proposed default was a later "Check archive". That check scans directory
+  entries and reads no file contents, so it cannot find such a problem. A restart of
+  the app does not empty the Windows file cache, which belongs to the system.
+- A separate action, "Check before delete", reads the NAS files of a passed archive
+  with the Windows file cache bypassed (`FILE_FLAG_NO_BUFFERING`). It hashes them in
+  the chosen hash mode. Each hash is compared with the copy-time hash in the
+  manifest, or with a hash of the laptop file where the manifest holds none.
+- The check is logged as a `check` row whose `parent_id` names the archive.
+  `schema.sql` is edited in place (D4).
+- `delete.py` refuses to delete unless such a check passed after the archive
+  finished. A passed check stays valid for a later delete run of the same archive.
+  The per-file size checks of D52 still run right before each file.
+- The NAS field test (D54) confirms that the bypass reads from the NAS.
+
+Affects: SPEC sections 3 and 8, `schema.sql`, `transfer/verify.py`,
+`transfer/delete.py`, `transfer/operations.py`.
+
+## D56. Compare with laptop copy
+
+Closes O11. The user chose the proposed option on 2026-10-03.
+
+- An archived recording with the "not verified" mark (D2, D44) gets an action,
+  "Compare with laptop copy". The user picks the laptop folder.
+- The app compares the channels, the file count and each file's size between the
+  laptop folder and the NAS folder, with SHA-256 in the chosen hash mode.
+- The comparison is logged as a `check` row with the laptop folder as `source`, the
+  NAS folder as `destination` and the hash mode.
+- The mark is shown while the in-place row exists and no later comparison row
+  passed. No row is removed.
+- A passed comparison does not allow deleting the laptop copy. Deletion stays tied to
+  a passed archive and its manifest (D52, D55).
+
+Affects: SPEC sections 5 and 8, `viewer.py`, `db/repository.py`,
+`transfer/operations.py`.
+
+## D57. Diagnostics in a console companion program
+
+Closes O34. The user chose this on 2026-10-03 in place of the proposed default
+(options of the main program).
+
+- The packaged app is windowed (D8). It has no console, so text that a command-line
+  option prints would not appear.
+- The build folder holds a second program, `IQDataManager-check.exe`, which runs in a
+  console. Its subcommands are `copy-check`, `db-check` and `make-test-set`, with the
+  options of the tools in `tools/`.
+- The code moves from `tools/` into `src/iqdm/diagnostics/`. The scripts in `tools/`
+  stay as thin wrappers, so the commands in the reports keep working.
+- `db-check` refuses `check`, `write` and `hold` on a database that holds any
+  recording other than its own test rows. On a laptop whose settings point at the
+  real catalogue, it then writes nothing there.
+
+Affects: SPEC sections 9, 11 and 12, `build/iqdm.spec`, `tools/`.
+
+## D58. Files copied at once as a setting
+
+Closes O35. The user chose the proposed default on 2026-10-03.
+
+- A new key, `copy_workers`, sets the number of files copied at once. The default is
+  4, and a value runs from 1 to 16. The Settings tab shows it as "Files copied at
+  once".
+- The flush to the destination's disks stays on and is not a setting. Deletion relies
+  on it (D54). `copy-check` still measures with the flush on and off.
+
+Affects: SPEC sections 4 and 8, `config.py`, `gui/settings_tab.py`.
+
+## D59. Time input at the display offset
+
+Closes O1. The user chose this on 2026-10-03 in place of the proposed default (UTC).
+
+- The "From" and "To" fields of a time range read a date and time at the display
+  offset (D24). Their labels name the zone, for example "From (UTC+8)".
+- Fields in Unix seconds sit next to them. Each pair is kept in sync.
+- Reason: the timeline axis, the Viewer's date filters (D43) and every other time on
+  screen use the display offset.
+
+Affects: SPEC section 8, the Archive / copy tab.
+
+## D60. Destination of a copy to a PC
+
+Closes O10. The user chose the proposed option on 2026-10-03.
+
+- For a copy to a PC, the destination field is filled in with
+  `default_local_copy_root` and the recording's relative path, for example
+  `D:\work\iq\2026\LocationA\20260918_0300`. The NAS folder structure is kept.
+- The user can edit the path or use Browse. Without `default_local_copy_root` the field
+  starts empty.
+
+Affects: SPEC section 8, the Archive / copy tab.
+
+## D61. One capture logged twice
+
+Closes O25. The user chose the proposed option on 2026-10-03.
+
+- A recording copied to the NAS by hand and logged there (D2) can also be logged from
+  its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)`
+  accepts both.
+- When another recording has the same start, end and channel indices, the Log tab
+  checklist shows an information line that names it.
+- The archive preview shows a warning when such a recording is archived.
+- Neither blocks.
+
+Affects: SPEC sections 6 and 8, `entry.py`, `db/repository.py`,
+`transfer/operations.py`.
+
+## D62. Transfer notes are appended
+
+Closes O12. The user chose the proposed default on 2026-10-03.
+
+- `repository.finish_transfer()` adds a new note after the text already stored,
+  separated by a space. Before this decision a new note replaced the stored text.
+- A note of None keeps the stored text.
+
+Affects: `db/repository.py`.
+
+## D63. Skipped files are hashed
+
+Closes issue 4 of the Milestone 5 report. The user decided on 2026-10-03, after
+asking how a stopped copy resumes.
+
+- A target file already in place with the source's size is skipped by the copy
+  (D51). Before this decision, verification trusted it by its size unless the hash
+  mode chose it.
+- When the hash mode is not `none`, verification now hashes every skipped file, on
+  the source and in the destination. With `none` it compares sizes only.
+- Reason: a file of the right size may come from outside the app, for example from a
+  hand copy (D2). A Windows copy that stopped part-way may leave a file at its full
+  size.
+- Cost: a resumed run reads the files already copied again, on both sides. The
+  preview's time estimate includes that reading.
+
+Affects: SPEC section 8, `transfer/verify.py`, `transfer/estimate.py`,
+`transfer/operations.py`.
+
+## D64. "Archive" in place of "move"
+
+The user decided on 2026-10-03, while planning Milestone 6.
+
+- The operation called "move" never moved files. It copies the recording to the NAS,
+  verifies the copy, and points the recording at it. The laptop copy stays until the
+  separate, confirmed delete (D52). The word "move" suggested that files leave the
+  laptop.
+- The app uses three terms: **copy** (to a PC; the recording entry is unchanged),
+  **archive** (to the NAS; the recording then points at the NAS copy) and **delete**
+  (the laptop copy, after a passed archive).
+- The change covers the code and the database: `Operation.ARCHIVE`, stored as
+  `'archive'`, the `operation` CHECK constraint and the delete triggers
+  (`schema.sql` edited in place, D4), `repository.finish_archive()` and
+  `operations.delete_laptop_copy(archive_id)`.
+- The tab is "Archive / copy", and the Viewer's button has the same name. SPEC,
+  STATUS and CLAUDE.md use the new terms. The user approved the CLAUDE.md change.
+- Entries D1 to D54 keep their wording. In them, "move" means an archive.
+- A database made before this change refuses archive rows. Scratch databases are made
+  again with `tools/db_check.py create`.
+
+Affects: CLAUDE.md, SPEC sections 1, 3, 5, 8, 9 and 12, `schema.sql`, `models.py`,
+`db/repository.py`, `transfer/`, `viewer.py`, `entry.py`, `app.py`.

@@ -124,8 +124,8 @@ def test_windows_path():
         windows_path("x\\y", None)
 
 
-def test_only_a_copy_or_a_move_has_a_destination(selection, tmp_path):
-    with pytest.raises(ValueError, match="copy or a move"):
+def test_only_a_copy_or_an_archive_has_a_destination(selection, tmp_path):
+    with pytest.raises(ValueError, match="copy or an archive"):
         check(selection, tmp_path / "out", operation=Operation.CHECK)
 
 
@@ -195,43 +195,43 @@ def nas(tmp_path) -> Path:
     return root
 
 
-def move(selection, dest, nas_root, **kw):
-    return check(selection, dest, Operation.MOVE, nas_roots=[str(nas_root)], **kw)
+def archive(selection, dest, nas_root, **kw):
+    return check(selection, dest, Operation.ARCHIVE, nas_roots=[str(nas_root)], **kw)
 
 
-def test_a_move_goes_to_a_new_folder_under_a_nas_root(selection, nas):
-    assert move(selection, nas / "2026" / "rec1", nas).ok
+def test_an_archive_goes_to_a_new_folder_under_a_nas_root(selection, nas):
+    assert archive(selection,nas / "2026" / "rec1", nas).ok
 
 
-def test_a_move_outside_the_nas_roots_is_refused(selection, tmp_path, nas):
+def test_an_archive_outside_the_nas_roots_is_refused(selection, tmp_path, nas):
     dest = tmp_path / "local" / "rec1"
-    assert move(selection, dest, nas).errors == (
+    assert archive(selection,dest, nas).errors == (
         "An archive goes to a folder in one of the NAS locations in Settings. "
         f"{dest} is not in one.",
     )
 
 
-def test_a_move_to_the_nas_root_itself_is_refused(selection, nas):
-    (error,) = move(selection, nas, nas).errors
+def test_an_archive_to_the_nas_root_itself_is_refused(selection, nas):
+    (error,) = archive(selection,nas, nas).errors
     assert error.startswith("The destination cannot hold a recording: a NAS root cannot")
 
 
-def test_a_move_refuses_a_folder_with_other_files(selection, nas):
+def test_an_archive_refuses_a_folder_with_other_files(selection, nas):
     dest = nas / "rec1"
     (dest / "extra").mkdir(parents=True)
     (dest / "readme.txt").write_text("x", encoding="utf-8")
-    assert move(selection, dest, nas).errors == (
+    assert archive(selection,dest, nas).errors == (
         "An archive needs a new or empty folder. The destination holds other files or "
         "folders: extra, readme.txt.",
     )
 
 
-def test_a_move_resumes_its_own_files(selection, nas):
+def test_an_archive_resumes_its_own_files(selection, nas):
     dest = nas / "rec1"
     copy_in(selection, dest, [selection.files[0].rel_path])
     (dest / "1").mkdir()
     (dest / (selection.files[5].rel_path + ".partial")).write_bytes(b"half")
-    result = move(selection, dest, nas)
+    result = archive(selection,dest, nas)
     assert result.ok, result.errors
     assert result.existing == {selection.files[0].rel_path}
 

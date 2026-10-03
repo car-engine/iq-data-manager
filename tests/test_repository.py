@@ -675,16 +675,16 @@ def test_finish_transfer_records_the_manifest(conn, site_id):
     assert (got.manifest_path, got.manifest_sha256) == ("C:/app/manifests/transfer-1.json", digest)
 
 
-def start_move(conn, rid) -> int:
+def start_archive(conn, rid) -> int:
     return repo.insert_transfer(
-        conn, transfer(rid, operation=Operation.MOVE, source="C:/captures/rec1")
+        conn, transfer(rid, operation=Operation.ARCHIVE, source="C:/captures/rec1")
     )
 
 
-def test_finish_move_archives_the_recording(conn, site_id):
+def test_finish_archive_points_the_recording_at_the_nas(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
-    tid = start_move(conn, rid)
-    repo.finish_move(
+    tid = start_archive(conn, rid)
+    repo.finish_archive(
         conn,
         tid,
         finished_at="2026-10-02T01:30:00Z",
@@ -695,21 +695,21 @@ def test_finish_move_archives_the_recording(conn, site_id):
         storage_root="//nas/recordings",
         rel_path="2026/rec1",
     )
-    move = repo.get_transfer(conn, tid)
-    assert move.verification is Verification.PASS
-    assert (move.n_files, move.total_bytes) == (20, 80000)
-    assert move.manifest_sha256 == "cd" * 32
+    archive = repo.get_transfer(conn, tid)
+    assert archive.verification is Verification.PASS
+    assert (archive.n_files, archive.total_bytes) == (20, 80000)
+    assert archive.manifest_sha256 == "cd" * 32
     rec = repo.get_recording(conn, rid)
     assert rec.archive_state is ArchiveState.ARCHIVED
     assert (rec.storage_root, rec.rel_path) == ("//nas/recordings", "2026/rec1")
     assert rec.archived_at == "2026-10-02T01:30:00Z"
 
 
-def test_finish_move_refuses_another_operation(conn, site_id):
+def test_finish_archive_refuses_another_operation(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     tid = repo.insert_transfer(conn, transfer(rid))
-    with pytest.raises(repo.RepositoryError, match="not a move"):
-        repo.finish_move(
+    with pytest.raises(repo.RepositoryError, match="not an archive"):
+        repo.finish_archive(
             conn,
             tid,
             finished_at="2026-10-02T01:30:00Z",
@@ -723,9 +723,9 @@ def test_finish_move_refuses_another_operation(conn, site_id):
     assert repo.get_recording(conn, rid).archive_state is ArchiveState.LOCAL
 
 
-def test_finish_move_refuses_a_recording_archived_meanwhile(conn, site_id):
+def test_finish_archive_refuses_a_recording_archived_meanwhile(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
-    first, second = start_move(conn, rid), start_move(conn, rid)
+    first, second = start_archive(conn, rid), start_archive(conn, rid)
     values = {
         "finished_at": "2026-10-02T01:30:00Z",
         "n_files": 20,
@@ -734,22 +734,22 @@ def test_finish_move_refuses_a_recording_archived_meanwhile(conn, site_id):
         "manifest_sha256": "cd" * 32,
         "storage_root": "//nas/recordings",
     }
-    repo.finish_move(conn, first, rel_path="first", **values)
+    repo.finish_archive(conn, first, rel_path="first", **values)
     with pytest.raises(repo.AlreadyArchivedError):
-        repo.finish_move(conn, second, rel_path="second", **values)
+        repo.finish_archive(conn, second, rel_path="second", **values)
     assert repo.get_recording(conn, rid).rel_path == "first"
     assert repo.get_transfer(conn, second).finished_at is None
 
 
-def test_finish_move_is_atomic(db_path):
+def test_finish_archive_is_atomic(db_path):
     with open_db(db_path) as c:
         site = repo.add_site(c, "SiteA").id
         rid = repo.insert_recording(c, recording(site))
         repo.insert_recording(c, recording(site, rel_path="taken", storage_root="//nas/rec"))
-        tid = start_move(c, rid)
+        tid = start_archive(c, rid)
 
     def finish(c):
-        repo.finish_move(
+        repo.finish_archive(
             c,
             tid,
             finished_at="2026-10-02T01:30:00Z",
@@ -770,16 +770,16 @@ def test_finish_move_is_atomic(db_path):
 
 def test_delete_row_round_trip(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
-    move = start_move(conn, rid)
+    archive = start_archive(conn, rid)
     repo.finish_transfer(
-        conn, move, finished_at="2026-10-02T01:30:00Z", verification=Verification.PASS
+        conn, archive, finished_at="2026-10-02T01:30:00Z", verification=Verification.PASS
     )
     tid = repo.insert_transfer(
         conn,
         transfer(
             rid,
             operation=Operation.DELETE,
-            parent_id=move,
+            parent_id=archive,
             destination=None,
             verification=Verification.PASS,
             finished_at="2026-10-02T02:00:00Z",
@@ -787,15 +787,15 @@ def test_delete_row_round_trip(conn, site_id):
     )
     got = repo.get_transfer(conn, tid)
     assert got.operation is Operation.DELETE
-    assert got.parent_id == move
+    assert got.parent_id == archive
 
 
-def test_delete_row_needs_a_passed_move(conn, site_id):
+def test_delete_row_needs_a_passed_archive(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
-    move = start_move(conn, rid)  # not finished: verification is still 'skipped'
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+    archive = start_archive(conn, rid)  # not finished: verification is still 'skipped'
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
         repo.insert_transfer(
-            conn, transfer(rid, operation=Operation.DELETE, parent_id=move, destination=None)
+            conn, transfer(rid, operation=Operation.DELETE, parent_id=archive, destination=None)
         )
 
 

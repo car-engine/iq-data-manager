@@ -150,7 +150,7 @@ def test_channel_checks(conn):
     "overrides",
     [
         {"operation": "delete"},
-        {"operation": "archive"},
+        {"operation": "move"},  # the name before D64
         {"verification": "ok"},
         {"hash_mode": "some"},
         {"channels": ""},
@@ -188,69 +188,69 @@ def test_transfer_valid(conn, overrides):
 # ---------------------------------------------------------------------------
 
 
-def passed_move(conn, rid) -> int:
-    return add_transfer(conn, rid, operation="move", verification="pass")
+def passed_archive(conn, rid) -> int:
+    return add_transfer(conn, rid, operation="archive", verification="pass")
 
 
 def add_delete(conn, rid, parent_id) -> int:
     return add_transfer(conn, rid, operation="delete", parent_id=parent_id, destination=None)
 
 
-def test_delete_after_a_passed_move_is_accepted(conn):
+def test_delete_after_a_passed_archive_is_accepted(conn):
     rid = add_recording(conn)
-    add_delete(conn, rid, passed_move(conn, rid))
+    add_delete(conn, rid, passed_archive(conn, rid))
     assert count(conn, "transfer_log") == 2
 
 
 @pytest.mark.parametrize(
     "parent",
     [
-        {"operation": "move", "verification": "fail"},
-        {"operation": "move", "verification": "skipped"},
+        {"operation": "archive", "verification": "fail"},
+        {"operation": "archive", "verification": "skipped"},
         {"operation": "copy", "verification": "pass"},
         {"operation": "check", "verification": "pass", "destination": None},
     ],
 )
-def test_delete_needs_a_passed_move_as_parent(conn, parent):
+def test_delete_needs_a_passed_archive_as_parent(conn, parent):
     rid = add_recording(conn)
     parent_id = add_transfer(conn, rid, **parent)
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
         add_delete(conn, rid, parent_id)
 
 
 def test_delete_parent_must_exist(conn):
     rid = add_recording(conn)
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
         add_delete(conn, rid, 999)
 
 
 def test_delete_parent_must_belong_to_the_same_recording(conn):
     rid = add_recording(conn)
     other = add_recording(conn, rel_path="rec2")
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
-        add_delete(conn, other, passed_move(conn, rid))
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
+        add_delete(conn, other, passed_archive(conn, rid))
 
 
 def test_parent_id_only_on_a_delete_row(conn):
     rid = add_recording(conn)
-    move = passed_move(conn, rid)
+    archive = passed_archive(conn, rid)
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
-        add_transfer(conn, rid, parent_id=move)
+        add_transfer(conn, rid, parent_id=archive)
 
 
-def test_delete_row_cannot_be_moved_to_a_failed_parent(conn):
+def test_delete_row_cannot_point_at_a_failed_parent(conn):
     rid = add_recording(conn)
-    delete = add_delete(conn, rid, passed_move(conn, rid))
-    failed = add_transfer(conn, rid, operation="move", verification="fail")
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+    delete = add_delete(conn, rid, passed_archive(conn, rid))
+    failed = add_transfer(conn, rid, operation="archive", verification="fail")
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
         conn.execute("UPDATE transfer_log SET parent_id = ? WHERE id = ?", (failed, delete))
 
 
-def test_row_cannot_become_a_delete_of_a_failed_move(conn):
+def test_row_cannot_become_a_delete_of_a_failed_archive(conn):
     rid = add_recording(conn)
-    failed = add_transfer(conn, rid, operation="move", verification="fail")
+    failed = add_transfer(conn, rid, operation="archive", verification="fail")
     copy = add_transfer(conn, rid)
-    with pytest.raises(sqlite3.IntegrityError, match="passed move"):
+    with pytest.raises(sqlite3.IntegrityError, match="passed archive"):
         conn.execute(
             "UPDATE transfer_log SET operation = 'delete', parent_id = ? WHERE id = ?",
             (failed, copy),

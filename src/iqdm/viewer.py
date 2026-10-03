@@ -289,7 +289,7 @@ class TransferRow:
 
 
 _OPERATIONS = {
-    Operation.MOVE: "Move",
+    Operation.ARCHIVE: "Archive",
     Operation.COPY: "Copy",
     Operation.CHECK: "Check",
     Operation.DELETE: "Delete laptop copy",

@@ -59,7 +59,7 @@ class HasTransferHistoryError(RepositoryError):
 
 
 class AlreadyArchivedError(RepositoryError):
-    """A move finished for a recording that another move archived first."""
+    """An archive finished for a recording that another archive pointed elsewhere first."""
 
 
 class ChannelRemovalError(RepositoryError):
@@ -596,7 +596,7 @@ def decode_channels(text: str | None) -> tuple[int, ...] | None:
 def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
     """Add a transfer_log row. Returns its id.
 
-    A delete row needs parent_id: a move of the same recording that passed
+    A delete row needs parent_id: an archive of the same recording that passed
     verification. The schema refuses any other delete row (D52).
     """
     row = conn.execute(
@@ -668,7 +668,7 @@ def finish_transfer(
     )
 
 
-def finish_move(
+def finish_archive(
     conn: sqlite3.Connection,
     transfer_id: int,
     *,
@@ -680,16 +680,16 @@ def finish_move(
     storage_root: str,
     rel_path: str,
 ) -> None:
-    """Finish a passed move and point its recording at the new copy (SPEC section 8).
+    """Finish a passed archive and point its recording at the new copy (SPEC section 8).
 
     Both writes happen in the caller's transaction, so the log row and the archive
     state change together. archived_at is the finish time. Raises AlreadyArchivedError
-    when the recording is no longer local, for example after a second move of the
+    when the recording is no longer local, for example after a second archive of the
     same recording finished first.
     """
     entry = get_transfer(conn, transfer_id)
-    if entry.operation is not Operation.MOVE:
-        raise RepositoryError(f"transfer {transfer_id} is a {entry.operation}, not a move")
+    if entry.operation is not Operation.ARCHIVE:
+        raise RepositoryError(f"transfer {transfer_id} is a {entry.operation}, not an archive")
     row = _one(conn, "SELECT archive_state FROM recordings WHERE id = ?", (entry.recording_id,))
     if row is None:
         raise NotFoundError(f"no recording with id {entry.recording_id}")

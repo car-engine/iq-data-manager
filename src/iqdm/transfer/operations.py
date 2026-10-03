@@ -1,4 +1,4 @@
-"""Copy, move, check and delete flows with their transfer_log rows (SPEC section 8).
+"""Copy, archive, check and delete flows with their transfer_log rows (SPEC section 8).
 
 Each flow runs in a worker thread. Database work happens in short steps, each with
 its own connection, never while files are being copied:
@@ -6,12 +6,12 @@ its own connection, never while files are being copied:
 - preview_transfer() reads the recording, rescans its folder (D53), checks the
   destination (D50, D51) and estimates the time. It writes nothing.
 - run_transfer() writes the transfer_log row with started_at, copies, verifies,
-  writes the manifest and finishes the row. A passed move also points the recording
-  at the NAS copy in the same transaction (finish_move). A cancelled transfer is
-  finished as 'skipped' with a note. If the app stops before the end, the row keeps
-  finished_at NULL.
-- delete_laptop_copy() checks a passed move and its manifest, writes the delete row,
-  deletes the laptop files through delete.py and finishes the row (D52).
+  writes the manifest and finishes the row. A passed archive also points the
+  recording at the NAS copy in the same transaction (finish_archive). A cancelled
+  transfer is finished as 'skipped' with a note. If the app stops before the end, the
+  row keeps finished_at NULL.
+- delete_laptop_copy() checks a passed archive and its manifest, writes the delete
+  row, deletes the laptop files through delete.py and finishes the row (D52).
 - check_archive() compares an archived recording's folder with its entry.
 """
 
@@ -75,7 +75,7 @@ class TransferRequest:
     """What the user asked for. channels None means all channels."""
 
     recording_id: int
-    operation: Operation  # COPY or MOVE
+    operation: Operation  # COPY or ARCHIVE
     destination: str
     hash_mode: HashMode
     channels: tuple[int, ...] | None = None
@@ -87,10 +87,10 @@ class TransferRequest:
 class Preview:
     """Everything shown before a transfer runs. ok is True when it may run.
 
-    destination is the folder the transfer writes to. For a move it is the NAS
+    destination is the folder the transfer writes to. For an archive it is the NAS
     location (D14): a mapped drive letter is replaced by its UNC path, so the log
     row, the manifest and the recording name the same folder. location is that
-    split for a move, and None for a copy.
+    split for an archive, and None for a copy.
     """
 
     request: TransferRequest
@@ -154,7 +154,7 @@ def _load_recording(db_path: Path | str, recording_id: int) -> Recording:
 def _archive_location(
     destination: str, nas_roots: tuple[str, ...], resolve_drive: DriveResolver | None
 ) -> Location | None:
-    """The NAS location of a move's destination, or None if it is not under a NAS root.
+    """The NAS location of an archive's destination, or None if it is not under a NAS root.
 
     check_destination() names the problem in the second case.
     """
@@ -165,7 +165,7 @@ def _archive_location(
     return location if location.archive_state is ArchiveState.ARCHIVED else None
 
 
-def _move_errors(
+def _archive_errors(
     db_path: Path | str, rec: Recording, selection: Selection, location: Location | None
 ) -> list[str]:
     """The rules for "Archive to NAS" (D50)."""
@@ -205,8 +205,8 @@ def preview_transfer(
 
     Raises the scanner's ScanError and ScanCancelled, and SelectionError.
     """
-    if request.operation not in (Operation.COPY, Operation.MOVE):
-        raise ValueError(f"a transfer is a copy or a move, got {request.operation}")
+    if request.operation not in (Operation.COPY, Operation.ARCHIVE):
+        raise ValueError(f"a transfer is a copy or an archive, got {request.operation}")
     rec = _load_recording(db_path, request.recording_id)
     selection = select_files(
         rec,
@@ -219,11 +219,11 @@ def preview_transfer(
     errors = []
     location = None
     destination = request.destination
-    if request.operation is Operation.MOVE:
+    if request.operation is Operation.ARCHIVE:
         location = _archive_location(request.destination, config.nas_roots, resolve_drive)
         if location is not None:
             destination = location.full_path
-        errors += _move_errors(db_path, rec, selection, location)
+        errors += _archive_errors(db_path, rec, selection, location)
     extra = {} if disk_usage is None else {"disk_usage": disk_usage}
     check = check_destination(
         selection,
@@ -296,8 +296,8 @@ def run_transfer(
         raise TransferError("The transfer has problems: " + " ".join(preview.errors))
     request, selection = preview.request, preview.selection
     location = preview.location
-    if request.operation is Operation.MOVE and location is None:
-        raise TransferError("A move needs a destination under a NAS location.")
+    if request.operation is Operation.ARCHIVE and location is None:
+        raise TransferError("An archive needs a destination under a NAS location.")
     source, destination = selection.source, Path(preview.destination)
     entry = TransferEntry(
         recording_id=request.recording_id,
@@ -387,7 +387,7 @@ def run_transfer(
     if location is not None:
 
         def finish(conn: Connection) -> None:
-            repository.finish_move(
+            repository.finish_archive(
                 conn,
                 tid,
                 finished_at=finished_at,
@@ -439,32 +439,32 @@ def _delete_notes(result: DeleteResult) -> str:
 
 def delete_laptop_copy(
     db_path: Path | str,
-    move_id: int,
+    archive_id: int,
     *,
     performed_by: str,
     now: Clock = utc_now_iso,
     progress: Callable[[int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> DeleteOutcome:
-    """Delete the laptop copy after a passed move, and record it (D52).
+    """Delete the laptop copy after a passed archive, and record it (D52).
 
     Raises DeleteRefused when a precondition does not hold; nothing is deleted then.
     """
     with open_db(db_path, readonly=True) as conn:
-        move = repository.get_transfer(conn, move_id)
-        rec = repository.get_recording(conn, move.recording_id)
-    if move.manifest_path is None or move.manifest_sha256 is None:
+        archive = repository.get_transfer(conn, archive_id)
+        rec = repository.get_recording(conn, archive.recording_id)
+    if archive.manifest_path is None or archive.manifest_sha256 is None:
         raise DeleteRefused(["The archive copy has no file list."])
     try:
-        manifest = read_manifest(Path(move.manifest_path), move.manifest_sha256)
+        manifest = read_manifest(Path(archive.manifest_path), archive.manifest_sha256)
     except ManifestError as exc:
         raise DeleteRefused([f"The file list cannot be used: {exc}"]) from exc
-    plan = prepare_delete(move, manifest, rec)
+    plan = prepare_delete(archive, manifest, rec)
     entry = TransferEntry(
-        recording_id=rec.id or move.recording_id,
+        recording_id=rec.id or archive.recording_id,
         operation=Operation.DELETE,
-        parent_id=move_id,
-        source=move.source,
+        parent_id=archive_id,
+        source=archive.source,
         started_at=now(),
         performed_by=performed_by,
     )

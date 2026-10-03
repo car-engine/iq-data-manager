@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-03 (Milestone 5 merged).
+report. Last updated: 2026-10-03 (Milestone 6 started: D64).
 
 ## Current state
 
@@ -15,8 +15,15 @@ report. Last updated: 2026-10-03 (Milestone 5 merged).
   then.
 - 1,202 tests pass and 4 skip on `main`. Three skips need the symbolic-link
   privilege; the other runs only off Windows. `ruff check` is clean.
-- **Next: Milestone 6, Move / copy tab.** Open items for its plan: O1, O10, O11,
-  O12, O25, O34, O35 and O36. It ends with the NAS field test (D54).
+- **Milestone 6, Archive / copy tab, is in progress** on branch `m6-move-copy-tab`.
+  The user approved the plan on 2026-10-03. D55–D62 close O36, O11, O34, O35, O1,
+  O10, O25 and O12. D63 hashes skipped files when a transfer resumes. The work for
+  D55–D63 lands step by step; DECISIONS.md states what each requires. The milestone
+  ends with the NAS field test (D54).
+- D64: the operation that was called "move" is now "archive", in the code, the
+  database and the documents. Scratch databases made before D64, such as
+  `dev/test.db` and `dev/m3.db`, refuse archive rows. Create a new scratch database
+  with `tools/db_check.py create` before a manual test or the NAS field test.
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
   `tests/test_user_text.py` checks the Viewer, Log and Settings tabs.
 - The NAS part of O21 is still open. The local part is done
@@ -35,7 +42,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
-| 6. Move / copy tab | Not started | | | |
+| 6. Archive / copy tab | In progress | `m6-move-copy-tab` | | |
 | 7. Packaging and migration | Not started | | | |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
@@ -55,23 +62,15 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O1 | Time input in the Move / copy tab. Displayed times follow `display_utc_offset_hours` (D24, default 8). The Viewer's date filters already read dates at that offset (D43). | 6 | Input fields stay UTC and say so. | M0 review 9 |
-| O10 | Copy-to-PC destination layout: keep `rel_path` under `default_local_copy_root`, or a folder the user picks | 6 | None yet | M0 review 19 |
-| O11 | "Verify against source" for recordings logged in place on the NAS, and how a later verification clears the unverified mark. The Viewer shows the mark while the D2 row exists (D44). | 6 | None yet | D2 |
-| O12 | `finish_transfer` replaces `notes`; source deletion is recorded in `notes` | 6 | Add to the existing text instead of replacing it. | M1 review |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
-| O25 | One capture logged twice. A recording copied to the NAS by hand and logged there (D2) can also be logged from its laptop folder. The two locations differ, so `UNIQUE (storage_root, rel_path)` accepts both. | 6 (with O11) | The Log tab reports information when another recording has the same start, end and channel indices. | User question, 2026-10-02 |
 | O33 | Long paths in the packaged app. `transfer/pathcheck.py` allows paths above the Windows limits when long paths are enabled in the registry. The executable also needs a manifest that declares `longPathAware`. | 7 | Check the PyInstaller build's manifest. Until then, keep destination paths short. | Milestone 5 |
-| O34 | The recording laptops have no Python, so the NAS field test (D54) needs `copy_check`, `db_check` and the test set inside the packaged app. | 6 | Command-line options of the app, such as `--copy-check`, `--db-check` and `--make-test-set`, with the code moved from `tools/` into the package. | D54 |
-| O35 | Files copied at once, and the flush, as settings. A slow NAS could then be handled without a new build. | 6 | Files at once: a setting, default 4 (local timings in the Milestone 5 report). The flush: on, and changed only after the NAS test shows the need. | D54; Milestone 5 report |
-| O36 | A check straight after a copy may read from the PC's cache, and deleting the laptop copy relies on that check. | 6 | Offer "Delete laptop copy" only after a separate "Check archive" run, made at least some minutes after the copy or after a restart of the app. | Milestone 5 report |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D54). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D64). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -98,6 +97,14 @@ Decided items are in `docs/DECISIONS.md` (D1–D54). The M0 review table in
 | O8 | "Destination empty or new" blocks resuming and second ranges | D51 (2026-10-03) |
 | O9 | Deletion record and per-file manifest | D52 (2026-10-03) |
 | O32 | Real file names for transfers | D53 (2026-10-03) |
+| O36 | A check straight after a copy may read from the PC's cache | D55 (2026-10-03) |
+| O11 | "Verify against source" for recordings logged in place on the NAS | D56 (2026-10-03) |
+| O34 | Diagnostics and the test set in the packaged app | D57 (2026-10-03) |
+| O35 | Files copied at once, and the flush, as settings | D58 (2026-10-03) |
+| O1 | Time input in the Archive / copy tab | D59 (2026-10-03) |
+| O10 | Copy-to-PC destination layout | D60 (2026-10-03) |
+| O25 | One capture logged twice | D61 (2026-10-03) |
+| O12 | `finish_transfer` replaces `notes` | D62 (2026-10-03) |
 
 ## Pending checks for the user
 

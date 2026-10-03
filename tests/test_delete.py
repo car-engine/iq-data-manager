@@ -27,11 +27,11 @@ class Scenario:
     source: Path
     dest: Path
     manifest: Manifest
-    move: TransferEntry
+    archive: TransferEntry
     rec: object
 
     def plan(self):
-        return prepare_delete(self.move, self.manifest, self.rec)
+        return prepare_delete(self.archive, self.manifest, self.rec)
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def archived(make_recording, tmp_path):
         manifest = Manifest(
             transfer_id=5,
             recording_id=1,
-            operation=Operation.MOVE,
+            operation=Operation.ARCHIVE,
             source=str(src),
             destination=str(dest),
             range_start_unix=None,
@@ -56,10 +56,10 @@ def archived(make_recording, tmp_path):
             created_at="2026-10-03T08:00:00Z",
             files=tuple(ManifestFile(path=i.rel_path, size=i.size) for i in items),
         )
-        move = TransferEntry(
+        archive = TransferEntry(
             id=5,
             recording_id=1,
-            operation=Operation.MOVE,
+            operation=Operation.ARCHIVE,
             source=str(src),
             destination=str(dest),
             started_at="2026-10-03T07:00:00Z",
@@ -77,7 +77,7 @@ def archived(make_recording, tmp_path):
             archive_state=ArchiveState.ARCHIVED,
             archived_at="2026-10-03T08:00:00Z",
         )
-        return Scenario(src, dest, manifest, move, rec)
+        return Scenario(src, dest, manifest, archive, rec)
 
     return build
 
@@ -223,9 +223,9 @@ def test_progress_counts_the_files(archived):
         ({"recording_id": 2}, "belongs to another recording"),
     ],
 )
-def test_the_move_must_be_a_passed_move_with_its_manifest(archived, change, reason):
+def test_the_archive_must_be_a_passed_archive_with_its_manifest(archived, change, reason):
     s = archived()
-    s.move = dataclasses.replace(s.move, **change)
+    s.archive = dataclasses.replace(s.archive, **change)
     with pytest.raises(DeleteRefused, match=reason):
         s.plan()
     assert len(files_under(s.source)) == 10  # 8 files and 2 channel folders
@@ -241,7 +241,7 @@ def test_the_move_must_be_a_passed_move_with_its_manifest(archived, change, reas
         {"destination": "C:/other"},
     ],
 )
-def test_the_manifest_must_belong_to_the_move(archived, change):
+def test_the_manifest_must_belong_to_the_archive(archived, change):
     s = archived()
     s.manifest = dataclasses.replace(s.manifest, **change)
     with pytest.raises(DeleteRefused, match="belongs to another transfer"):
@@ -271,7 +271,7 @@ def test_the_recording_must_point_at_the_archive_copy(archived, change):
 def test_source_and_destination_must_differ(archived):
     s = archived()
     same = str(s.source)
-    s.move = dataclasses.replace(s.move, destination=same)
+    s.archive = dataclasses.replace(s.archive, destination=same)
     s.manifest = dataclasses.replace(s.manifest, destination=same)
     s.rec = dataclasses.replace(s.rec, storage_root=str(s.source.parent), rel_path=s.source.name)
     with pytest.raises(DeleteRefused, match="same folder"):
