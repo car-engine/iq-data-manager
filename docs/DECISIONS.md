@@ -1039,6 +1039,9 @@ Closes O36. The user chose this on 2026-10-03, while planning Milestone 6.
   with the Windows file cache bypassed (`FILE_FLAG_NO_BUFFERING`). It hashes them in
   the chosen hash mode. Each hash is compared with the copy-time hash in the
   manifest, or with a hash of the laptop file where the manifest holds none.
+- Hash mode `none` is refused for this check. In that mode the sizes come from the
+  directory entries and no file content is read. Found in self-review
+  (`95c9256`).
 - The check is logged as a `check` row whose `parent_id` names the archive.
   `schema.sql` is edited in place (D4).
 - `delete.py` refuses to delete unless such a check passed after the archive

@@ -61,7 +61,7 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
-| `transfer_log` | History of archives, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row, and a check before delete, name the archive they follow in `parent_id` (D52, D55). |
+| `transfer_log` | History of archives, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row, and a check before delete, name the archive they follow in `parent_id` (D52, D55). `dismissed_at` records "Forget" on an unfinished copy or archive. |
 
 Key semantics:
 
@@ -392,8 +392,8 @@ in place until the user deletes it.
 - **Check before delete** (D55): reads the NAS files of a passed archive with the
   Windows file cache bypassed, and hashes them in the chosen hash mode. Each hash is
   compared with the copy-time hash in the manifest, or with a hash of the laptop file
-  where the manifest holds none. It is logged as a `check` row with the archive in
-  `parent_id`.
+  where the manifest holds none. Hash mode `none` is refused, because it reads no
+  file content. It is logged as a `check` row with the archive in `parent_id`.
 - **Delete the laptop copy**: a separate, explicit, user-confirmed action, offered
   only after an archive passed verification and a later check before delete passed
   (D55). It is logged as a `transfer_log` row with `operation = 'delete'` and the
@@ -413,6 +413,39 @@ in place until the user deletes it.
 Each copy or archive first writes its `transfer_log` row with `started_at`. A row with no
 `finished_at` is a transfer that never completed, for example after a crash. A
 cancelled transfer is finished with `verification = 'skipped'` and a note.
+
+### Running, stopping and resuming
+
+The tab (`gui/transfer_tab.py`, logic in `movecopy.py`) runs one operation at a time:
+a preview, a copy, an archive, a check or a deletion. All run in a worker thread.
+
+- **Locked form.** While an operation runs, the tab's inputs are locked. The Viewer
+  and the Log tab stay usable. The Viewer's "Archive / copy" button opens no other
+  recording until the operation ends. Settings Save waits for it.
+- **Progress.** A copy shows a bar by bytes, files and bytes done, the speed over the
+  last 10 s and the time left. A check shows bytes hashed and files checked. A
+  deletion shows files deleted. A retry after an error shows the file, the attempt
+  and the pause. The tab's title and the status bar show the running operation, for
+  example "Archive / copy (copying 41 %)".
+- **Run.** Run is enabled only after a preview that passed, and any change to the
+  form drops the preview.
+- **Stop.** Stop asks first for a copy or an archive (default No) and takes effect
+  between chunks. Files already copied stay; the file being copied stays as
+  `<name>.partial`. The row is finished as `skipped`, and its note says "Stopped after
+  N of M files". A stopped check or deletion is logged as well. A check has no
+  resume. A deletion run again finishes the rest.
+- **Closing the window** during an operation asks first. Yes stops the operation and
+  waits until its row is written.
+- **Unfinished transfers.** The tab lists copies and archives that were stopped,
+  failed or never finished, newest first, for the current user or, on request, for
+  all users. A later run of the same recording, destination, range and channels
+  replaces an earlier one in the list. An archive leaves the list once its recording
+  is archived. Resume fills in the form from the row and runs the preview; files
+  already in place with the right size are not copied again (D51, D63). Forget asks
+  first and sets `transfer_log.dismissed_at`; the row and the copied files stay.
+- **Delete laptop copy** is enabled only when a check before delete of the current
+  archive passed (D55). It asks first, names the folder, the file count and the size,
+  and defaults to No.
 
 ### Scope
 
