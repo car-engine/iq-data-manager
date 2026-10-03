@@ -199,6 +199,31 @@ def test_hidden_key_error_names_the_free_space_margin():
     assert "free_space_margin_gb" in error
 
 
+def test_copy_workers_defaults_to_4(tmp_path):
+    assert load_config(tmp_path / "absent.toml").copy_workers == 4
+
+
+@pytest.mark.parametrize("n", [1, 4, 16])
+def test_copy_workers_is_read(tmp_path, n):
+    assert load_config(write(tmp_path, f"copy_workers = {n}")).copy_workers == n
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("0", "from 1 to 16"),
+        ("17", "from 1 to 16"),
+        ("-2", "from 1 to 16"),
+        ("4.0", "whole number"),
+        ("true", "whole number"),
+        ("'4'", "whole number"),
+    ],
+)
+def test_copy_workers_must_be_a_whole_number_from_1_to_16(tmp_path, text, message):
+    with pytest.raises(ConfigError, match=f"copy_workers must be .*{message}|{message}"):
+        load_config(write(tmp_path, f"copy_workers = {text}"))
+
+
 # =========================================================================
 # Writing (Settings tab, Milestone 3a)
 # =========================================================================

@@ -54,6 +54,7 @@ class Config:
     display_utc_offset_hours: float = 8.0  # displayed times only; storage stays UTC (D24)
     coverage_highlight_percent: float = 99.0  # the Viewer marks coverage below this (D39)
     free_space_margin_gb: float = 10.0  # kept free on a transfer destination (D51)
+    copy_workers: int = 4  # files copied at once (D58)
     storage_roots: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -113,6 +114,16 @@ def offset_error(hours: float) -> str | None:
     return None
 
 
+COPY_WORKERS_MAX = 16
+
+
+def copy_workers_error(n: int) -> str | None:
+    """Why `n` cannot be copy_workers, or None if it can (D58)."""
+    if not 1 <= n <= COPY_WORKERS_MAX:
+        return f"copy_workers must be from 1 to {COPY_WORKERS_MAX}"
+    return None
+
+
 def coverage_error(percent: float) -> str | None:
     """Why `percent` cannot be coverage_highlight_percent, or None if it can (D39)."""
     if not 0 < percent <= COVERAGE_MAX_PERCENT:
@@ -163,6 +174,12 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
     margin = _number(data, "free_space_margin_gb", where, Config.free_space_margin_gb)
     if margin < 0:
         raise ConfigError(f"{where}: free_space_margin_gb must be 0 or more")
+    workers = data.get("copy_workers", Config.copy_workers)
+    if isinstance(workers, bool) or not isinstance(workers, int):
+        raise ConfigError(f"{where}: copy_workers must be a whole number")
+    error = copy_workers_error(workers)
+    if error is not None:
+        raise ConfigError(f"{where}: {error}")
     mode_text = data.get("default_hash_mode", str(Config.default_hash_mode))
     try:
         mode = HashMode(mode_text)
@@ -179,6 +196,7 @@ def parse_config(data: Mapping[str, Any], where: str) -> Config:
         display_utc_offset_hours=offset,
         coverage_highlight_percent=threshold,
         free_space_margin_gb=margin,
+        copy_workers=workers,
         storage_roots=_storage_roots(data, where),
     )
 

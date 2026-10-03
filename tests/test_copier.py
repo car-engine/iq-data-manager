@@ -13,6 +13,7 @@ from iqdm.scan.scanner import scan_recording
 from iqdm.transfer.copier import (
     CopyItem,
     CopyProgress,
+    RetryNotice,
     copy_files,
     local_path,
     partial_path,
@@ -226,6 +227,26 @@ def test_a_failed_read_is_retried(make_recording, tmp_path):
     assert result.ok
     assert len(result.copied) == 2
     assert sum(pauses) == pytest.approx(2 * 2 * 0.5)  # 2 files, 2 pauses each
+
+
+def test_each_retry_is_announced_before_its_pause(make_recording, tmp_path):
+    info = make_recording(n_slots=1)
+    events: list[object] = []
+    result = copy_files(
+        Path(info.root),
+        tmp_path / "out",
+        items_of(info),
+        open_source=FlakyOpener(2),
+        retry_pause_s=5.0,
+        sleep=events.append,
+        retrying=events.append,
+    )
+    assert result.ok
+    notices = [e for e in events if isinstance(e, RetryNotice)]
+    assert [(n.attempt, n.attempts, n.pause_s) for n in notices] == [(2, 4, 5.0), (3, 4, 5.0)]
+    assert notices[0].rel_path == items_of(info)[0].rel_path
+    assert notices[0].message == "the network name is no longer available"
+    assert isinstance(events[0], RetryNotice)  # the notice comes before the pause
 
 
 def test_a_file_that_keeps_failing_is_reported(make_recording, tmp_path):

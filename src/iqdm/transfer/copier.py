@@ -44,6 +44,17 @@ SourceOpener = Callable[[Path], BinaryIO]
 
 
 @dataclass(frozen=True, kw_only=True)
+class RetryNotice:
+    """A file failed an attempt and is tried again after a pause."""
+
+    rel_path: str
+    attempt: int  # the attempt that comes next, from 2
+    attempts: int  # all attempts, retries plus the first
+    pause_s: float
+    message: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class CopyItem:
     """One file to copy. size is the source size from the selection's scan."""
 
@@ -144,6 +155,7 @@ class _Engine:
     open_source: SourceOpener
     cancelled: Callable[[], bool]
     progress: _Progress
+    retrying: Callable[[RetryNotice], None] | None = None
 
     def copy(self, item: CopyItem) -> tuple[str, str | None]:
         """Copy one file. Returns ('copied', hash) or ('skipped', None).
@@ -174,6 +186,16 @@ class _Engine:
                 self.progress.add(n_bytes=-written)
                 last = exc
                 if attempt < self.retries:
+                    if self.retrying is not None:
+                        self.retrying(
+                            RetryNotice(
+                                rel_path=item.rel_path,
+                                attempt=attempt + 2,
+                                attempts=self.retries + 1,
+                                pause_s=self.retry_pause_s,
+                                message=str(exc),
+                            )
+                        )
                     self._pause()
                 continue
             except (_Failed, _Cancelled):
@@ -239,6 +261,7 @@ def copy_files(
     fsync: bool = True,
     progress: Callable[[CopyProgress], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    retrying: Callable[[RetryNotice], None] | None = None,
     retries: int = RETRIES,
     retry_pause_s: float = RETRY_PAUSE_S,
     sleep: Callable[[float], None] = time.sleep,
@@ -247,7 +270,8 @@ def copy_files(
 ) -> CopyResult:
     """Copy `items` from `source` to `destination`, `workers` files at a time.
 
-    progress is called from the worker threads. With hash_source, the SHA-256 of each
+    progress and retrying are called from the worker threads; retrying before each
+    pause between attempts. With hash_source, the SHA-256 of each
     copied file is computed from the bytes read and returned in source_hashes.
     fsync=False skips the flush to the destination's disks; it exists for timing
     comparisons (D54), and the app keeps the default.
@@ -275,6 +299,7 @@ def copy_files(
         open_source=open_source,
         cancelled=is_cancelled,
         progress=_Progress(items, progress),
+        retrying=retrying,
     )
     outcomes: list[tuple[str, str | None] | FileFailure | None] = [None] * len(items)
 

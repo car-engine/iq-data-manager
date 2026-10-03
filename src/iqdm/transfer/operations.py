@@ -41,7 +41,7 @@ from iqdm.models import (
 )
 from iqdm.scan.scanner import ScanError, scan_recording
 from iqdm.timeutil import utc_now_iso
-from iqdm.transfer.copier import CopyItem, CopyProgress, CopyResult, copy_files
+from iqdm.transfer.copier import CopyItem, CopyProgress, CopyResult, RetryNotice, copy_files
 from iqdm.transfer.delete import (
     DeleteRefused,
     DeleteResult,
@@ -317,9 +317,13 @@ def run_transfer(
     now: Clock = utc_now_iso,
     copy_progress: Callable[[CopyProgress], None] | None = None,
     verify_progress: Callable[[VerifyProgress], None] | None = None,
+    copy_retry: Callable[[RetryNotice], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> TransferOutcome:
-    """Copy, verify, write the manifest and record the result. See the module text."""
+    """Copy, verify, write the manifest and record the result. See the module text.
+
+    workers is the number of files copied at once (config.copy_workers, D58).
+    """
     if not preview.ok:
         raise TransferError("The transfer has problems: " + " ".join(preview.errors))
     request, selection = preview.request, preview.selection
@@ -367,6 +371,7 @@ def run_transfer(
             workers=workers,
             progress=copy_progress,
             cancelled=cancelled,
+            retrying=copy_retry,
         )
         if copy.cancelled:
             done = len(copy.copied) + len(copy.skipped)
