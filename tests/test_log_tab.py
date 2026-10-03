@@ -214,6 +214,33 @@ def test_scan_fills_channel_table_and_times(qtbot, make_tab, make_recording):
     assert "Folder not already in the database" in checklist_texts(tab, ItemState.OK)
 
 
+def test_the_same_capture_in_another_folder_is_reported(
+    qtbot, make_tab, db_path, site_id, make_recording
+):
+    """D61: two folders with the same files, such as a laptop folder and its hand copy."""
+    first = make_recording(n_channels=2, n_slots=5)
+    form = entry.EntryInput(
+        logged_by="u",
+        site_id=site_id,
+        channels=[
+            entry.ChannelInput(channel_index=i, fc_mhz="400", fs_text="1k") for i in (0, 1)
+        ],
+    )
+    scan = scan_recording(Path(first.root), 1.0)
+    rid = entry.save_new(
+        db_path, entry.build_recording(form, scan=scan, location=split_location(first.root))
+    )
+    second = make_recording(n_channels=2, n_slots=5)
+    tab = make_tab()
+    scan_folder(qtbot, tab, second.root)
+    assert (
+        f"Recording {rid} has the same start, end and channels. It may be the same capture "
+        "in another folder."
+    ) in checklist_texts(tab, ItemState.INFO)
+    scan_folder(qtbot, tab, first.root)  # the same folder: an error, without the line
+    assert not any("same start, end" in t for t in checklist_texts(tab))
+
+
 def test_scan_reports_progress_and_can_be_cancelled(qtbot, make_tab, make_recording, monkeypatch):
     info = make_recording(n_slots=5)
     tab = make_tab()

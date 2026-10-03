@@ -44,7 +44,7 @@ from iqdm.gui.widgets.checklist import ChecklistView
 from iqdm.gui.widgets.param_table import ParamTable
 from iqdm.gui.workers import Task, TaskRunner
 from iqdm.location import DriveResolver, Location, LocationError, mapped_drive_unc, split_location
-from iqdm.models import Endianness, IqLayout, Recording, SampleType
+from iqdm.models import Endianness, IqLayout, Recording, SameStart, SampleType
 from iqdm.scan.scanner import ScanCancelled, ScanError, ScanResult, scan_recording
 from iqdm.timeutil import display_time, offset_label
 
@@ -88,6 +88,7 @@ class ScanOutcome:
     logged_id: int | None = None
     duplicate_checked: bool = False
     db_error: str | None = None
+    same_start: tuple[SameStart, ...] = ()  # recordings that start with the scan (D61)
 
 
 @dataclass(eq=False)
@@ -127,6 +128,7 @@ class LogTab(QWidget):
         self._location_error: str | None = None
         self._logged_id: int | None = None
         self._duplicate_checked = False
+        self._same_start: tuple[SameStart, ...] = ()
         self._original: Recording | None = None
         self._scan_task: Task | None = None
         self._saving = False
@@ -477,6 +479,7 @@ class LogTab(QWidget):
         self._scan = None
         self._logged_id = None
         self._duplicate_checked = False
+        self._same_start = ()
         self._scan_problems: tuple[str, ...] = ()
         self.scan_summary.clear()
         self.start_edit.clear()
@@ -667,6 +670,7 @@ class LogTab(QWidget):
             original=self._original,
             scan_problems=self._scan_problems,
             known_param_names=self._choices.param_names,
+            same_start=self._same_start,
         )
         self.checklist.set_items(items)
         self.state_note.setText(entry.state_note(self._location, self._original))
@@ -771,9 +775,12 @@ class LogTab(QWidget):
                 return ScanOutcome(scan=scan)
             try:
                 logged = entry.find_logged(db, location)
+                same = tuple(entry.find_same_start(db, scan))
             except (DatabaseError, OSError) as exc:
                 return ScanOutcome(scan=scan, db_error=str(exc))
-            return ScanOutcome(scan=scan, logged_id=logged, duplicate_checked=True)
+            return ScanOutcome(
+                scan=scan, logged_id=logged, duplicate_checked=True, same_start=same
+            )
 
         self._clear_message()
         self.scan_summary.setText("Scanning...")
@@ -797,6 +804,7 @@ class LogTab(QWidget):
         self._scan = entry.with_file_duration(outcome.scan, self.duration_spin.value())
         self._logged_id = outcome.logged_id
         self._duplicate_checked = outcome.duplicate_checked
+        self._same_start = outcome.same_start
         self._show_scan()
         if outcome.db_error is not None:
             self.show_message(f"Cannot check the database for this folder: {outcome.db_error}")

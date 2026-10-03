@@ -18,6 +18,7 @@ from typing import Any
 from iqdm.db.connection import DatabaseError
 from iqdm.models import (
     IN_PLACE_NOTE,
+    SAME_TIME_S,
     ArchiveState,
     Channel,
     Endianness,
@@ -28,6 +29,7 @@ from iqdm.models import (
     Recording,
     RecordingFilter,
     RecordingSummary,
+    SameStart,
     SampleType,
     Site,
     TransferEntry,
@@ -434,6 +436,28 @@ def find_recording_by_location(
         (storage_root, rel_path),
     )
     return None if row is None else row["id"]
+
+
+def recordings_starting_at(conn: sqlite3.Connection, start_unix: float) -> list[SameStart]:
+    """Recordings that start at start_unix, with their end and channel indices (D61)."""
+    rows = _rows(
+        conn,
+        "SELECT r.id, r.end_unix, r.archive_state, c.channel_index FROM recordings r"
+        " JOIN channels c ON c.recording_id = r.id"
+        " WHERE r.start_unix BETWEEN ? AND ? ORDER BY r.id, c.channel_index",
+        (start_unix - SAME_TIME_S, start_unix + SAME_TIME_S),
+    )
+    found: dict[int, SameStart] = {}
+    for r in rows:
+        prior = found.get(r["id"])
+        indices = (*prior.channel_indices, r["channel_index"]) if prior else (r["channel_index"],)
+        found[r["id"]] = SameStart(
+            recording_id=r["id"],
+            end_unix=r["end_unix"],
+            channel_indices=indices,
+            archive_state=ArchiveState(r["archive_state"]),
+        )
+    return list(found.values())
 
 
 def like_pattern(text: str) -> str:

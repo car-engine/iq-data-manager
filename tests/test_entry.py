@@ -33,6 +33,7 @@ from iqdm.models import (
     Endianness,
     IqLayout,
     Operation,
+    SameStart,
     SampleType,
     Verification,
 )
@@ -244,6 +245,76 @@ def test_already_logged_is_an_error(make_recording):
     scan = scan_of(info)
     items = ready_items(form_for(scan, 1), scan, local_location(info), logged_id=7)
     assert "Folder already logged as recording 7" in texts(items, ItemState.ERROR)
+
+
+SAME_CAPTURE = (
+    "Recording 9 has the same start, end and channels. It may be the same capture in "
+    "another folder."
+)
+
+
+def twin(scan, rid=9, **kw) -> SameStart:
+    """A logged recording with the times and channels of a scan of 1 s files."""
+    values = {
+        "recording_id": rid,
+        "end_unix": max(c.files[-1].timestamp for c in scan.channels) + 1.0,
+        "channel_indices": tuple(c.channel_index for c in scan.channels),
+        "archive_state": ArchiveState.ARCHIVED,
+    } | kw
+    return SameStart(**values)
+
+
+def test_the_same_capture_logged_elsewhere_is_information(make_recording):
+    """D61: another recording with the same start, end and channels."""
+    info = make_recording(n_channels=2, n_slots=5)
+    scan = scan_of(info)
+    items = ready_items(form_for(scan, 1), scan, local_location(info), same_start=[twin(scan)])
+    assert SAME_CAPTURE in texts(items, ItemState.INFO)
+    assert entry.can_save(items)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"end_unix": float(T0 + 6)}, {"channel_indices": (0,)}, {"recording_id": 7}],
+)
+def test_another_end_other_channels_or_the_same_folder_are_not_reported(make_recording, change):
+    info = make_recording(n_channels=2, n_slots=5)
+    scan = scan_of(info)
+    items = ready_items(
+        form_for(scan, 1),
+        scan,
+        local_location(info),
+        logged_id=7,
+        same_start=[twin(scan, **change)],
+    )
+    assert not any("same start, end and channels" in t for t in texts(items))
+
+
+def test_the_end_follows_the_file_duration(make_recording):
+    info = make_recording(n_slots=5)
+    scan = scan_of(info)
+    other = twin(scan, end_unix=float(T0 + 4 + 2))  # last file at T0 + 4, files of 2 s
+    form = replace(form_for(scan, 1), file_duration_s=2.0)
+    items = ready_items(
+        form, with_file_duration(scan, 2.0), local_location(info), same_start=[other]
+    )
+    assert SAME_CAPTURE in texts(items, ItemState.INFO)
+    at_one_second = ready_items(form_for(scan, 1), scan, local_location(info), same_start=[other])
+    assert SAME_CAPTURE not in texts(at_one_second)
+
+
+def test_find_same_start_reads_the_database(db_path, site_id, make_recording):
+    info = make_recording(n_channels=2, n_slots=5)
+    scan = scan_of(info)
+    rec = build_recording(form_for(scan, site_id), scan=scan, location=local_location(info))
+    rid = save_new(db_path, rec, now=NOW)
+    (found,) = entry.find_same_start(db_path, scan)
+    assert found == SameStart(
+        recording_id=rid,
+        end_unix=float(T0 + 5),
+        channel_indices=(0, 1),
+        archive_state=ArchiveState.LOCAL,
+    )
 
 
 def test_duplicate_check_must_run(make_recording):

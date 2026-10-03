@@ -36,6 +36,8 @@ from iqdm.models import (
     Recording,
     TransferEntry,
     Verification,
+    envelope,
+    same_capture,
 )
 from iqdm.scan.scanner import ScanError, scan_recording
 from iqdm.timeutil import utc_now_iso
@@ -109,6 +111,7 @@ class Preview:
     hashed_files: int
     errors: tuple[str, ...]  # the operation's own rules, then the destination's
     sample_fraction: float
+    warnings: tuple[str, ...] = ()  # shown in the preview; they do not block (D61)
 
     @property
     def ok(self) -> bool:
@@ -196,6 +199,20 @@ def _archive_errors(
     return errors
 
 
+def _archived_twins(db_path: Path | str, rec: Recording) -> list[str]:
+    """Warnings for archived recordings with the same start, end and channels (D61)."""
+    start, end = envelope(rec.channels)
+    with open_db(db_path, readonly=True) as conn:
+        candidates = repository.recordings_starting_at(conn, start)
+    twins = same_capture(candidates, end, [c.channel_index for c in rec.channels], exclude=rec.id)
+    return [
+        f"Recording {t.recording_id} is already archived with the same start, end and "
+        "channels. It may be the same capture."
+        for t in twins
+        if t.archive_state is ArchiveState.ARCHIVED
+    ]
+
+
 def preview_transfer(
     db_path: Path | str,
     request: TransferRequest,
@@ -223,6 +240,7 @@ def preview_transfer(
         cancelled=cancelled,
     )
     errors = []
+    warnings: list[str] = []
     location = None
     destination = request.destination
     if request.operation is Operation.ARCHIVE:
@@ -230,6 +248,7 @@ def preview_transfer(
         if location is not None:
             destination = location.full_path
         errors += _archive_errors(db_path, rec, selection, location)
+        warnings += _archived_twins(db_path, rec)
     extra = {} if disk_usage is None else {"disk_usage": disk_usage}
     check = check_destination(
         selection,
@@ -263,6 +282,7 @@ def preview_transfer(
         hashed_files=len(targets),
         errors=tuple(errors),
         sample_fraction=config.hash_sample_fraction,
+        warnings=tuple(warnings),
     )
 
 

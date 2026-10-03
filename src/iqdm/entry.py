@@ -31,10 +31,12 @@ from iqdm.models import (
     Operation,
     Param,
     Recording,
+    SameStart,
     SampleType,
     Site,
     TransferEntry,
     Verification,
+    same_capture,
 )
 from iqdm.scan.scanner import (
     NAMES_SHOWN,
@@ -535,6 +537,32 @@ def _duplicate_items(
     return [ChecklistItem(ItemState.ERROR, f"Folder already logged as recording {logged_id}")]
 
 
+def scan_start(scan: ScanResult) -> float | None:
+    """The first file's timestamp over all channels, or None for a scan without files."""
+    starts = [c.files[0].timestamp for c in scan.channels if c.files]
+    return min(starts) if starts else None
+
+
+def _same_capture_items(
+    form: EntryInput, scan: ScanResult, same_start: Sequence[SameStart], logged_id: int | None
+) -> list[ChecklistItem]:
+    """Information when another recording has the same start, end and channels (D61)."""
+    ends = [e for c in scan.channels if (e := _end(c, form.file_duration_s)) is not None]
+    if not ends or not same_start:
+        return []
+    found = same_capture(
+        same_start, max(ends), [c.channel_index for c in scan.channels], exclude=logged_id
+    )
+    return [
+        ChecklistItem(
+            ItemState.INFO,
+            f"Recording {m.recording_id} has the same start, end and channels. It may be the "
+            "same capture in another folder.",
+        )
+        for m in found
+    ]
+
+
 def _size_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
     items: list[ChecklistItem] = []
     expected: set[int] = set()
@@ -910,11 +938,13 @@ def checklist(
     original: Recording | None = None,
     scan_problems: Sequence[str] = (),
     known_param_names: Sequence[str] = (),
+    same_start: Sequence[SameStart] = (),
 ) -> list[ChecklistItem]:
     """The "Before saving" checklist (SPEC section 6). Saving needs no ERROR or TODO item.
 
     scan_problems holds the problems of a scan that stopped (ScanError.problems).
     known_param_names are the RF chain names already in the database (D28).
+    same_start holds the logged recordings that start with the scan (D61).
 
     New entry: original is None, and scan, location and the duplicate check come from
     the scan worker. Edit mode (D16): original is the stored recording, scan is None
@@ -926,6 +956,8 @@ def checklist(
     items += _scan_items(scan, original, scan_problems)
     if original is None:
         items += _duplicate_items(scan, logged_id, duplicate_checked)
+        if scan is not None:
+            items += _same_capture_items(form, scan, same_start, logged_id)
     if scan is not None:
         items += _size_items(form, scan)
     elif original is not None:
@@ -1226,6 +1258,15 @@ def find_logged(db_path: Path | str, location: Location) -> int | None:
     """Id of the recording already logged at this location, or None."""
     with open_db(db_path, readonly=True) as conn:
         return repository.find_recording_by_location(conn, location.storage_root, location.rel_path)
+
+
+def find_same_start(db_path: Path | str, scan: ScanResult) -> list[SameStart]:
+    """Logged recordings that start with the scan's first file (D61)."""
+    start = scan_start(scan)
+    if start is None:
+        return []
+    with open_db(db_path, readonly=True) as conn:
+        return repository.recordings_starting_at(conn, start)
 
 
 def load_recording(db_path: Path | str, recording_id: int) -> Recording:

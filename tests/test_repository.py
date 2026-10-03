@@ -15,9 +15,11 @@ from iqdm.models import (
     Param,
     Recording,
     RecordingFilter,
+    SameStart,
     SampleType,
     TransferEntry,
     Verification,
+    same_capture,
 )
 
 T0 = 1790733600.0  # 2026-09-30T02:00:00Z
@@ -825,6 +827,39 @@ def test_transfers_listed_oldest_first(conn, site_id):
     repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T01:00:00Z"))
     starts = [t.started_at for t in repo.list_transfers(conn, rid)]
     assert starts == ["2026-10-02T01:00:00Z", "2026-10-02T05:00:00Z"]
+
+
+# ---------------------------------------------------------------------------
+# One capture logged twice (D61)
+# ---------------------------------------------------------------------------
+
+
+def test_recordings_starting_at_list_their_end_and_channels(conn, site_id):
+    first = repo.insert_recording(conn, recording(site_id, rel_path="a"))
+    second = repo.insert_recording(
+        conn, recording(site_id, rel_path="b", channels=[channel(2), channel(0)], params=[])
+    )
+    repo.insert_recording(
+        conn,
+        recording(site_id, rel_path="later", channels=[channel(0, start=T0 + 1)], params=[]),
+    )
+    found = repo.recordings_starting_at(conn, T0)
+    assert [(s.recording_id, s.channel_indices) for s in found] == [
+        (first, (0, 1)),
+        (second, (0, 2)),
+    ]
+    assert all(s.archive_state is ArchiveState.LOCAL for s in found)
+
+
+def test_same_capture_needs_the_end_and_the_channels():
+    local = ArchiveState.LOCAL
+    cands = [
+        SameStart(recording_id=1, end_unix=10.0, channel_indices=(0, 1), archive_state=local),
+        SameStart(recording_id=2, end_unix=11.0, channel_indices=(0, 1), archive_state=local),
+        SameStart(recording_id=3, end_unix=10.0, channel_indices=(0,), archive_state=local),
+    ]
+    assert [c.recording_id for c in same_capture(cands, 10.0, [1, 0])] == [1]
+    assert same_capture(cands, 10.0, [0, 1], exclude=1) == []
 
 
 # ---------------------------------------------------------------------------

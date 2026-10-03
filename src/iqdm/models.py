@@ -196,6 +196,38 @@ class TransferEntry:
     id: int | None = None
 
 
+@dataclass(frozen=True, kw_only=True)
+class SameStart:
+    """A logged recording that starts at a given time, for finding one capture logged
+    twice (D61)."""
+
+    recording_id: int
+    end_unix: float
+    channel_indices: tuple[int, ...]
+    archive_state: ArchiveState
+
+
+SAME_TIME_S = 1e-6  # start and end times this close count as equal (D61)
+
+
+def same_capture(
+    candidates: Sequence[SameStart],
+    end_unix: float,
+    channel_indices: Sequence[int],
+    *,
+    exclude: int | None = None,
+) -> list[SameStart]:
+    """The candidates with this end and these channel indices, other than `exclude`."""
+    wanted = tuple(sorted(channel_indices))
+    return [
+        c
+        for c in candidates
+        if c.recording_id != exclude
+        and abs(c.end_unix - end_unix) <= SAME_TIME_S
+        and c.channel_indices == wanted
+    ]
+
+
 def channel_coverage(channel: Channel, file_duration_s: float) -> float | None:
     """n_files * file_duration_s / span, or None if n_files is unknown or span is zero."""
     span = channel.end_unix - channel.start_unix

@@ -631,6 +631,20 @@ def test_comparison_needs_an_archived_recording_and_another_folder(env):
         compare(env, rid, laptop=env.nas / "in-place")
 
 
+def test_the_archive_preview_warns_about_the_same_capture_archived(env):
+    """D61: the laptop folder and its hand copy on the NAS are both logged."""
+    assert env.preview(env.request()).warnings == ()
+    twin = logged_in_place(env)
+    preview = env.preview(env.request())
+    assert preview.warnings == (
+        f"Recording {twin} is already archived with the same start, end and channels. "
+        "It may be the same capture.",
+    )
+    assert preview.ok  # a warning does not block
+    copy = env.preview(env.request(Operation.COPY, env.tmp / "pc" / "rec"))
+    assert copy.warnings == ()
+
+
 def env_rows(env, rid):
     with open_db(env.db, readonly=True) as conn:
         return repo.list_transfers(conn, rid)
