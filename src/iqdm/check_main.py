@@ -45,7 +45,8 @@ COMMANDS: dict[str, tuple[Command, str]] = {
 
 def usage() -> str:
     lines = [f"usage: {PROG} COMMAND [options]", "", "commands:"]
-    lines += [f"  {name:<14} {text}" for name, (_, text) in COMMANDS.items()]
+    width = max(len(name) for name in COMMANDS) + 2
+    lines += [f"  {name:<{width}}{text}" for name, (_, text) in COMMANDS.items()]
     lines += ["", f"Run {PROG} COMMAND --help for the options of a command."]
     return "\n".join(lines)
 

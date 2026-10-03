@@ -31,7 +31,7 @@ def test_without_a_command_it_prints_the_usage(capsys):
     out = capsys.readouterr().out
     assert out.startswith(f"usage: {PROG} COMMAND")
     for name in ("copy-check", "db-check", "make-test-set", "migrate-legacy"):
-        assert name in out
+        assert f"  {name}  " in out  # each name is set apart from its description
     assert main(["--help"]) == 0
     assert capsys.readouterr().out.strip() == usage()
     assert main(["--version"]) == 0
