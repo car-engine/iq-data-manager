@@ -9,12 +9,12 @@ report. Last updated: 2026-10-04 (Milestone 6 built; NAS field test pending).
 - Milestones 0 to 5 are merged into `main` and pushed. On `main`, 1,202 tests pass and
   4 skip.
 - **Milestone 6, Archive / copy tab, is built on branch `m6-move-copy-tab`** and not
-  merged. Report: [reports/M6.md](reports/M6.md). 1,409 tests pass and 4 skip on the
+  merged. Report: [reports/M6.md](reports/M6.md). 1,410 tests pass and 4 skip on the
   branch; three skips need the symbolic-link privilege, the other runs only off
   Windows. `ruff check` is clean.
 - **The milestone ends with the NAS field test (D54)**, which the user runs with
-  `dist/m6-2/IQDataManager/` (built from `95c9256`). The steps are in the report.
-  `dist/m6-1` is older and lacks a fix; do not take it to the NAS.
+  `dist/m6-3/IQDataManager/` (built from `47a7f06`). The steps are in the report.
+  `dist/m6-1` and `dist/m6-2` are older and lack fixes; do not take them to the NAS.
 - D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
   when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
 - Scratch databases made before D64, such as `dev/test.db` and `dev/m3.db`, refuse
@@ -108,7 +108,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D64). The M0 review table in
 
 - A manual test of the Archive / copy tab on this PC with the quick test set. Steps in
   [reports/M6.md](reports/M6.md), "Manual test on this PC".
-- The NAS field test (D54) with `dist/m6-2/IQDataManager/`, including O21 (`db-check`
+- The NAS field test (D54) with `dist/m6-3/IQDataManager/`, including O21 (`db-check`
   `check`, `hold` and `write` on a scratch database on the NAS, from two PCs). Steps in
   [reports/M6.md](reports/M6.md), "NAS field test". O21 must pass before the app
   writes to a real database on the NAS.
@@ -134,9 +134,10 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   Milestone 4 manual tests.
 - `dev/m5-copy-check/` (local copy timings and the fsync probe, about 4.8 GB).
 - `dev/m5-testset-quick/` (the quick test set, 67.8 MB).
-- `dist/m6-1/` (103 MB, superseded by `dist/m6-2`), `build/work-m6-1/`,
-  `build/m6-1-build.log`; after the NAS field test also `dist/m6-2/`,
-  `build/work-m6-2/` and `build/m6-2-build.log`.
+- `dist/m6-1/`, `dist/m6-2/` (103 MB each, superseded by `dist/m6-3`),
+  `build/work-m6-1/`, `build/work-m6-2/`, `build/m6-1-build.log`,
+  `build/m6-2-build.log`; after the NAS field test also `dist/m6-3/`,
+  `build/work-m6-3/` and `build/m6-3-build.log`.
 - `dev/m6-shots/` (screenshots and `shots.py`, 1.3 MB) and `dev/m6-exe-check/`
   (output of the packaged diagnostics, 81 MB).
 - `dev/test.db` and `dev/m3.db` were made before D64 and refuse archive rows.
