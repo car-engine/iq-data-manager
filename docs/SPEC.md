@@ -414,6 +414,10 @@ from the database entry.
 - A target file that already exists with the source's size counts as copied and is
   skipped (resume, D51). A target file with another size stops the transfer before
   anything is written.
+- Before the rename, each file is flushed to the destination's disks (`os.fsync`).
+  A crash at the destination then cannot leave a file with its real name and size
+  but without its data. `copy_files(fsync=False)` exists for timing comparisons
+  only (D54).
 - Each file gets up to 3 retries after the first attempt, 5 s apart.
 - Progress reports files and bytes. Cancel stops between chunks and leaves the
   `.partial` file, which a later run overwrites.
@@ -516,7 +520,8 @@ iq-data-manager/
   tools/
     make_fixtures.py          # synthetic IQ recordings for tests and manual testing
     db_check.py               # create, write and locking checks on a scratch database (O21)
-    copy_check.py             # copy-engine throughput on a scratch folder (D48)
+    copy_check.py             # copy-engine throughput, flush on and off (D48, D54)
+    make_nas_testset.py       # synthetic recordings for the NAS field test (D54)
     migrate_legacy.py         # legacy DB -> new schema (writes a NEW file)
   tests/
   build/
@@ -582,7 +587,8 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    `transfer_log` rows. No GUI. Heavily tested.
 6. **Move / copy tab**: GUI over the core, preview, run with progress and cancel,
    post-verification delete flow, the transfer keys in the Settings tab. The
-   Viewer's Copy / move button comes with this tab (D42).
+   Viewer's Copy / move button comes with this tab (D42). The milestone ends with the
+   first test on the NAS, with the test set from `tools/make_nas_testset.py` (D54).
 7. **Packaging and migration**: PyInstaller build, legacy migration tool (packaged, so
    it runs without Python), an admin option `--create-db PATH` for an empty database,
    short user guide (D30). The settings dialog and the config writer moved to

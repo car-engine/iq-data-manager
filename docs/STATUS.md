@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-03 (Milestone 5 report).
+report. Last updated: 2026-10-03 (D54, NAS field test with the Milestone 6 build).
 
 ## Current state
 
@@ -11,11 +11,13 @@ report. Last updated: 2026-10-03 (Milestone 5 report).
 - **Milestone 5 (Transfer core) is done on branch `m5-transfer-core`, not merged.**
   Report: [reports/M5.md](reports/M5.md). Decisions D48–D53 close O6, O7, O8, O9,
   O13 and O32. The app copies files itself (D48); there are no transfer scripts.
-- 1,187 tests pass and 4 skip on `m5-transfer-core`. Three skips need the
+- D54: the first test on the NAS runs with the Milestone 6 build, on the test set
+  from `tools/make_nas_testset.py`. The copy engine is not tested on the NAS before
+  then.
+- 1,202 tests pass and 4 skip on `m5-transfer-core`. Three skips need the
   symbolic-link privilege; the other runs only off Windows. `ruff check` is clean.
-- **Next: Milestone 6, Move / copy tab**, after the merge. Before it, the user runs
-  `tools/copy_check.py` on the NAS (pending checks below). Open items for its plan:
-  O1, O10, O11, O12 and O25.
+- **Next: Milestone 6, Move / copy tab.** Open items for its plan: O1, O10, O11,
+  O12, O25, O34, O35 and O36. It ends with the NAS field test (D54).
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
   `tests/test_user_text.py` checks the Viewer, Log and Settings tabs.
 - The NAS part of O21 is still open. The local part is done
@@ -33,7 +35,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3. Log tab | Done, merged | `m3-log-tab` | `0569068`–`eed75f0`, `cbeab1e` (report), plus the commit that records the merge | [M3](reports/M3.md) |
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
-| 5. Transfer core | Done, not merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, plus the commit that holds the report | [M5](reports/M5.md) |
+| 5. Transfer core | Done, not merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), plus the commit that records D54 | [M5](reports/M5.md) |
 | 6. Move / copy tab | Not started | | | |
 | 7. Packaging and migration | Not started | | | |
 
@@ -56,6 +58,9 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O10 | Copy-to-PC destination layout: keep `rel_path` under `default_local_copy_root`, or a folder the user picks | 6 | None yet | M0 review 19 |
 | O11 | "Verify against source" for recordings logged in place on the NAS, and how a later verification clears the unverified mark. The Viewer shows the mark while the D2 row exists (D44). | 6 | None yet | D2 |
 | O12 | `finish_transfer` replaces `notes`; source deletion is recorded in `notes` | 6 | Add to the existing text instead of replacing it. | M1 review |
+| O34 | The recording laptops have no Python, so the NAS field test (D54) needs `copy_check`, `db_check` and the test set inside the packaged app. | 6 | Command-line options of the app, such as `--copy-check`, `--db-check` and `--make-test-set`, with the code moved from `tools/` into the package. | D54 |
+| O35 | Files copied at once, and the flush, as settings. A slow NAS could then be handled without a new build. | 6 | Files at once: a setting, default 4 (local timings in the Milestone 5 report). The flush: on, and changed only after the NAS test shows the need. | D54; Milestone 5 report |
+| O36 | A check straight after a copy may read from the PC's cache, and deleting the laptop copy relies on that check. | 6 | Offer "Delete laptop copy" only after a separate "Check archive" run, made at least some minutes after the copy or after a restart of the app. | Milestone 5 report |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
@@ -65,7 +70,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D53). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D54). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -99,10 +104,9 @@ Decided items are in `docs/DECISIONS.md` (D1–D53). The M0 review table in
   `check`, `hold` and `write` on a scratch database on the NAS, with `hold` and
   `write` on two PCs. Steps are in
   [reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md).
-- Before Milestone 6: run `tools/copy_check.py` from a laptop to a scratch folder on
-  the NAS, once with large files and once with small files. Commands are in
-  [reports/M5.md](reports/M5.md), "Checks before merging". The results set how many
-  files the Move / copy tab copies at once.
+- At the end of Milestone 6 (D54): the NAS field test with the Milestone 6 build and
+  the test set from `tools/make_nas_testset.py`. `TESTSET.md` in the set lists the
+  order; the Milestone 6 report gives the steps. O21 runs on the same trip.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 
@@ -124,8 +128,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   `dev/m4-shots/` (Viewer and Settings screenshots), and `dev/m4-manual/` after the
   Milestone 4 manual tests.
 - `dev/m5-copy-check/` (local copy timings and the fsync probe, about 4.8 GB).
-- The folders that `tools/copy_check.py` writes on the NAS and the laptop, after the
-  check.
+- `dev/m5-testset-quick/` (the quick test set, 67.8 MB).
+- After the NAS field test: the test set on the laptop and the folders the test
+  writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
   folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
 - `build/pyinstaller-cache/` can stay; it speeds up later builds.

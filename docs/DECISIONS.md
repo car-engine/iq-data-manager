@@ -71,6 +71,7 @@ Rules for this file:
 | D51 | Destination folders and resuming | 2026-10-03, Milestone 5 | Active |
 | D52 | Deletion record and transfer manifest | 2026-10-03, Milestone 5 | Active |
 | D53 | File names come from a rescan | 2026-10-03, Milestone 5 | Active |
+| D54 | NAS field test with the Milestone 6 build | 2026-10-03, Milestone 5 | Active |
 
 ## D1. Sample types
 
@@ -983,3 +984,32 @@ Closes O32. The user chose this on 2026-10-03 in place of the proposed default
 - The schema stores no file extension.
 
 Affects: SPEC section 8, `transfer/selection.py`.
+
+## D54. NAS field test with the Milestone 6 build
+
+The user decided on 2026-10-03, after the Milestone 5 report. Development happens away
+from the network that holds the NAS. A test there means taking a frozen build to a
+recording laptop and reporting back the next day.
+
+- The copy engine is not tested on the NAS before Milestone 6. The first NAS test
+  uses the Milestone 6 build, with the Move / copy tab.
+- `tools/make_nas_testset.py` writes the data for that test on the laptop: five
+  synthetic recordings of random bytes (large files, many small files, gaps and
+  ranges, a single `.bin` channel with a short last file, half-second files), with
+  `TESTSET.md` and `testset.json`. The default set holds 5.05 GB.
+- `tools/copy_check.py` measures throughput with 1, 4 and 8 files at once, with the
+  flush to the destination's disks on and off (`--fsync both`), on a test-set
+  recording (`--source`).
+- `copy_files()` takes `fsync=False` for that comparison only. The app keeps the
+  flush. It ensures that a crash on the NAS cannot leave a file with its real name
+  and size but without its data, which a size check would pass.
+- Risks the user accepted:
+  - throughput to the NAS, above all for many small files, is unknown until then;
+  - a check straight after a copy may read from the PC's cache;
+  - engine faults and tab faults turn up in the same trip.
+- The Milestone 6 plan takes up three open items that reduce these risks: O34
+  (diagnostics and the test set in the packaged app), O35 (files at once and the
+  flush as settings) and O36 (deletion only after a later check).
+
+Affects: SPEC sections 8, 9 and 12, `transfer/copier.py`, `tools/copy_check.py`,
+`tools/make_nas_testset.py`, `tools/make_fixtures.py`.
