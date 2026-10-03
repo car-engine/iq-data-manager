@@ -102,6 +102,7 @@ class ViewerTab(QWidget):
     """Filters, the recordings list, channels, gap scan and details. Read-only."""
 
     edit_requested = Signal(int)  # recording id for the Log tab's edit mode (D16)
+    transfer_requested = Signal(int)  # recording id for the Archive / copy tab (D42)
 
     def __init__(
         self,
@@ -240,6 +241,11 @@ class ViewerTab(QWidget):
         self.edit_button = QPushButton("Edit entry")
         self.edit_button.setToolTip("Open this recording in the Log recording tab to change it.")
         self.edit_button.clicked.connect(self.request_edit)
+        self.transfer_button = QPushButton("Archive / copy")
+        self.transfer_button.setToolTip(
+            "Open this recording in the Archive / copy tab to archive it to the NAS or copy it."
+        )
+        self.transfer_button.clicked.connect(self.request_transfer)
         self.message_label = QLabel()
         self.message_label.setWordWrap(True)
 
@@ -266,6 +272,7 @@ class ViewerTab(QWidget):
         header.addWidget(self.refresh_button)
         header.addWidget(self.open_button)
         header.addWidget(self.edit_button)
+        header.addWidget(self.transfer_button)
 
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -911,6 +918,7 @@ class ViewerTab(QWidget):
         self.apply_button.setEnabled(has_db)
         self.open_button.setEnabled(selected)
         self.edit_button.setEnabled(selected)
+        self.transfer_button.setEnabled(selected)
         scanning = self._scan_task is not None
         self.scan_button.setEnabled(selected and not scanning)
         self.cancel_scan_button.setEnabled(scanning)
@@ -928,3 +936,7 @@ class ViewerTab(QWidget):
     def request_edit(self) -> None:
         if self._details is not None and self._details.recording.id is not None:
             self.edit_requested.emit(self._details.recording.id)
+
+    def request_transfer(self) -> None:
+        if self._details is not None and self._details.recording.id is not None:
+            self.transfer_requested.emit(self._details.recording.id)

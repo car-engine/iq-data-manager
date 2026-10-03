@@ -25,6 +25,7 @@ from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab
+from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
 from iqdm.models import (
     IN_PLACE_NOTE,
@@ -35,11 +36,14 @@ from iqdm.models import (
     Recording,
     TransferEntry,
 )
+from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
 
 FORBIDDEN = re.compile(
     r"DECISIONS|\bSPEC\b|\bD\d{1,2}\b|\bO\d{1,2}\b|\bMilestone\b"
     r"|db_path|nas_roots|display_utc_offset_hours|coverage_highlight_percent|user_version"
+    r"|default_local_copy_root|network_speed_mb_s|default_hash_mode|hash_sample_fraction"
+    r"|free_space_margin_gb|copy_workers|transfer_log|parent_id"
     r"|schema|journal|busy timeout|foreign keys",
     re.IGNORECASE,
 )
@@ -208,4 +212,57 @@ def test_viewer_tab_text_is_plain(qtbot, db_path, make_recording):
     assert tab.gap_label.text()
     assert tab.difference_label.text()
     assert tab.filter_error.text()
+    assert offending(texts) == []
+
+
+def test_transfer_tab_text_is_plain(qtbot, tmp_path, db_path, make_recording):
+    info = make_recording(n_channels=2, n_slots=20, channels={1: ChannelSpec(gaps=frozenset({3}))})
+    gappy, archived = viewer_catalogue(db_path, info)
+    nas = tmp_path / "nas"
+    config = Config(
+        db_path=str(db_path), nas_roots=(str(nas),), default_local_copy_root=str(tmp_path / "pc")
+    )
+    tab = TransferTab(
+        config,
+        manifests_dir=tmp_path / "manifests",
+        performed_by=lambda: "userA",
+        preview_options={
+            "resolve_drive": None,
+            "disk_usage": lambda _p: DiskUsage(10**15, 0, 10**15),
+            "long_paths": True,
+        },
+    )
+    qtbot.addWidget(tab)
+
+    def idle() -> None:
+        qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
+
+    def texts_now() -> list[str]:
+        return (
+            visible_texts(tab)
+            + [i.text for i in tab.preview_lines.items]
+            + [tab.file_list.item(i).text() for i in range(tab.file_list.count())]
+        )
+
+    idle()
+    texts = texts_now()
+    tab.load_recording(gappy)  # a local recording with a gap: an archive
+    idle()
+    tab.dest_edit.setText(str(tmp_path / "not-on-the-nas"))
+    tab.preview_button.click()  # archive errors: not on the NAS, folder differs
+    idle()
+    texts += texts_now()
+    tab.copy_radio.setChecked(True)
+    tab.preview_button.click()  # a copy preview with missing seconds and a difference
+    idle()
+    texts += texts_now()
+    tab.range_radio.setChecked(True)
+    tab.from_edit.setText("wrong")
+    tab.from_edit.editingFinished.emit()  # a time error
+    texts += texts_now()
+    tab.load_recording(archived)  # not verified: the comparison and the laptop note
+    idle()
+    texts += texts_now()
+    assert tab.preview_lines.items
+    assert tab.laptop_label.text()
     assert offending(texts) == []

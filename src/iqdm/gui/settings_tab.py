@@ -18,6 +18,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
+    QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -30,12 +31,14 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from iqdm import __version__
 from iqdm.config import (
+    COPY_WORKERS_MAX,
     COVERAGE_MAX_PERCENT,
     OFFSET_MAX_HOURS,
     OFFSET_MIN_HOURS,
@@ -57,6 +60,7 @@ from iqdm.db.version import SchemaStatus
 from iqdm.entry import ItemState
 from iqdm.gui.widgets.checklist import MARKS, colours_for
 from iqdm.gui.workers import TaskRunner
+from iqdm.models import HashMode
 from iqdm.timeutil import display_time, iso_to_unix, offset_label
 
 PREVIEW_ISO = "2026-09-30T02:00:00Z"  # a fixed instant for the offset preview
@@ -171,6 +175,27 @@ COVERAGE_TOOLTIP = (
     "Coverage is the share of the recording's time span that has data files."
 )
 COVERAGE_STEP_PERCENT = 0.5
+SPEED_MESSAGE = "Use a speed above 0 MB/s."
+SAMPLE_MESSAGE = "Use a share above 0 % and at most 100 %."
+TRANSFER_TOOLTIPS = {
+    "copy_root": (
+        "A copy to a PC goes to this folder, under the recording's own folder path. "
+        "You can change the destination for each copy."
+    ),
+    "speed": "Used for the time estimates in the Archive / copy tab. Nothing is limited.",
+    "hash": "What the check after a copy compares, unless you choose otherwise there.",
+    "sample": "The share of the files that a sample check hashes, at least one file.",
+    "margin": "A copy or an archive starts only if this much space stays free afterwards.",
+    "workers": (
+        "More files at once can be faster on a slow network or with many small files. "
+        "The default is 4."
+    ),
+}
+HASH_MODE_TEXT = {
+    HashMode.NONE: "Sizes only",
+    HashMode.SAMPLE: "Sizes, and hashes of a sample of the files",
+    HashMode.ALL: "Sizes and hashes of every file",
+}
 
 
 def offset_preview(hours: float) -> str:
@@ -229,6 +254,7 @@ class SettingsTab(QWidget):
         column.addWidget(self._build_database())
         column.addWidget(self._build_nas_roots())
         column.addWidget(self._build_display())
+        column.addWidget(self._build_transfers())
         column.addWidget(self._build_about())
         column.addStretch(1)
         inner = QWidget()
@@ -346,6 +372,70 @@ class SettingsTab(QWidget):
         layout.addRow(self.coverage_error)
         return box
 
+    def _build_transfers(self) -> QGroupBox:
+        box = QGroupBox("Transfers")
+        self.copy_root_edit = QLineEdit()
+        self.copy_root_edit.setPlaceholderText("A folder on this PC, or empty")
+        self.copy_root_edit.textChanged.connect(self._validate)
+        self.copy_root_browse_button = QPushButton("Browse...")
+        self.copy_root_browse_button.clicked.connect(self._browse_copy_root)
+        self.speed_spin = QDoubleSpinBox()
+        self.speed_spin.setRange(0.0, 100_000.0)  # 0 shows the error line
+        self.speed_spin.setDecimals(1)
+        self.speed_spin.setSuffix(" MB/s")
+        self.speed_spin.valueChanged.connect(self._validate)
+        self.speed_error = QLabel()
+        self.hash_mode_combo = QComboBox()
+        for mode in (HashMode.NONE, HashMode.SAMPLE, HashMode.ALL):
+            self.hash_mode_combo.addItem(HASH_MODE_TEXT[mode], mode)
+        self.hash_mode_combo.currentIndexChanged.connect(self._validate)
+        self.sample_spin = QDoubleSpinBox()
+        self.sample_spin.setRange(0.0, 100.0)  # 0 shows the error line
+        self.sample_spin.setDecimals(1)
+        self.sample_spin.setSuffix(" %")
+        self.sample_spin.valueChanged.connect(self._validate)
+        self.sample_error = QLabel()
+        self.margin_spin = QDoubleSpinBox()
+        self.margin_spin.setRange(0.0, 1_000_000.0)
+        self.margin_spin.setDecimals(1)
+        self.margin_spin.setSuffix(" GB")
+        self.margin_spin.valueChanged.connect(self._validate)
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(1, COPY_WORKERS_MAX)
+        self.workers_spin.valueChanged.connect(self._validate)
+        for widget, key in (
+            (self.copy_root_edit, "copy_root"),
+            (self.speed_spin, "speed"),
+            (self.hash_mode_combo, "hash"),
+            (self.sample_spin, "sample"),
+            (self.margin_spin, "margin"),
+            (self.workers_spin, "workers"),
+        ):
+            widget.setToolTip(TRANSFER_TOOLTIPS[key])
+        for label in (self.speed_error, self.sample_error):
+            label.setWordWrap(True)
+            label.setVisible(False)
+
+        root_row = QHBoxLayout()
+        root_row.addWidget(self.copy_root_edit, 1)
+        root_row.addWidget(self.copy_root_browse_button)
+        layout = QFormLayout(box)
+        layout.addRow("Local copy folder", root_row)
+        layout.addRow("Network speed for estimates", self.speed_spin)
+        layout.addRow(self.speed_error)
+        layout.addRow("Check after a copy", self.hash_mode_combo)
+        layout.addRow("Sample size", self.sample_spin)
+        layout.addRow(self.sample_error)
+        layout.addRow("Free space to keep", self.margin_spin)
+        layout.addRow("Files copied at once", self.workers_spin)
+        return box
+
+    def _browse_copy_root(self) -> None:
+        start = self.copy_root_edit.text().strip()
+        folder = QFileDialog.getExistingDirectory(self, "Local copy folder", start)
+        if folder:
+            self.copy_root_edit.setText(str(Path(folder)))
+
     def _build_about(self) -> QGroupBox:
         box = QGroupBox("About")
         self.config_path_label = QLabel()
@@ -389,6 +479,13 @@ class SettingsTab(QWidget):
             nas_roots=tuple(self.roots_list.item(i).text() for i in range(self.roots_list.count())),
             display_utc_offset_hours=self.offset_spin.value(),
             coverage_highlight_percent=self.coverage_spin.value(),
+            default_local_copy_root=self.copy_root_edit.text().strip(),
+            network_speed_mb_s=self.speed_spin.value(),
+            # QComboBox keeps a StrEnum as plain text; HashMode() turns it back
+            default_hash_mode=HashMode(self.hash_mode_combo.currentData() or HashMode.SAMPLE),
+            hash_sample_fraction=round(self.sample_spin.value() / 100, 6),
+            free_space_margin_gb=self.margin_spin.value(),
+            copy_workers=self.workers_spin.value(),
         )
 
     def has_changes(self) -> bool:
@@ -413,6 +510,12 @@ class SettingsTab(QWidget):
                 self._hidden_error = hidden_key_error(self._data, where)
         self._baseline = settings_from_data(self._data or {})
         self._show_settings(self._baseline)
+        # The fields round some values (one decimal place for the sample share), so the
+        # baseline is what they show. A file value they cannot show stays a change.
+        shown = self.current_settings()
+        if settings_errors(shown) == settings_errors(self._baseline):
+            self._baseline = shown
+        self._validate()
         self._show_about()
         self.check_database()
 
@@ -427,6 +530,13 @@ class SettingsTab(QWidget):
             self.roots_list.addItem(QListWidgetItem(root))
         self.offset_spin.setValue(settings.display_utc_offset_hours)
         self.coverage_spin.setValue(settings.coverage_highlight_percent)
+        self.copy_root_edit.setText(settings.default_local_copy_root)
+        self.speed_spin.setValue(settings.network_speed_mb_s)
+        index = self.hash_mode_combo.findData(settings.default_hash_mode)
+        self.hash_mode_combo.setCurrentIndex(max(0, index))
+        self.sample_spin.setValue(settings.hash_sample_fraction * 100)
+        self.margin_spin.setValue(settings.free_space_margin_gb)
+        self.workers_spin.setValue(min(max(settings.copy_workers, 1), COPY_WORKERS_MAX))
         self._update_root_buttons()
         self._validate()
 
@@ -511,6 +621,14 @@ class SettingsTab(QWidget):
         self.coverage_error.setText(COVERAGE_MESSAGE if coverage_bad else "")
         self.coverage_error.setStyleSheet(error_style)
         self.coverage_error.setVisible(coverage_bad)
+        for label, key, message in (
+            (self.speed_error, "network_speed_mb_s", SPEED_MESSAGE),
+            (self.sample_error, "hash_sample_fraction", SAMPLE_MESSAGE),
+        ):
+            bad = key in errors
+            label.setText(message if bad else "")
+            label.setStyleSheet(error_style)
+            label.setVisible(bad)
 
         problem, detail = self._problem()
         self.problem_label.setText(problem)

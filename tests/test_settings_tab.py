@@ -26,6 +26,7 @@ from iqdm.gui.settings_tab import (
     offset_preview,
 )
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, colours_for
+from iqdm.models import HashMode
 
 NAS = r"\\nas\recordings"
 
@@ -500,10 +501,10 @@ def test_a_failed_write_is_reported(make_tab, config_file, monkeypatch):
 
 
 def test_a_wrong_hidden_key_blocks_save(make_tab, config_file):
-    write(config_file, "network_speed_mb_s = -1\n")
+    write(config_file, "storage_roots = 5\n")
     tab = make_tab(config_file)
     tab.db_edit.setText("new.db")
-    assert "network_speed_mb_s" in tab.problem_label.text()  # named, to fix by hand (D36)
+    assert "storage_roots" in tab.problem_label.text()  # named, to fix by hand (D36)
     assert "Correct it in the file (Open folder)" in tab.problem_label.text()
     assert not tab.save_button.isEnabled()
 
@@ -511,6 +512,60 @@ def test_a_wrong_hidden_key_blocks_save(make_tab, config_file):
     tab.reload_button.click()
     assert tab.problem_label.isHidden()
     assert tab.db_edit.text() == ""
+
+
+# ---------------------------------------------------------------------------
+# Transfers (Milestone 6; D34, D58)
+# ---------------------------------------------------------------------------
+
+
+def test_transfer_keys_are_shown_and_saved(qtbot, make_tab, config_file):
+    write(
+        config_file,
+        "default_local_copy_root = 'D:\\work\\iq'\nnetwork_speed_mb_s = 95\n"
+        "default_hash_mode = 'all'\nhash_sample_fraction = 0.1\nfree_space_margin_gb = 20\n"
+        "copy_workers = 8\n",
+    )
+    tab = make_tab(config_file)
+    assert tab.copy_root_edit.text() == r"D:\work\iq"
+    assert tab.speed_spin.value() == 95.0
+    assert tab.current_settings().default_hash_mode is HashMode.ALL
+    assert tab.sample_spin.value() == 10.0
+    assert tab.margin_spin.value() == 20.0
+    assert tab.workers_spin.value() == 8
+    assert not tab.save_button.isEnabled()  # nothing changed
+    tab.workers_spin.setValue(2)
+    tab.hash_mode_combo.setCurrentIndex(tab.hash_mode_combo.findData(HashMode.SAMPLE))
+    tab.copy_root_edit.setText("")
+    config = save_and_get_config(qtbot, tab)
+    assert (config.copy_workers, config.default_hash_mode) == (2, HashMode.SAMPLE)
+    assert config.default_local_copy_root is None
+    assert config.network_speed_mb_s == 95.0
+    assert "default_local_copy_root" not in read_config_data(config_file)
+
+
+@pytest.mark.parametrize(
+    ("field", "label", "message"),
+    [
+        ("speed_spin", "speed_error", "Use a speed above 0 MB/s."),
+        ("sample_spin", "sample_error", "Use a share above 0 % and at most 100 %."),
+    ],
+)
+def test_a_zero_speed_or_sample_is_marked_and_blocks_save(
+    make_tab, config_file, field, label, message
+):
+    tab = make_tab(config_file)
+    getattr(tab, field).setValue(0.0)
+    assert getattr(tab, label).text() == message
+    assert not getattr(tab, label).isHidden()
+    assert not tab.save_button.isEnabled()
+
+
+def test_a_sample_share_the_field_rounds_is_not_a_change(make_tab, config_file):
+    write(config_file, "hash_sample_fraction = 0.0125\n")
+    tab = make_tab(config_file)
+    assert tab.sample_spin.value() == pytest.approx(1.3, abs=0.051)
+    assert not tab.save_button.isEnabled()
 
 
 def test_an_unreadable_file_can_be_replaced(qtbot, make_tab, config_file):

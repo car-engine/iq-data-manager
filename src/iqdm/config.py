@@ -30,6 +30,13 @@ SETTINGS_KEYS = (  # shown in the Settings tab
     "nas_roots",
     "display_utc_offset_hours",
     "coverage_highlight_percent",
+    # Transfers (Milestone 6; D34, D58)
+    "default_local_copy_root",
+    "network_speed_mb_s",
+    "default_hash_mode",
+    "hash_sample_fraction",
+    "free_space_margin_gb",
+    "copy_workers",
 )
 OFFSET_MIN_HOURS = -12.0
 OFFSET_MAX_HOURS = 14.0
@@ -235,12 +242,36 @@ class SettingsInput:
     nas_roots: tuple[str, ...] = ()
     display_utc_offset_hours: float = Config.display_utc_offset_hours
     coverage_highlight_percent: float = Config.coverage_highlight_percent
+    default_local_copy_root: str = ""  # "" means none
+    network_speed_mb_s: float = Config.network_speed_mb_s
+    default_hash_mode: HashMode = Config.default_hash_mode
+    hash_sample_fraction: float = Config.hash_sample_fraction
+    free_space_margin_gb: float = Config.free_space_margin_gb
+    copy_workers: int = Config.copy_workers
 
 
 def _number_or_default(value: object, default: float) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         return default
     return float(value)
+
+
+def _whole_or_default(value: object, default: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return default
+    return value
+
+
+def _mode_or_default(value: object) -> HashMode:
+    try:
+        return HashMode(value)
+    except ValueError:
+        return Config.default_hash_mode
+
+
+def _as_written(value: float) -> int | float:
+    """A whole number as an integer, so the file reads 110 rather than 110.0."""
+    return int(value) if float(value).is_integer() else float(value)
 
 
 def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
@@ -251,6 +282,7 @@ def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
     """
     db = data.get("db_path")
     roots = data.get("nas_roots")
+    copy_root = data.get("default_local_copy_root")
     return SettingsInput(
         db_path=db.strip() if isinstance(db, str) else "",
         nas_roots=tuple(r for r in roots if isinstance(r, str)) if isinstance(roots, list) else (),
@@ -260,6 +292,18 @@ def settings_from_data(data: Mapping[str, Any]) -> SettingsInput:
         coverage_highlight_percent=_number_or_default(
             data.get("coverage_highlight_percent"), Config.coverage_highlight_percent
         ),
+        default_local_copy_root=copy_root.strip() if isinstance(copy_root, str) else "",
+        network_speed_mb_s=_number_or_default(
+            data.get("network_speed_mb_s"), Config.network_speed_mb_s
+        ),
+        default_hash_mode=_mode_or_default(data.get("default_hash_mode")),
+        hash_sample_fraction=_number_or_default(
+            data.get("hash_sample_fraction"), Config.hash_sample_fraction
+        ),
+        free_space_margin_gb=_number_or_default(
+            data.get("free_space_margin_gb"), Config.free_space_margin_gb
+        ),
+        copy_workers=_whole_or_default(data.get("copy_workers"), Config.copy_workers),
     )
 
 
@@ -275,6 +319,15 @@ def settings_errors(settings: SettingsInput) -> dict[str, str]:
     error = coverage_error(settings.coverage_highlight_percent)
     if error is not None:
         errors["coverage_highlight_percent"] = error
+    if not settings.network_speed_mb_s > 0:
+        errors["network_speed_mb_s"] = "network_speed_mb_s must be positive"
+    if not 0 < settings.hash_sample_fraction <= 1:
+        errors["hash_sample_fraction"] = "hash_sample_fraction must be above 0 and at most 1"
+    if settings.free_space_margin_gb < 0:
+        errors["free_space_margin_gb"] = "free_space_margin_gb must be 0 or more"
+    error = copy_workers_error(settings.copy_workers)
+    if error is not None:
+        errors["copy_workers"] = error
     return errors
 
 
@@ -312,6 +365,16 @@ def merge_settings(data: Mapping[str, Any], settings: SettingsInput) -> dict[str
     merged["display_utc_offset_hours"] = int(offset) if offset.is_integer() else offset
     threshold = float(settings.coverage_highlight_percent)
     merged["coverage_highlight_percent"] = int(threshold) if threshold.is_integer() else threshold
+    copy_root = settings.default_local_copy_root.strip()
+    if copy_root:
+        merged["default_local_copy_root"] = copy_root
+    else:
+        merged.pop("default_local_copy_root", None)
+    merged["network_speed_mb_s"] = _as_written(settings.network_speed_mb_s)
+    merged["default_hash_mode"] = str(settings.default_hash_mode)
+    merged["hash_sample_fraction"] = _as_written(settings.hash_sample_fraction)
+    merged["free_space_margin_gb"] = _as_written(settings.free_space_margin_gb)
+    merged["copy_workers"] = int(settings.copy_workers)
     return merged
 
 

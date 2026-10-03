@@ -17,8 +17,10 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
+from iqdm.db import repository
+from iqdm.db.connection import open_db, write_transaction
 from iqdm.entry import ChecklistItem, ItemState, format_size, missing_text
 from iqdm.location import join_location
 from iqdm.models import HashMode, Operation, Recording, TransferEntry, Verification
@@ -408,6 +410,19 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
 NOT_FINISHED = (
     "Not finished. The app stopped before the end, or the transfer still runs on another PC."
 )
+
+
+def load_unfinished(db_path: Path | str, performed_by: str | None) -> list[TransferEntry]:
+    """Copies and archives the user may resume, newest first. None lists every user's."""
+    with open_db(db_path, readonly=True) as conn:
+        return repository.list_unfinished_transfers(conn, performed_by)
+
+
+def forget_transfer(db_path: Path | str, transfer_id: int, *, now: str) -> None:
+    """Hide an unfinished copy or archive from the list ("Forget"). Its row stays."""
+    write_transaction(
+        db_path, lambda conn: repository.dismiss_transfer(conn, transfer_id, dismissed_at=now)
+    )
 
 
 def unfinished_state(entry: TransferEntry) -> str:

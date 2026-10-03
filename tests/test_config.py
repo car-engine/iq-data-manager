@@ -193,10 +193,17 @@ def test_free_space_margin_must_be_0_or_more(tmp_path, text):
         load_config(path)
 
 
-def test_hidden_key_error_names_the_free_space_margin():
-    error = hidden_key_error({"free_space_margin_gb": -1}, "config.toml")
-    assert error is not None
-    assert "free_space_margin_gb" in error
+def test_the_transfer_keys_are_shown_so_none_is_hidden():
+    """Milestone 6 shows the transfer keys in the Settings tab (D34, D58)."""
+    data = {
+        "free_space_margin_gb": -1,
+        "network_speed_mb_s": 0,
+        "hash_sample_fraction": 2,
+        "default_hash_mode": "some",
+        "copy_workers": 0,
+        "default_local_copy_root": 3,
+    }
+    assert hidden_key_error(data, "config.toml") is None
 
 
 def test_copy_workers_defaults_to_4(tmp_path):
@@ -264,7 +271,79 @@ def test_settings_from_data_takes_the_shown_keys(tmp_path):
         db_path=r"D:\data\catalog.db",
         nas_roots=(r"\\nas\recordings",),
         display_utc_offset_hours=5.5,
+        network_speed_mb_s=95.0,
     )
+
+
+def test_settings_from_data_takes_the_transfer_keys():
+    settings = settings_from_data(
+        {
+            "default_local_copy_root": r" D:\work\iq ",
+            "network_speed_mb_s": 80,
+            "default_hash_mode": "all",
+            "hash_sample_fraction": 0.1,
+            "free_space_margin_gb": 0,
+            "copy_workers": 8,
+        }
+    )
+    assert (
+        settings.default_local_copy_root,
+        settings.network_speed_mb_s,
+        settings.default_hash_mode,
+        settings.hash_sample_fraction,
+        settings.free_space_margin_gb,
+        settings.copy_workers,
+    ) == (r"D:\work\iq", 80.0, HashMode.ALL, 0.1, 0.0, 8)
+
+
+def test_settings_from_data_gives_defaults_for_wrong_transfer_types():
+    settings = settings_from_data(
+        {
+            "default_local_copy_root": 3,
+            "network_speed_mb_s": "fast",
+            "default_hash_mode": "some",
+            "copy_workers": 4.5,
+        }
+    )
+    assert settings.default_local_copy_root == ""
+    assert settings.network_speed_mb_s == 110.0
+    assert settings.default_hash_mode is HashMode.SAMPLE
+    assert settings.copy_workers == 4
+
+
+@pytest.mark.parametrize(
+    ("change", "key"),
+    [
+        ({"network_speed_mb_s": 0.0}, "network_speed_mb_s"),
+        ({"hash_sample_fraction": 0.0}, "hash_sample_fraction"),
+        ({"hash_sample_fraction": 1.5}, "hash_sample_fraction"),
+        ({"free_space_margin_gb": -0.5}, "free_space_margin_gb"),
+        ({"copy_workers": 0}, "copy_workers"),
+        ({"copy_workers": 17}, "copy_workers"),
+    ],
+)
+def test_settings_errors_check_the_transfer_keys(change, key):
+    assert list(settings_errors(SettingsInput(**change))) == [key]
+
+
+def test_merge_writes_the_transfer_keys():
+    merged = merge_settings(
+        {"default_local_copy_root": r"D:\old"},
+        SettingsInput(
+            network_speed_mb_s=110.0,
+            default_hash_mode=HashMode.NONE,
+            hash_sample_fraction=0.05,
+            free_space_margin_gb=2.5,
+            copy_workers=8,
+        ),
+    )
+    assert "default_local_copy_root" not in merged  # blank removes the key
+    assert merged["network_speed_mb_s"] == 110
+    assert type(merged["network_speed_mb_s"]) is int
+    assert merged["default_hash_mode"] == "none"
+    assert merged["hash_sample_fraction"] == 0.05
+    assert merged["free_space_margin_gb"] == 2.5
+    assert merged["copy_workers"] == 8
 
 
 def test_settings_from_data_keeps_a_wrong_root_as_typed():
@@ -335,16 +414,15 @@ def test_hidden_key_error_ignores_the_shown_keys():
 
 
 def test_hidden_key_error_names_the_key():
-    error = hidden_key_error({"network_speed_mb_s": -1}, "config.toml")
+    error = hidden_key_error({"storage_roots": 5}, "config.toml")
     assert error is not None
-    assert "network_speed_mb_s" in error
+    assert "storage_roots" in error
 
 
 def test_merge_keeps_every_key_that_is_not_shown(tmp_path):
     data = read_config_data(write(tmp_path, FULL_FILE))
     merged = merge_settings(data, SettingsInput(db_path=r"E:\new.db"))
     assert merged["colour"] == "blue"
-    assert merged["network_speed_mb_s"] == 95
     assert merged["storage_roots"] == {r"\\nas\recordings": "/mnt/nas/recordings"}
     assert merged["extra"] == {"nested": {"a": [1, 2]}}
     assert merged["logged_at"] == data["logged_at"]
@@ -389,6 +467,8 @@ def test_save_reads_back_the_same_config(tmp_path):
         nas_roots=(r"\\nas\recordings", r"\\nas2\Récordings é"),
         display_utc_offset_hours=-9.5,
         coverage_highlight_percent=97.5,
+        network_speed_mb_s=95.0,
+        copy_workers=6,
     )
     returned = save_config(path, merge_settings(read_config_data(path), settings))
     loaded = load_config(path)
@@ -398,6 +478,7 @@ def test_save_reads_back_the_same_config(tmp_path):
     assert loaded.display_utc_offset_hours == -9.5
     assert loaded.coverage_highlight_percent == 97.5
     assert loaded.network_speed_mb_s == 95.0
+    assert loaded.copy_workers == 6
     assert read_config_data(path)["extra"] == {"nested": {"a": [1, 2]}}
 
 

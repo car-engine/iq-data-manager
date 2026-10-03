@@ -733,3 +733,13 @@ def test_edit_entry_asks_for_the_log_tab(qtbot, tab, catalogue):
     with qtbot.waitSignal(tab.edit_requested, timeout=1_000) as blocker:
         tab.edit_button.click()
     assert blocker.args == [catalogue["gappy"]]
+
+
+def test_archive_copy_asks_for_the_transfer_tab(qtbot, tab, catalogue):
+    """D42: the button comes with the Archive / copy tab."""
+    assert not tab.transfer_button.isEnabled()  # nothing selected
+    select(qtbot, tab, catalogue["gappy"])
+    assert tab.transfer_button.isEnabled()
+    with qtbot.waitSignal(tab.transfer_requested, timeout=1_000) as blocker:
+        tab.transfer_button.click()
+    assert blocker.args == [catalogue["gappy"]]

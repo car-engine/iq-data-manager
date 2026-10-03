@@ -7,7 +7,7 @@ viewer.timeline_rows(). Times on the axis are at the display offset (D24).
 from collections.abc import Sequence
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QPainter, QPaintEvent, QPalette
+from PySide6.QtGui import QPainter, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from iqdm.entry import ItemState
@@ -52,13 +52,30 @@ def axis_ticks(t0: float, t1: float, count: int = TICKS) -> list[float]:
 
 
 class TimelineView(QWidget):
-    """Bars for the channels of one recording. Data in the OK colour, gaps in amber."""
+    """Bars for the channels of one recording. Data in the OK colour, gaps in amber.
+
+    set_selection() marks a time range on chosen rows with a frame in the highlight
+    colour, for the Archive / copy tab.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._rows: tuple[TimelineRow, ...] = ()
         self._offset = 0.0
+        self._selection: tuple[float | None, float | None, frozenset[str]] | None = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_selection(
+        self, start: float | None, end: float | None, labels: frozenset[str] | None
+    ) -> None:
+        """Mark start to end (None: the edge of the timeline) on the rows with these
+        labels. labels None removes the mark."""
+        self._selection = None if labels is None else (start, end, labels)
+        self.update()
+
+    @property
+    def selection(self) -> tuple[float | None, float | None, frozenset[str]] | None:
+        return self._selection
 
     @property
     def rows(self) -> tuple[TimelineRow, ...]:
@@ -121,6 +138,15 @@ class TimelineView(QWidget):
                     painter.fillRect(
                         QRectF(x, bar_top - 2, w, BAR_HEIGHT + 4), colours[ItemState.INFO]
                     )
+                if self._selection is not None and row.label in self._selection[2]:
+                    s0 = t0 if self._selection[0] is None else max(t0, self._selection[0])
+                    s1 = t1 if self._selection[1] is None else min(t1, self._selection[1])
+                    if s1 > s0:
+                        xs = x_for(s0, t0, t1, left, width)
+                        xe = x_for(s1, t0, t1, left, width)
+                        pen = QPen(palette.color(QPalette.ColorRole.Highlight), 2)
+                        painter.setPen(pen)
+                        painter.drawRect(QRectF(xs, bar_top - 4, xe - xs, BAR_HEIGHT + 8))
             axis_top = MARGIN + len(self._rows) * ROW_HEIGHT
             painter.setPen(text)
             ticks = axis_ticks(t0, t1)

@@ -5,8 +5,11 @@ from PySide6.QtWidgets import QMessageBox
 
 from iqdm import __version__
 from iqdm.app import (
+    CLOSE_QUESTION,
     LOG_TAB_SAVING,
     LOG_TAB_SAVING_EDIT,
+    TRANSFER_BUSY,
+    TRANSFER_RUNNING,
     MainWindow,
     _parse_args,
     config_path_for,
@@ -148,7 +151,12 @@ def make_window(qtbot, config_file, **kw) -> MainWindow:
 
 
 def wait_window(qtbot, window: MainWindow) -> None:
-    for runner in (window.viewer_tab.runner, window.log_tab.runner, window.settings_tab.runner):
+    for runner in (
+        window.viewer_tab.runner,
+        window.log_tab.runner,
+        window.settings_tab.runner,
+        window.transfer_tab.runner,
+    ):
         qtbot.waitUntil(lambda r=runner: not r.busy, timeout=10_000)
 
 
@@ -350,6 +358,86 @@ def test_edit_entry_waits_for_a_log_tab_save(qtbot, tmp_path, db_path, monkeypat
     window.log_tab._saving = False
     assert shown == [LOG_TAB_SAVING_EDIT]
     assert window.tabs.currentWidget() is window.viewer_tab
+
+
+class _RunningTask:
+    """Stands in for a running operation in the Archive / copy tab."""
+
+    def cancel(self) -> None:
+        pass
+
+
+def test_archive_copy_opens_the_recording_in_its_tab(qtbot, tmp_path, db_path):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.viewer_tab.transfer_button.click()
+    wait_window(qtbot, window)
+    assert window.tabs.currentWidget() is window.transfer_tab
+    assert window.transfer_tab.recording is not None
+    assert window.transfer_tab.recording.id == rid
+    assert window.transfer_tab.manifests_dir == tmp_path / "manifests"
+
+
+def test_archive_copy_waits_for_a_running_operation(qtbot, tmp_path, db_path, monkeypatch):
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text, *a: shown.append(text)
+    )
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.transfer_tab._task = _RunningTask()
+    window.viewer_tab.transfer_button.click()
+    window.transfer_tab._task = None
+    assert shown == [TRANSFER_BUSY]
+    assert window.transfer_tab.recording is None
+
+
+def test_settings_wait_for_a_running_operation(qtbot, tmp_path, db_path, monkeypatch):
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text, *a: shown.append(text)
+    )
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.transfer_tab._task = _RunningTask()
+    assert not window.confirm_apply(window.config)
+    window.transfer_tab._task = None
+    assert shown == [TRANSFER_RUNNING]
+
+
+def test_the_tab_title_shows_a_running_operation(qtbot, tmp_path, db_path):
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    index = window.tabs.indexOf(window.transfer_tab)
+    window.transfer_tab.status_changed.emit("copying 41 %")
+    assert window.tabs.tabText(index) == "Archive / copy (copying 41 %)"
+    assert window.statusBar().currentMessage() == "Archive / copy: copying 41 %"
+    window.transfer_tab.status_changed.emit("")
+    assert window.tabs.tabText(index) == "Archive / copy"
+
+
+@pytest.mark.parametrize("answer", [QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes])
+def test_closing_during_an_operation_asks_first(qtbot, tmp_path, db_path, monkeypatch, answer):
+    asked: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda parent, title, text, *a: asked.append(text) or answer
+    )
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    calls: list[str] = []
+    monkeypatch.setattr(window.transfer_tab, "stop", lambda ask=True: calls.append(f"stop {ask}"))
+    monkeypatch.setattr(window.transfer_tab, "wait_until_idle", lambda: calls.append("wait"))
+    window.transfer_tab._task = _RunningTask()
+    closed = window.close()
+    window.transfer_tab._task = None
+    assert asked == [CLOSE_QUESTION]
+    if answer == QMessageBox.StandardButton.No:
+        assert not closed
+        assert calls == []
+    else:
+        assert closed
+        assert calls == ["stop False", "wait"]
+
+
+def test_closing_when_idle_asks_nothing(qtbot, tmp_path, db_path, questions):
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    assert window.close()
+    assert questions == []
 
 
 def test_a_log_tab_save_refreshes_the_viewer(qtbot, tmp_path, db_path):

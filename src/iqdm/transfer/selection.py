@@ -8,7 +8,7 @@ not missing.
 """
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from iqdm.models import Recording
@@ -68,6 +68,7 @@ class Selection:
     channel_indices: tuple[int, ...] | None
     channels: tuple[ChannelSelection, ...]
     differences: tuple[str, ...]
+    scan: ScanResult | None = field(default=None, compare=False, repr=False)  # the rescan
 
     @property
     def files(self) -> tuple[SelectedFile, ...]:
@@ -182,6 +183,7 @@ def select_from_scan(
         channel_indices=indices,
         channels=selected,
         differences=tuple(scan_differences(rec, scan)),
+        scan=scan,
     )
 
 

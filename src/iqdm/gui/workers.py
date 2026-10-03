@@ -13,12 +13,13 @@ own slots.
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
 
 class _TaskSignals(QObject):
-    progress = Signal(object, int)  # task, count
+    progress = Signal(object, object)  # task, a count or a progress object
     succeeded = Signal(object, object)  # task, result
     failed = Signal(object, object)  # task, exception
 
@@ -39,8 +40,9 @@ class Task(QRunnable):
     def is_cancelled(self) -> bool:
         return self._cancel.is_set()
 
-    def report(self, count: int) -> None:
-        self.signals.progress.emit(self, count)
+    def report(self, value: object) -> None:
+        """Send progress to the main thread. Safe to call from any thread."""
+        self.signals.progress.emit(self, value)
 
     def run(self) -> None:
         try:
@@ -55,7 +57,7 @@ class Task(QRunnable):
 class _Callbacks:
     on_success: Callable[[object], None] | None
     on_failure: Callable[[Exception], None] | None
-    on_progress: Callable[[int], None] | None
+    on_progress: Callable[[Any], None] | None
 
 
 class TaskRunner(QObject):
@@ -72,7 +74,7 @@ class TaskRunner(QObject):
         *,
         on_success: Callable[[object], None] | None = None,
         on_failure: Callable[[Exception], None] | None = None,
-        on_progress: Callable[[int], None] | None = None,
+        on_progress: Callable[[Any], None] | None = None,
     ) -> Task:
         task = Task(fn)
         self._running[task] = _Callbacks(on_success, on_failure, on_progress)
@@ -91,11 +93,11 @@ class TaskRunner(QObject):
         """Block until the pool is idle. For tests and shutdown."""
         return self._pool.waitForDone(msecs)
 
-    @Slot(object, int)
-    def _progress(self, task: Task, count: int) -> None:
+    @Slot(object, object)
+    def _progress(self, task: Task, value: object) -> None:
         callbacks = self._running.get(task)
         if callbacks is not None and callbacks.on_progress is not None:
-            callbacks.on_progress(count)
+            callbacks.on_progress(value)
 
     @Slot(object, object)
     def _succeeded(self, task: Task, result: object) -> None:

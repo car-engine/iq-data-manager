@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QTabWidget, QWidget
 
 from iqdm import __version__
@@ -17,6 +18,7 @@ from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
+from iqdm.transfer.manifest import manifests_dir
 
 APP_NAME = "IQ Data Manager"
 TAB_COUNT = 4
@@ -28,6 +30,19 @@ LOG_TAB_SAVING = "The Log tab is saving a recording. Save the settings when it h
 LOG_TAB_SAVING_EDIT = (
     "The Log tab is saving a recording. Click Edit entry again when it has finished."
 )
+TRANSFER_RUNNING = (
+    "An operation is running in the Archive / copy tab. Save the settings when it has "
+    "finished."
+)
+TRANSFER_BUSY = (
+    "An operation is running in the Archive / copy tab. Open the recording there when it "
+    "has finished."
+)
+CLOSE_QUESTION = (
+    "An operation is running in the Archive / copy tab.\n\nStop it and close the app? A "
+    "stopped copy or archive can be resumed later."
+)
+TRANSFER_TAB = "Archive / copy"
 
 
 def drop_log_input_question(recording_id: int) -> str:
@@ -65,7 +80,17 @@ class MainWindow(QMainWindow):
         self.log_tab = LogTab(self.config)
         self.viewer_tab.edit_requested.connect(self.edit_recording)
         self.log_tab.saved.connect(lambda _id: self.viewer_tab.refresh())
-        self.transfer_tab = TransferTab()
+        self.transfer_tab = TransferTab(
+            self.config,
+            manifests_dir=None if config_path is None else manifests_dir(config_path),
+        )
+        self.viewer_tab.transfer_requested.connect(self.open_transfer)
+        self.log_tab.saved.connect(self.transfer_tab.recording_saved)
+        self.transfer_tab.recording_changed.connect(lambda _id: self.viewer_tab.refresh())
+        self.transfer_tab.pick_requested.connect(
+            lambda: self.tabs.setCurrentWidget(self.viewer_tab)
+        )
+        self.transfer_tab.status_changed.connect(self._transfer_status)
         self.settings_tab = SettingsTab(
             config_path,
             db_override=db_override,
@@ -77,7 +102,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.viewer_tab, "Viewer")
         self.tabs.addTab(self.log_tab, "Log recording")
-        self.tabs.addTab(self.transfer_tab, "Archive / copy")
+        self.tabs.addTab(self.transfer_tab, TRANSFER_TAB)
         self.tabs.addTab(self.settings_tab, "Settings")
         self.setCentralWidget(self.tabs)
         if config_error is not None:
@@ -96,6 +121,9 @@ class MainWindow(QMainWindow):
         if self.log_tab.is_saving:
             QMessageBox.information(self, "Settings not saved", LOG_TAB_SAVING)
             return False
+        if self.transfer_tab.is_busy:
+            QMessageBox.information(self, "Settings not saved", TRANSFER_RUNNING)
+            return False
         effective = self._effective(new_config)
         if not self.log_tab.apply_clears_form(effective) or not self.log_tab.has_unsaved_input():
             return True
@@ -113,7 +141,42 @@ class MainWindow(QMainWindow):
         self.config = self._effective(config)
         self.log_tab.apply_config(self.config)
         self.viewer_tab.apply_config(self.config)
+        self.transfer_tab.apply_config(self.config)
         self.statusBar().showMessage(status_text(self.config, None))
+
+    def open_transfer(self, recording_id: int) -> None:
+        """Open a recording from the Viewer in the Archive / copy tab (D42)."""
+        self.tabs.setCurrentWidget(self.transfer_tab)
+        if self.transfer_tab.is_busy:
+            QMessageBox.information(self, "Recording not opened", TRANSFER_BUSY)
+            return
+        self.transfer_tab.load_recording(recording_id)
+
+    def _transfer_status(self, text: str) -> None:
+        """Show a running operation in the tab's title and the status bar."""
+        index = self.tabs.indexOf(self.transfer_tab)
+        self.tabs.setTabText(index, f"{TRANSFER_TAB} ({text})" if text else TRANSFER_TAB)
+        if text:
+            self.statusBar().showMessage(f"{TRANSFER_TAB}: {text}")
+        else:
+            self.statusBar().showMessage(status_text(self.config, None))
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802  (Qt override)
+        """Ask before closing while an operation runs; Yes stops it and waits for it."""
+        if self.transfer_tab.is_busy:
+            answer = QMessageBox.question(
+                self,
+                "Stop and close?",
+                CLOSE_QUESTION,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self.transfer_tab.stop(ask=False)
+            self.transfer_tab.wait_until_idle()
+        event.accept()
 
     def edit_recording(self, recording_id: int) -> None:
         """Open a recording from the Viewer in the Log tab's edit mode (D16, D45).
