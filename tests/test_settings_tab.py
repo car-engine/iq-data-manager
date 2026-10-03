@@ -9,12 +9,15 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QFileDialog, QInputDialog
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from iqdm.config import Config, backup_path, load_config, read_config_data
 from iqdm.db import version
-from iqdm.db.connection import inspect_database
+from iqdm.db.connection import DatabaseError, inspect_database
+from iqdm.db.connection import database_status as schema_status
+from iqdm.db.version import SchemaStatus
 from iqdm.entry import ItemState
+from iqdm.gui import settings_tab
 from iqdm.gui.settings_tab import (
     COVERAGE_MESSAGE,
     NO_CONFIG_PATH,
@@ -23,6 +26,7 @@ from iqdm.gui.settings_tab import (
     DatabaseStatus,
     SettingsTab,
     database_status,
+    new_database_question,
     offset_preview,
 )
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, colours_for
@@ -290,6 +294,130 @@ def test_a_late_result_of_an_earlier_check_is_dropped(make_tab, config_file):
     tab = make_tab(config_file)
     tab._checked(tab._check_id - 1, DatabaseStatus(ItemState.OK, "an old result"))
     assert tab.db_state == NO_DB_PATH
+
+
+# ---------------------------------------------------------------------------
+# New database (D67)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def new_db_dialogs(monkeypatch):
+    """Stubs for the save dialog and the Yes/No question. Records what was asked."""
+    state: dict[str, object] = {"path": "", "answer": QMessageBox.StandardButton.Yes}
+    asked: list[str] = []
+
+    def save_name(*args, **kwargs):
+        return str(state["path"]), "SQLite database"
+
+    def question(parent, title, text, *args):
+        asked.append(text)
+        return state["answer"]
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", save_name)
+    monkeypatch.setattr(QMessageBox, "question", question)
+    state["asked"] = asked
+    return state
+
+
+def test_new_database_creates_the_file_and_fills_the_field(
+    qtbot, make_tab, config_file, tmp_path, new_db_dialogs
+):
+    target = tmp_path / "project.db"
+    new_db_dialogs["path"] = target.as_posix()
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    wait_idle(qtbot, tab)
+    assert schema_status(target) is SchemaStatus.CURRENT
+    assert new_db_dialogs["asked"] == [new_database_question(target)]
+    assert tab.db_edit.text() == str(target)
+    assert tab.db_state.state is ItemState.OK
+    assert tab.message_label.text() == f"Created {target}. Click Save to use it."
+    assert tab.new_db_button.isEnabled()
+    assert tab.save_button.isEnabled()
+    assert not config_file.exists()  # Save switches to it
+    config = save_and_get_config(qtbot, tab)
+    assert config.db_path == str(target)
+
+
+def test_new_database_adds_the_file_extension(
+    qtbot, make_tab, config_file, tmp_path, new_db_dialogs
+):
+    new_db_dialogs["path"] = str(tmp_path / "project")
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    wait_idle(qtbot, tab)
+    assert (tmp_path / "project.db").is_file()
+    assert tab.db_edit.text() == str(tmp_path / "project.db")
+
+
+def test_new_database_answered_no_creates_nothing(make_tab, config_file, tmp_path, new_db_dialogs):
+    new_db_dialogs["path"] = str(tmp_path / "project.db")
+    new_db_dialogs["answer"] = QMessageBox.StandardButton.No
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    assert not (tmp_path / "project.db").exists()
+    assert tab.db_edit.text() == ""
+    assert tab.message_label.text() == "No database created."
+
+
+def test_new_database_cancelled_changes_nothing(make_tab, config_file, tmp_path, new_db_dialogs):
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    assert new_db_dialogs["asked"] == []
+    assert tab.db_edit.text() == ""
+    assert sorted(p.name for p in tmp_path.iterdir()) == []
+
+
+def test_new_database_refuses_an_existing_file(make_tab, config_file, db_path, new_db_dialogs):
+    before = (db_path.read_bytes(), db_path.stat().st_mtime_ns)
+    new_db_dialogs["path"] = str(db_path)
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    assert new_db_dialogs["asked"] == []
+    assert (db_path.read_bytes(), db_path.stat().st_mtime_ns) == before
+    assert tab.db_edit.text() == ""
+    assert tab.message_label.text().startswith(f"{db_path} already exists.")
+
+
+def test_new_database_reports_a_failure(
+    qtbot, make_tab, config_file, tmp_path, new_db_dialogs, monkeypatch
+):
+    def fail(path):
+        raise DatabaseError("creating the schema failed")
+
+    monkeypatch.setattr(settings_tab, "create_database", fail)
+    new_db_dialogs["path"] = str(tmp_path / "project.db")
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    wait_idle(qtbot, tab)
+    assert tab.db_edit.text() == ""
+    assert tab.message_label.text() == (
+        "The database was not created. Check the folder and the network connection."
+    )
+    assert tab.message_label.toolTip() == "creating the schema failed"
+    assert tab.new_db_button.isEnabled()
+    tab.show_message("Read the file again.")
+    assert tab.message_label.toolTip() == ""
+
+
+def test_new_database_names_an_empty_file_left_behind(
+    qtbot, make_tab, config_file, tmp_path, new_db_dialogs, monkeypatch
+):
+    target = tmp_path / "project.db"
+
+    def fail(path):
+        Path(path).write_bytes(b"")
+        raise DatabaseError("creating the schema failed")
+
+    monkeypatch.setattr(settings_tab, "create_database", fail)
+    new_db_dialogs["path"] = str(target)
+    tab = make_tab(config_file)
+    tab.new_db_button.click()
+    wait_idle(qtbot, tab)
+    assert tab.message_label.text().endswith(
+        f"An empty file may remain at {target}. Remove it before you try again."
+    )
 
 
 # ---------------------------------------------------------------------------

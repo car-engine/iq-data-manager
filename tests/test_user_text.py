@@ -24,7 +24,7 @@ from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
 from iqdm.gui.log_tab import LogTab
-from iqdm.gui.settings_tab import SettingsTab
+from iqdm.gui.settings_tab import SettingsTab, new_database_question
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
 from iqdm.models import (
@@ -113,6 +113,12 @@ def test_settings_tab_text_is_plain(settings_tab):
     texts = visible_texts(tab, skip_tooltips=(tab.db_status, tab.problem_label))
     assert offending(texts) == []
     assert tab.roots_error.text()  # the wrong root's message was checked
+    assert "New database..." in texts
+
+
+def test_new_database_question_is_plain(tmp_path):
+    """The Yes/No question of "New database..." is shown outside the tab (D67)."""
+    assert offending([new_database_question(tmp_path / "project.db")]) == []
 
 
 def test_log_tab_text_is_plain(qtbot, db_path):

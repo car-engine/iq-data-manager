@@ -2,8 +2,9 @@
 
 SPEC section 4, "Settings tab" (DECISIONS.md D29, D30). The file is read and written
 through iqdm.config, which has no Qt. Database checks run in a TaskRunner, because a
-database on the NAS can take seconds to answer. The tab never creates or changes a
-database: inspect_database() opens the file read-only.
+database on the NAS can take seconds to answer. The tab creates a database only
+through "New database..." (D67), into a file that does not exist, and never changes
+one: inspect_database() opens the file read-only.
 
 Text in the tab is for the people who log recordings: no config key names, decision
 numbers or database internals (CLAUDE.md, "User-facing text"; D38). Technical detail
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -55,7 +57,12 @@ from iqdm.config import (
     settings_errors,
     settings_from_data,
 )
-from iqdm.db.connection import DatabaseInfo, DatabaseProblem, inspect_database
+from iqdm.db.connection import (
+    DatabaseInfo,
+    DatabaseProblem,
+    create_database,
+    inspect_database,
+)
 from iqdm.db.version import SchemaStatus
 from iqdm.entry import ItemState
 from iqdm.gui.widgets.checklist import MARKS, colours_for
@@ -78,6 +85,18 @@ NO_CONFIG_PATH = (
     "set. Start the app with --config PATH."
 )
 WAITING_MARK = "\N{WHITE CIRCLE}"  # no answer yet: no path, or a check in progress
+NEW_DB_TOOLTIP = "Create a new, empty database file, for example for a private project."
+NEW_DB_SUFFIX = ".db"
+
+
+def new_database_question(path: Path) -> str:
+    """The Yes/No question before "New database..." creates a file (D67)."""
+    return (
+        f"Create a new, empty database?\n\n{path}\n\n"
+        "The new database is separate from the shared catalogue. Recordings saved in it "
+        "do not appear in the shared catalogue. Other people see them only if they "
+        "choose this file.\n\nClick Save afterwards to use the new database."
+    )
 
 
 @dataclass(frozen=True)
@@ -294,6 +313,9 @@ class SettingsTab(QWidget):
         self.db_edit.editingFinished.connect(self._db_edit_finished)
         self.db_browse_button = QPushButton("Browse...")
         self.db_browse_button.clicked.connect(self._browse_db)
+        self.new_db_button = QPushButton("New database...")
+        self.new_db_button.setToolTip(NEW_DB_TOOLTIP)
+        self.new_db_button.clicked.connect(self.new_database)
         self.check_button = QPushButton("Check connection")
         self.check_button.clicked.connect(self.check_database)
         self.db_status = QLabel()
@@ -304,6 +326,7 @@ class SettingsTab(QWidget):
         row = QHBoxLayout()
         row.addWidget(self.db_edit, 1)
         row.addWidget(self.db_browse_button)
+        row.addWidget(self.new_db_button)
         row.addWidget(self.check_button)
         layout = QVBoxLayout(box)
         layout.addWidget(QLabel("Database file"))
@@ -472,6 +495,7 @@ class SettingsTab(QWidget):
 
     def show_message(self, text: str) -> None:
         self.message_label.setText(text)
+        self.message_label.setToolTip("")  # a failure may set detail after this
 
     def current_settings(self) -> SettingsInput:
         return SettingsInput(
@@ -656,6 +680,66 @@ class SettingsTab(QWidget):
         if path:
             self.db_edit.setText(str(Path(path)))
             self.check_database()
+
+    def new_database(self) -> None:
+        """Create an empty database in a new file, after a Yes, and put it in the field.
+
+        DECISIONS.md D67. The file must not exist; create_database() refuses one that
+        does. Save then switches the app to it, as after Browse.
+        """
+        current = self.db_edit.text().strip()
+        start = str(Path(current).parent) if current else ""
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            "New database file",
+            start,
+            DB_FILE_FILTER,
+            options=QFileDialog.Option.DontConfirmOverwrite,  # an existing file is refused
+        )
+        if not path:
+            return
+        target = Path(path)
+        if target.suffix.lower() != NEW_DB_SUFFIX:
+            target = target.with_name(target.name + NEW_DB_SUFFIX)
+        if target.exists():
+            self.show_message(
+                f"{target} already exists. Choose a new file name, or use Browse to "
+                "choose that file."
+            )
+            return
+        answer = QMessageBox.question(
+            self,
+            "Create a new database?",
+            new_database_question(target),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self.show_message("No database created.")
+            return
+        self.new_db_button.setEnabled(False)
+        self.show_message(f"Creating {target}...")
+        self.runner.start(
+            lambda task: create_database(target),
+            on_success=lambda _result: self._database_created(target),
+            on_failure=lambda exc: self._database_not_created(target, exc),
+        )
+
+    def _database_created(self, target: Path) -> None:
+        self.new_db_button.setEnabled(True)
+        self.db_edit.setText(str(target))
+        self.check_database()
+        self.show_message(f"Created {target}. Click Save to use it.")
+
+    def _database_not_created(self, target: Path, exc: BaseException) -> None:
+        self.new_db_button.setEnabled(True)
+        text = "The database was not created. Check the folder and the network connection."
+        if isinstance(exc, FileExistsError):
+            text = f"{target} already exists. Choose a new file name."
+        elif target.exists():
+            text += f" An empty file may remain at {target}. Remove it before you try again."
+        self.show_message(text)
+        self.message_label.setToolTip(str(exc))
 
     def _db_edit_finished(self) -> None:
         if self.db_edit.text().strip() != self._checked_path:
