@@ -1,4 +1,7 @@
-"""Tests for tools/make_nas_testset.py. Every test set is written under tmp_path."""
+"""Tests for iqdm.diagnostics.testset, through tools/make_nas_testset.py (D57).
+
+Every test set is written under tmp_path.
+"""
 
 import json
 from pathlib import Path

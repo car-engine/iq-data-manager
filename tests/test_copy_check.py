@@ -1,4 +1,7 @@
-"""Tests for tools/copy_check.py. Sources and destinations live in tmp_path."""
+"""Tests for iqdm.diagnostics.copy_check, through tools/copy_check.py (D57).
+
+Sources and destinations live in tmp_path.
+"""
 
 import copy_check
 

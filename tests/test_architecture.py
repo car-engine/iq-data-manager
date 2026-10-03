@@ -9,6 +9,8 @@ These tests read the files under src/iqdm/ and parse them with ast. They write n
 - iqdm.transfer runs no subprocess: the app copies files itself (DECISIONS.md D48).
 - iqdm.transfer calls no function that replaces or moves a file: os.replace and the
   shutil copy and move functions. The copy engine renames without replacing (D48).
+  Both rules also cover iqdm.diagnostics and check_main.py, which copy and write test
+  files (D57).
   A Path.replace() call cannot be told from str.replace() here; review covers it.
 """
 
@@ -123,6 +125,7 @@ def test_delete_methods_only_in_delete_module():
 
 
 TRANSFER = ("transfer/",)
+FILE_WRITERS = ("transfer/", "diagnostics/", "check_main.py")  # code that copies files
 REPLACING = {"os": {"replace"}, "shutil": {"copy", "copy2", "copyfile", "copytree", "move"}}
 
 
@@ -174,20 +177,35 @@ def test_transfer_package_is_checked():
     assert "transfer/copier.py" in rels
 
 
+def _file_writer_trees() -> list[tuple[str, ast.AST]]:
+    """transfer/, and the diagnostics that copy and write test files (D57)."""
+    return [
+        (_rel(p), ast.parse(p.read_text(encoding="utf-8"), filename=str(p)))
+        for p in _source_files()
+        if _allowed(_rel(p), FILE_WRITERS)
+    ]
+
+
+def test_the_file_writers_are_found():
+    rels = [rel for rel, _ in _file_writer_trees()]
+    assert "diagnostics/copy_check.py" in rels
+    assert "check_main.py" in rels
+
+
 def test_transfer_runs_no_subprocess():
     offenders = [
         f"{rel}:{line}"
-        for rel, tree in _transfer_trees()
+        for rel, tree in _file_writer_trees()
         for line in module_imports(tree, "subprocess")
     ]
-    assert offenders == [], f"subprocess imported in transfer/: {offenders}"
+    assert offenders == [], f"subprocess imported in transfer/ or diagnostics/: {offenders}"
 
 
 def test_transfer_never_replaces_or_moves_files():
     offenders = [
-        f"{rel}:{line}" for rel, tree in _transfer_trees() for line in replacing_calls(tree)
+        f"{rel}:{line}" for rel, tree in _file_writer_trees() for line in replacing_calls(tree)
     ]
-    assert offenders == [], f"replacing or moving call in transfer/: {offenders}"
+    assert offenders == [], f"replacing or moving call in transfer/ or diagnostics/: {offenders}"
 
 
 def test_sqlite3_imported_only_in_db():

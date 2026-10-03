@@ -44,13 +44,15 @@ The tool only creates files. It refuses an output folder that exists and is not 
 ## Check tools
 
 Each tool prints its usage with `--help` and deletes nothing. Use them only on scratch
-databases and folders.
+databases and folders. The code lives in `src/iqdm/diagnostics/`; the scripts in
+`tools/` are wrappers over it (DECISIONS.md D57). The packaged build runs the same
+code as `IQDataManager-check.exe COMMAND`, in a console window.
 
-| Tool | Use |
-| --- | --- |
-| `tools/db_check.py` | Create a scratch database; check opening, writing and locking (O21). |
-| `tools/copy_check.py` | Time the copy engine with 1, 4 and 8 files at once, flush on and off. |
-| `tools/make_nas_testset.py` | Write the synthetic recordings for the NAS field test (D54). |
+| Tool | Packaged command | Use |
+| --- | --- | --- |
+| `tools/db_check.py` | `db-check` | Create a scratch database; check opening, writing and locking (O21). Refuses a database with recordings it did not write. |
+| `tools/copy_check.py` | `copy-check` | Time the copy engine with 1, 4 and 8 files at once, flush on and off. |
+| `tools/make_nas_testset.py` | `make-test-set` | Write the synthetic recordings for the NAS field test (D54). |
 
 ## Run
 
@@ -80,13 +82,15 @@ comments. Create a development database with
 
 ## Build
 
-`build/iqdm.spec` makes a windowed onedir build. Build into output folders that do
-not exist yet. Do not pass `--noconfirm` or `--clean`, because both delete existing
-output.
+`build/iqdm.spec` makes a onedir build with two programs: the windowed
+`IQDataManager.exe` and the console program `IQDataManager-check.exe` (D57). Build
+into output folders that do not exist yet. Do not pass `--noconfirm` or `--clean`,
+because both delete existing output.
 
 ```
 PYINSTALLER_CONFIG_DIR=build/pyinstaller-cache pyinstaller build/iqdm.spec --distpath dist/<name> --workpath build/work-<name>
 dist/<name>/IQDataManager/IQDataManager.exe --smoke-test
+dist/<name>/IQDataManager/IQDataManager-check.exe --help
 ```
 
 `PYINSTALLER_CONFIG_DIR` keeps PyInstaller's cache inside the repository. Git ignores

@@ -1,4 +1,6 @@
-"""Tests for tools/db_check.py (open item O21). All databases live in tmp_path.
+"""Tests for iqdm.diagnostics.db_check, through tools/db_check.py (O21, D57).
+
+All databases live in tmp_path.
 
 The locking tests start the tool as separate processes, as on two PCs.
 """
@@ -12,8 +14,10 @@ from pathlib import Path
 import pytest
 
 import db_check
-from iqdm.db.connection import database_status
+from iqdm.db import repository as repo
+from iqdm.db.connection import database_status, open_db, write_transaction
 from iqdm.db.version import SchemaStatus
+from iqdm.models import Channel, Recording
 
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "db_check.py"
 
@@ -104,6 +108,57 @@ def test_hold_rejects_bad_seconds(db_path, seconds):
     with pytest.raises(SystemExit) as exc_info:
         db_check.main(["hold", str(db_path), "--seconds", seconds])
     assert exc_info.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# Only a scratch database (D57)
+# ---------------------------------------------------------------------------
+
+
+def catalogue_with_a_recording(db_path: Path) -> int:
+    def insert(conn):
+        site = repo.add_site(conn, "SiteA").id
+        return repo.insert_recording(
+            conn,
+            Recording(
+                logged_by="userA",
+                site_id=site,
+                storage_root="C:/captures",
+                rel_path="rec1",
+                channels=[
+                    Channel(channel_index=0, fc_hz=1e6, fs_hz=1e3, start_unix=1.0, end_unix=2.0)
+                ],
+            ),
+        )
+
+    return write_transaction(db_path, insert)
+
+
+def rows(db_path: Path) -> tuple[int, int]:
+    with open_db(db_path, readonly=True) as conn:
+        return (
+            conn.execute("SELECT COUNT(*) FROM sites").fetchone()[0],
+            conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0],
+        )
+
+
+@pytest.mark.parametrize("argv", [["check"], ["write"], ["hold", "--seconds", "1"]])
+def test_a_database_with_real_recordings_is_refused(db_path, capsys, argv):
+    catalogue_with_a_recording(db_path)
+    before = rows(db_path)
+    code, out = run(capsys, argv[0], str(db_path), *argv[1:])
+    assert code == 1
+    assert "FAIL  scratch database: the database holds 1 recordings that this tool did not" in out
+    assert "lock taken" not in out
+    assert rows(db_path) == before  # nothing written
+
+
+def test_its_own_test_rows_do_not_count(db_path, capsys):
+    run(capsys, "check", str(db_path))  # writes a test recording
+    code, out = run(capsys, "write", str(db_path))
+    assert code == 0, out
+    code, out = run(capsys, "check", str(db_path))
+    assert code == 0, out
 
 
 # ---------------------------------------------------------------------------

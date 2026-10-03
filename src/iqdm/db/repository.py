@@ -438,6 +438,13 @@ def find_recording_by_location(
     return None if row is None else row["id"]
 
 
+def count_recordings_except(conn: sqlite3.Connection, remarks: str) -> int:
+    """Recordings whose remarks are not `remarks`. The database check uses it to tell a
+    scratch database, which holds only its own test rows, from a real catalogue (D57)."""
+    row = _one(conn, "SELECT COUNT(*) AS n FROM recordings WHERE remarks IS NOT ?", (remarks,))
+    return 0 if row is None else row["n"]
+
+
 def recordings_starting_at(conn: sqlite3.Connection, start_unix: float) -> list[SameStart]:
     """Recordings that start at start_unix, with their end and channel indices (D61)."""
     rows = _rows(
