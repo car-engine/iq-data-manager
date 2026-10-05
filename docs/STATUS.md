@@ -2,8 +2,8 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-04 (Milestone 7 started; Milestone 6 NAS field test
-pending).
+report. Last updated: 2026-10-06 (Milestone 6 NAS field test run; D71; second visit
+to the NAS pending).
 
 ## Current state
 
@@ -14,7 +14,9 @@ pending).
   the defaults file in the program folder. After the build check of `dist/m7-1`, the
   user asked for D69 (the Settings tab's notes in amber with the ⓘ mark) and D70 (a
   question before leaving the Settings tab or closing the window with unsaved
-  settings). 1,533 tests pass and 4 skip on the branch.
+  settings). After the field test, D71: the legacy import reads day-only dates such
+  as `12-Apr-2023`, and Check archive takes counts, sizes and times from the folder
+  for entries that never had counts. 1,549 tests pass and 4 skip on the branch.
 - The user ran the packaged legacy import on a synthetic legacy file and the defaults
   file check with `dist/m7-1` on 2026-10-04; both gave the expected results. The
   safety hook blocks an agent's shell command that holds a UNC path, so the user runs
@@ -27,10 +29,15 @@ pending).
   manual test on this PC on 2026-10-04 with no issues. 1,410 tests pass and 4 skip on
   `main`; three skips need the symbolic-link privilege, the other runs only off
   Windows. `ruff check` is clean.
-- **The NAS field test (D54) is still to run.** The user runs it with
-  `dist/m6-3/IQDataManager/` (built from `47a7f06`). The steps are in the report.
-  `dist/m6-1` and `dist/m6-2` are older and lack fixes; do not take them to the NAS.
-  Fixes from the field test go on a new branch from `main`.
+- **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
+  10 GbE link. Every app step passed; results and throughput are in
+  [reports/M6.md](reports/M6.md), "NAS field test results". Two checks are still
+  open: locking between two PCs (O21; one PC only), and whether Check before delete
+  reads past the PC's cache (D55; the check ran with a 5 % sample, and on 10 GbE a
+  time cannot tell). The second visit uses `dist/m7-3` and
+  [FIELD_TEST_CHECKLIST.html](FIELD_TEST_CHECKLIST.html), which the build ships.
+- The user ran a dry run of the legacy import on a copy of the real legacy database.
+  Its `date` holds a day only, so every row warned; D71 followed.
 - D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
   when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
 - Scratch databases made before D64, such as `dev/test.db` and `dev/m3.db`, refuse
@@ -80,10 +87,11 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
 | O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
+| O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | After the field tests | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D68). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D71). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -122,10 +130,13 @@ Decided items are in `docs/DECISIONS.md` (D1–D68). The M0 review table in
 
 ## Pending checks for the user
 
-- The NAS field test (D54) with `dist/m6-3/IQDataManager/`, including O21 (`db-check`
-  `check`, `hold` and `write` on a scratch database on the NAS, from two PCs). Steps in
-  [reports/M6.md](reports/M6.md), "NAS field test". O21 must pass before the app
-  writes to a real database on the NAS.
+- The second visit to the NAS with `dist/m7-3`, steps in
+  [FIELD_TEST_CHECKLIST.html](FIELD_TEST_CHECKLIST.html):
+  - O21, locking from two PCs (`db-check hold` and `write`). O21 must pass before the
+    app writes to a real database on the NAS.
+  - D55, Check before delete of every file, with `netstat -e` before and after.
+  - The legacy import of a copy of the real legacy database, and Check archive on
+    each imported recording in the trial catalogue on the laptop.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 The Milestone 6 manual test on this PC passed on 2026-10-04.
@@ -160,6 +171,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log` (superseded by
   `dist/m7-2`), and `dev/m7-legacy/` (the synthetic legacy file, its import and the
   script that made it) after the Milestone 7 checks.
+- `dist/m7-2/`, `build/work-m7-2/` and `build/m7-2-build.log` once `dist/m7-3` is
+  built. Keep `dist/m7-2/IQDataManager/field-test/` elsewhere if the logs are wanted;
+  they hold the NAS address, so they stay out of the repository.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch

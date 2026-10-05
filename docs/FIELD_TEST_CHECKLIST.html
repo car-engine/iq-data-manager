@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Test Checklist</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1d2127;
+    --muted: #5b6370;
+    --border: #d5d9df;
+    --panel: #f5f7f9;
+    --code-bg: #eef1f4;
+    --accent: #2357a6;
+    --ok: #1f7a3d;
+    --warn: #8a5a00;
+    --warn-bg: #fff6e0;
+    --done: #8b929c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c;
+      --fg: #e4e7eb;
+      --muted: #a0a8b3;
+      --border: #343a42;
+      --panel: #1d2126;
+      --code-bg: #232830;
+      --accent: #7fa8e8;
+      --ok: #6cc28a;
+      --warn: #e6b450;
+      --warn-bg: #2b2414;
+      --done: #6e7681;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c;
+    --fg: #e4e7eb;
+    --muted: #a0a8b3;
+    --border: #343a42;
+    --panel: #1d2126;
+    --code-bg: #232830;
+    --accent: #7fa8e8;
+    --ok: #6cc28a;
+    --warn: #e6b450;
+    --warn-bg: #2b2414;
+    --done: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 {
+    font-size: 1.15rem;
+    margin: 32px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  p { margin: 6px 0; }
+  .sub { color: var(--muted); margin-bottom: 16px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 12px 0;
+  }
+  .warn { background: var(--warn-bg); border-color: var(--warn); }
+  .warn strong { color: var(--warn); }
+  .settings { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: center; }
+  .settings label { font-weight: 600; }
+  input[type="text"], textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 12px 0; }
+  .progress { font-weight: 600; }
+  button {
+    font: inherit;
+    color: var(--fg);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  ol.steps > li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 4px 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    break-inside: avoid;
+  }
+  ol.steps > li > input[type="checkbox"] { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); }
+  .num { font-weight: 600; margin-right: 4px; }
+  li.done .body > :not(.result) { color: var(--done); }
+  li.done .num::after { content: " \2713"; color: var(--ok); }
+  .expect { color: var(--ok); }
+  .expect::before { content: "Expected: "; font-weight: 600; }
+  li.done .expect { color: var(--done); }
+  .cmd { position: relative; margin: 6px 0; }
+  .cmd pre {
+    margin: 0;
+    padding: 8px 64px 8px 10px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font: 13px/1.45 Consolas, "Cascadia Mono", monospace;
+    color: var(--fg);
+  }
+  .cmd button { position: absolute; top: 5px; right: 5px; font-size: 12px; padding: 1px 8px; }
+  code { font: 13px Consolas, "Cascadia Mono", monospace; background: var(--code-bg); padding: 0 4px; border-radius: 4px; }
+  ul.inner, ol.inner { margin: 4px 0; padding-left: 22px; }
+  .result { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; margin-top: 6px; }
+  .result label { color: var(--muted); }
+  .note { color: var(--muted); font-size: 0.93rem; }
+  @media (max-width: 560px) {
+    .settings, .result { grid-template-columns: 1fr; }
+  }
+  @media print {
+    :root { --bg: #fff; --fg: #000; --muted: #333; --border: #999; --panel: #fff; --code-bg: #f2f2f2; --ok: #000; --done: #000; }
+    body { font-size: 11pt; }
+    .noprint, .cmd button { display: none !important; }
+    main { padding: 0; max-width: none; }
+    h2 { break-after: avoid; }
+    li.done .body > :not(.result) { color: #000; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>IQ Data Manager: field test checklist, second visit</h1>
+  <p class="sub">What the first visit on 2026-10-05 left open: locking between two PCs, reads past the PC's memory, and the legacy import with the real times. Build: <code>dist\m7-3</code>.</p>
+
+  <div class="panel">
+    <p><strong>Paths in the commands.</strong> Enter the real paths here. Every command below changes to match.</p>
+    <div class="settings">
+      <label for="share">Scratch share</label>
+      <input type="text" id="share" value="\\nas\share" spellcheck="false">
+      <label for="legacy">Legacy recordings root</label>
+      <input type="text" id="legacy" value="\\nas\Data\IQ" spellcheck="false">
+    </div>
+    <p class="note">The scratch share holds the scratch folder <code>iqdm-test2</code>. The legacy root is where the real recordings sit, as their <code>data_dir</code> values name it.</p>
+  </div>
+
+  <div class="panel warn">
+    <p><strong>Bring back only text output and screenshots.</strong> Do not copy the legacy database, or any catalogue made from it, into the repository. Never point the app at the real catalogue during these tests.</p>
+  </div>
+
+  <div class="bar noprint">
+    <span class="progress" id="progress"></span>
+    <button type="button" id="print">Print</button>
+    <button type="button" id="reset">Clear all ticks and notes</button>
+  </div>
+  <p class="note noprint">Ticks and notes are kept in this browser on this PC.</p>
+
+  <h2>1. Set up</h2>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">1.1</span>Unzip the <code>m7-3</code> build into a new folder, <code>D:\iqdm3\</code>, on the test laptop <em>and</em> on a second PC (PC B).</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">1.2</span>Create an empty work folder, <code>D:\iqdm-test2\</code>, on the laptop.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">1.3</span>In Explorer, create an empty scratch folder on the NAS: <code data-t>{SHARE}\iqdm-test2</code></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">1.4</span>Open a Command Prompt on the laptop:
+      <div class="cmd"><pre>cd /d D:\iqdm3</pre></div></div></li>
+  </ol>
+
+  <h2>2. Locking between two PCs</h2>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">2.1</span>Create a scratch database on the NAS:
+      <div class="cmd"><pre data-t>IQDataManager-check.exe db-check create {SHARE}\iqdm-test2\lock.db</pre></div>
+      <p class="expect">every line says PASS.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">2.2</span>On the laptop, hold the database:
+      <div class="cmd"><pre data-t>IQDataManager-check.exe db-check hold {SHARE}\iqdm-test2\lock.db --seconds 30 &gt; D:\iqdm-test2\db-hold.txt 2&gt;&amp;1</pre></div>
+      Within those 30 s, on PC B:
+      <div class="cmd"><pre data-t>D:\iqdm3\IQDataManager-check.exe db-check write {SHARE}\iqdm-test2\lock.db &gt; D:\iqdm3\db-write-B.txt 2&gt;&amp;1</pre></div>
+      <p class="expect">the write waits until the hold ends, then passes. Bring back both files.</p></div></li>
+  </ol>
+
+  <h2>3. Reads past the PC's memory</h2>
+  <p class="note">On a 10 GbE link, reads from the NAS and reads from the PC's memory take about the same time, so a watch cannot tell them apart. The Windows counter of received bytes can.</p>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">3.1</span>Write a new test set:
+      <div class="cmd"><pre>IQDataManager-check.exe make-test-set D:\iqdm-test2\set</pre></div></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.2</span>Start the app with its own settings file:
+      <div class="cmd"><pre>IQDataManager.exe --config D:\iqdm-test2\config.toml</pre></div>
+      In the Settings tab:
+      <ul class="inner">
+        <li>New database... and choose <code data-t>{SHARE}\iqdm-test2\m7.db</code>. Answer Yes.</li>
+        <li>NAS locations: add <code data-t>{SHARE}\iqdm-test2</code></li>
+      </ul>
+      Then click Save.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.3</span>Log <code>D:\iqdm-test2\set\A-large-files</code> in the Log recording tab. Archive it to <code data-t>{SHARE}\iqdm-test2\archive\A</code>.
+      <p class="expect">the archive passes.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.4</span>In a Command Prompt, note the received bytes:
+      <div class="cmd"><pre>netstat -e</pre></div>
+      <div class="result"><label for="r-before">Bytes received, before</label><input type="text" id="r-before" data-keep></div></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.5</span>In the Archive / copy tab, choose <strong>Sizes and hashes of every file</strong>, then click <strong>Check before delete</strong> on A. Do nothing else on the network while it runs.
+      <p class="expect">the check passes.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.6</span>Run <code>netstat -e</code> again.
+      <div class="result"><label for="r-after">Bytes received, after</label><input type="text" id="r-after" data-keep></div>
+      <p class="expect">"after" minus "before" is at least 4,000,000,000 bytes: the 4 GB of A came over the network. A difference far below that means the reads came from the PC's memory.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">3.7</span>Optional, the copy speed with 16 files at once:
+      <div class="cmd"><pre data-t>IQDataManager-check.exe copy-check {SHARE}\iqdm-test2\cc-A --source D:\iqdm-test2\set\A-large-files --workers 1 4 8 16 --fsync on --hash &gt; D:\iqdm-test2\copy-check-A.txt 2&gt;&amp;1</pre></div></div></li>
+  </ol>
+
+  <h2>4. Legacy import with the real times</h2>
+  <p class="note">Everything in this section writes only to <code>D:\iqdm-test2\legacy\</code>. Nothing is written to the NAS or to the legacy file.</p>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">4.1</span><strong>Copy the legacy database</strong> to <code>D:\iqdm-test2\legacy\legacy-copy.db</code>, while nobody is writing to it. Check that no file named <code>&lt;name&gt;-journal</code> sits next to the original.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">4.2</span><strong>Dry run</strong>, with the same <code>--nas-root</code>, <code>--drive</code> and <code>--table</code> options as on the first visit:
+      <div class="cmd"><pre data-t>IQDataManager-check.exe migrate-legacy D:\iqdm-test2\legacy\legacy-copy.db D:\iqdm-test2\legacy\catalog.db --nas-root {LEGACY} --dry-run &gt; D:\iqdm-test2\legacy\dry-run.txt 2&gt;&amp;1</pre></div>
+      <p class="expect">no "cannot be read" warning for dates such as 12-Apr-2023. A row whose date and date_unix fall on different days still gets a warning.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">4.3</span><strong>Real run</strong> on the laptop's disk: the same command without <code>--dry-run</code>, and without the <code>&gt;</code> part, so you see the result.
+      <p class="expect"><code>catalog.db</code> and <code>catalog.db.report.txt</code> appear in <code>D:\iqdm-test2\legacy\</code>.</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">4.4</span><strong>Open the trial catalogue:</strong>
+      <div class="cmd"><pre>IQDataManager.exe --config D:\iqdm-test2\legacy\config.toml --db D:\iqdm-test2\legacy\catalog.db</pre></div>
+      <p class="expect">the Viewer lists the recordings at midnight of their day, "archived, not verified", with sizes "unknown".</p></div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">4.5</span><strong>Check archive on each recording</strong> (about 40): select it in the Viewer, click Archive / copy, then Check archive.
+      <p class="expect">each check says the counts, sizes and times now come from the folder. The Viewer then shows the time of the first file, the size and the coverage.</p>
+      <p class="note">If a check says the files are some other number of seconds apart than the entry's file duration, note the recording. Its file duration needs correcting in the Log tab.</p>
+      <div class="result"><label for="r-legacy">Recordings checked / failed</label><input type="text" id="r-legacy" data-keep></div></div></li>
+  </ol>
+
+  <h2>5. Bring back</h2>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">5.1</span><code>db-hold.txt</code> from the laptop and <code>db-write-B.txt</code> from PC B.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">5.2</span>The two <code>netstat -e</code> numbers from steps 3.4 and 3.6, and <code>copy-check-A.txt</code> if you ran step 3.7.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">5.3</span><code>dry-run.txt</code> and <code>catalog.db.report.txt</code>, and the notes of any Check archive that failed or named a file duration.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">5.4</span>A screenshot of any message that looked wrong or unclear.</div></li>
+  </ol>
+  <div class="result">
+    <label for="r-notes">Notes</label>
+    <textarea id="r-notes" data-keep></textarea>
+  </div>
+
+  <h2>6. Clean up afterwards</h2>
+  <ol class="steps">
+    <li><input type="checkbox"><div class="body"><span class="num">6.1</span>Remove <code>D:\iqdm-test2\</code> from the laptop, and <code>D:\iqdm3\db-write-B.txt</code> from PC B.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">6.2</span>Remove <code data-t>{SHARE}\iqdm-test2</code> from the NAS.</div></li>
+  </ol>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "iqdm-field-test-v2";
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+
+  // Path substitution: elements marked data-t keep their template text.
+  var templated = Array.prototype.slice.call(document.querySelectorAll("[data-t]"));
+  templated.forEach(function (el) { el.dataset.t = el.textContent; });
+  var share = document.getElementById("share");
+  var legacy = document.getElementById("legacy");
+  if (state.share) share.value = state.share;
+  if (state.legacy) legacy.value = state.legacy;
+  function render() {
+    var s = share.value.trim().replace(/\\+$/, "") || "\\\\nas\\share";
+    var l = legacy.value.trim().replace(/\\+$/, "") || "\\\\nas\\Data\\IQ";
+    templated.forEach(function (el) {
+      el.textContent = el.dataset.t.split("{SHARE}").join(s).split("{LEGACY}").join(l);
+    });
+  }
+  [share, legacy].forEach(function (input) {
+    input.addEventListener("input", function () {
+      state[input.id] = input.value;
+      save();
+      render();
+    });
+  });
+  render();
+
+  // Ticks.
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("ol.steps > li > input[type=checkbox]"));
+  var progress = document.getElementById("progress");
+  function update() {
+    var done = 0;
+    boxes.forEach(function (box) {
+      box.parentElement.classList.toggle("done", box.checked);
+      if (box.checked) done++;
+    });
+    progress.textContent = done + " of " + boxes.length + " steps done";
+  }
+  boxes.forEach(function (box, i) {
+    var id = "step-" + i;
+    box.setAttribute("aria-label", "Step " + box.parentElement.querySelector(".num").textContent + " done");
+    box.checked = !!(state.ticks && state.ticks[id]);
+    box.addEventListener("change", function () {
+      state.ticks = state.ticks || {};
+      state.ticks[id] = box.checked;
+      save();
+      update();
+    });
+  });
+  update();
+
+  // Result fields.
+  Array.prototype.slice.call(document.querySelectorAll("[data-keep]")).forEach(function (field) {
+    if (state.fields && state.fields[field.id]) field.value = state.fields[field.id];
+    field.addEventListener("input", function () {
+      state.fields = state.fields || {};
+      state.fields[field.id] = field.value;
+      save();
+    });
+  });
+
+  // Copy buttons on each command block.
+  Array.prototype.slice.call(document.querySelectorAll(".cmd")).forEach(function (block) {
+    var pre = block.querySelector("pre");
+    var button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Copy";
+    button.addEventListener("click", function () {
+      var text = pre.textContent;
+      function done() {
+        button.textContent = "Copied";
+        setTimeout(function () { button.textContent = "Copy"; }, 1500);
+      }
+      function fallback() {
+        var range = document.createRange();
+        range.selectNodeContents(pre);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        try { document.execCommand("copy"); done(); } catch (e) { button.textContent = "Select and copy"; }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+    block.appendChild(button);
+  });
+
+  document.getElementById("print").addEventListener("click", function () { window.print(); });
+  document.getElementById("reset").addEventListener("click", function () {
+    if (!window.confirm("Clear all ticks and notes on this page?")) return;
+    state = { share: state.share, legacy: state.legacy };
+    save();
+    boxes.forEach(function (box) { box.checked = false; });
+    Array.prototype.slice.call(document.querySelectorAll("[data-keep]")).forEach(function (f) { f.value = ""; });
+    update();
+  });
+})();
+</script>
+</body>
+</html>

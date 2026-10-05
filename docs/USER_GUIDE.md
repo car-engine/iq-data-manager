@@ -19,7 +19,8 @@ example as a zip file, and keep its contents together. It holds:
 - `IQDataManager-check.exe`, a console program for checks and the legacy import
   (section 8);
 - `USER_GUIDE.md`, this guide;
-- `defaults.example.toml`, a template for the shared settings.
+- `defaults.example.toml`, a template for the shared settings;
+- `FIELD_TEST_CHECKLIST.html`, the steps of the current test on the NAS.
 
 ### Shared settings for new PCs
 
@@ -46,6 +47,34 @@ refuses a copy or an archive whose paths are too long for the PC. To allow longe
 paths, an administrator sets the registry value `LongPathsEnabled` to 1 under
 `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem`, then restarts the
 PC. The same setting is in the Group Policy editor as "Enable Win32 long paths".
+
+### Copy speed settings
+
+Two settings in the Transfers section depend on the network:
+
+- **Files copied at once.** Copying several files at once fills a fast link better.
+  The best number depends mostly on the link and on the file size:
+
+  | Link and files | Files at once |
+  | --- | --- |
+  | 10 GbE, large files | 8 or more |
+  | Gigabit Ethernet | 2 to 4 |
+  | Wi-Fi | 1 or 2 |
+  | Many small files | 4 to 8; it makes little difference |
+
+- **Network speed.** The app uses it only for time estimates. Set it to the speed the
+  copy check measures.
+
+To measure, run the copy check on a typical laptop. Use a local copy of a real
+recording as the source and a scratch folder on the NAS as the destination:
+
+```
+IQDataManager-check.exe copy-check \\server\share\scratch\cc --source D:\some-recording --workers 1 4 8 16 --fsync on
+```
+
+Choose the number of files with the shortest copy time, and take its MB/s as the
+network speed. Put both in `defaults.toml` for the team. Remove the scratch folder
+afterwards.
 
 ## 2. Settings
 
@@ -229,7 +258,15 @@ This is for the administrator, once, when the shared catalogue is created.
    `catalog.db.report.txt`. The new file must not exist yet.
 5. Put the new database on the NAS and set it as the database file on each PC, or in
    `defaults.toml`.
+6. Run **Check archive** once on each imported recording, in the Archive / copy tab.
 
-Every imported recording is marked "archived, not verified". Its file counts and sizes
-are unknown until **Check archive** runs on it. The import assumes one-second files
-of int16 samples, interleaved I then Q, with no header.
+The legacy table holds only the day of each recording. Until Check archive runs, an
+imported recording starts at midnight of its day, and its file counts and sizes are
+unknown. Check archive reads the recording's folder on the NAS and takes the counts,
+the sizes and the real start and end of each channel from its files. If the files
+are spaced differently from one second, the check says so. Correct the file duration
+in the Log tab's edit mode.
+
+Every imported recording stays marked "archived, not verified" until a comparison with
+another copy passes. The import assumes one-second files of int16 samples,
+interleaved I then Q, with no header.
