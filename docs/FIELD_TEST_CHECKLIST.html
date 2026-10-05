@@ -151,12 +151,16 @@
   <div class="panel">
     <p><strong>Paths in the commands.</strong> Enter the real paths here. Every command below changes to match.</p>
     <div class="settings">
+      <label for="prog">Program folder</label>
+      <input type="text" id="prog" value="D:\iqdm3" spellcheck="false">
+      <label for="work">Work folder</label>
+      <input type="text" id="work" value="D:\iqdm-test2" spellcheck="false">
       <label for="share">Scratch share</label>
       <input type="text" id="share" value="\\nas\share" spellcheck="false">
       <label for="legacy">Legacy recordings root</label>
       <input type="text" id="legacy" value="\\nas\Data\IQ" spellcheck="false">
     </div>
-    <p class="note">The scratch share holds the scratch folder <code>iqdm-test2</code>. The legacy root is where the real recordings sit, as their <code>data_dir</code> values name it.</p>
+    <p class="note">The program folder is where you unzip the build: it holds <code>IQDataManager.exe</code>. Use the same folder on both PCs. The work folder is a new, empty folder on the laptop's own disk for the test data. The scratch share holds the scratch folder <code>iqdm-test2</code>. The legacy root is where the real recordings sit, as their <code>data_dir</code> values name it.</p>
   </div>
 
   <div class="panel warn">
@@ -172,11 +176,12 @@
 
   <h2>1. Set up</h2>
   <ol class="steps">
-    <li><input type="checkbox"><div class="body"><span class="num">1.1</span>Unzip the <code>m7-3</code> build into a new folder, <code>D:\iqdm3\</code>, on the test laptop <em>and</em> on a second PC (PC B).</div></li>
-    <li><input type="checkbox"><div class="body"><span class="num">1.2</span>Create an empty work folder, <code>D:\iqdm-test2\</code>, on the laptop.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">1.1</span>Unzip the <code>m7-3</code> build into the program folder, <code data-t>{PROG}</code>, on the test laptop <em>and</em> on a second PC (PC B).</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">1.2</span>Create the work folder, <code data-t>{WORK}</code>, on the laptop. It must be empty.</div></li>
     <li><input type="checkbox"><div class="body"><span class="num">1.3</span>In Explorer, create an empty scratch folder on the NAS: <code data-t>{SHARE}\iqdm-test2</code></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">1.4</span>Open a Command Prompt on the laptop:
-      <div class="cmd"><pre>cd /d D:\iqdm3</pre></div></div></li>
+      <div class="cmd"><pre data-t>cd /d {PROG}</pre></div>
+      <p class="note">The commands below start with the program's name, so they run from this folder.</p></div></li>
   </ol>
 
   <h2>2. Locking between two PCs</h2>
@@ -185,9 +190,9 @@
       <div class="cmd"><pre data-t>IQDataManager-check.exe db-check create {SHARE}\iqdm-test2\lock.db</pre></div>
       <p class="expect">every line says PASS.</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">2.2</span>On the laptop, hold the database:
-      <div class="cmd"><pre data-t>IQDataManager-check.exe db-check hold {SHARE}\iqdm-test2\lock.db --seconds 30 &gt; D:\iqdm-test2\db-hold.txt 2&gt;&amp;1</pre></div>
+      <div class="cmd"><pre data-t>IQDataManager-check.exe db-check hold {SHARE}\iqdm-test2\lock.db --seconds 30 &gt; {WORK}\db-hold.txt 2&gt;&amp;1</pre></div>
       Within those 30 s, on PC B:
-      <div class="cmd"><pre data-t>D:\iqdm3\IQDataManager-check.exe db-check write {SHARE}\iqdm-test2\lock.db &gt; D:\iqdm3\db-write-B.txt 2&gt;&amp;1</pre></div>
+      <div class="cmd"><pre data-t>{PROG}\IQDataManager-check.exe db-check write {SHARE}\iqdm-test2\lock.db &gt; {PROG}\db-write-B.txt 2&gt;&amp;1</pre></div>
       <p class="expect">the write waits until the hold ends, then passes. Bring back both files.</p></div></li>
   </ol>
 
@@ -195,16 +200,16 @@
   <p class="note">On a 10 GbE link, reads from the NAS and reads from the PC's memory take about the same time, so a watch cannot tell them apart. The Windows counter of received bytes can.</p>
   <ol class="steps">
     <li><input type="checkbox"><div class="body"><span class="num">3.1</span>Write a new test set:
-      <div class="cmd"><pre>IQDataManager-check.exe make-test-set D:\iqdm-test2\set</pre></div></div></li>
+      <div class="cmd"><pre data-t>IQDataManager-check.exe make-test-set {WORK}\set</pre></div></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">3.2</span>Start the app with its own settings file:
-      <div class="cmd"><pre>IQDataManager.exe --config D:\iqdm-test2\config.toml</pre></div>
+      <div class="cmd"><pre data-t>IQDataManager.exe --config {WORK}\config.toml</pre></div>
       In the Settings tab:
       <ul class="inner">
         <li>New database... and choose <code data-t>{SHARE}\iqdm-test2\m7.db</code>. Answer Yes.</li>
         <li>NAS locations: add <code data-t>{SHARE}\iqdm-test2</code></li>
       </ul>
       Then click Save.</div></li>
-    <li><input type="checkbox"><div class="body"><span class="num">3.3</span>Log <code>D:\iqdm-test2\set\A-large-files</code> in the Log recording tab. Archive it to <code data-t>{SHARE}\iqdm-test2\archive\A</code>.
+    <li><input type="checkbox"><div class="body"><span class="num">3.3</span>Log <code data-t>{WORK}\set\A-large-files</code> in the Log recording tab. Archive it to <code data-t>{SHARE}\iqdm-test2\archive\A</code>.
       <p class="expect">the archive passes.</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">3.4</span>In a Command Prompt, note the received bytes:
       <div class="cmd"><pre>netstat -e</pre></div>
@@ -215,20 +220,20 @@
       <div class="result"><label for="r-after">Bytes received, after</label><input type="text" id="r-after" data-keep></div>
       <p class="expect">"after" minus "before" is at least 4,000,000,000 bytes: the 4 GB of A came over the network. A difference far below that means the reads came from the PC's memory.</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">3.7</span>Optional, the copy speed with 16 files at once:
-      <div class="cmd"><pre data-t>IQDataManager-check.exe copy-check {SHARE}\iqdm-test2\cc-A --source D:\iqdm-test2\set\A-large-files --workers 1 4 8 16 --fsync on --hash &gt; D:\iqdm-test2\copy-check-A.txt 2&gt;&amp;1</pre></div></div></li>
+      <div class="cmd"><pre data-t>IQDataManager-check.exe copy-check {SHARE}\iqdm-test2\cc-A --source {WORK}\set\A-large-files --workers 1 4 8 16 --fsync on --hash &gt; {WORK}\copy-check-A.txt 2&gt;&amp;1</pre></div></div></li>
   </ol>
 
   <h2>4. Legacy import with the real times</h2>
-  <p class="note">Everything in this section writes only to <code>D:\iqdm-test2\legacy\</code>. Nothing is written to the NAS or to the legacy file.</p>
+  <p class="note">Everything in this section writes only to <code data-t>{WORK}\legacy</code>. Nothing is written to the NAS or to the legacy file.</p>
   <ol class="steps">
-    <li><input type="checkbox"><div class="body"><span class="num">4.1</span><strong>Copy the legacy database</strong> to <code>D:\iqdm-test2\legacy\legacy-copy.db</code>, while nobody is writing to it. Check that no file named <code>&lt;name&gt;-journal</code> sits next to the original.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">4.1</span><strong>Copy the legacy database</strong> to <code data-t>{WORK}\legacy\legacy-copy.db</code>, while nobody is writing to it. Check that no file named <code>&lt;name&gt;-journal</code> sits next to the original.</div></li>
     <li><input type="checkbox"><div class="body"><span class="num">4.2</span><strong>Dry run</strong>, with the same <code>--nas-root</code>, <code>--drive</code> and <code>--table</code> options as on the first visit:
-      <div class="cmd"><pre data-t>IQDataManager-check.exe migrate-legacy D:\iqdm-test2\legacy\legacy-copy.db D:\iqdm-test2\legacy\catalog.db --nas-root {LEGACY} --dry-run &gt; D:\iqdm-test2\legacy\dry-run.txt 2&gt;&amp;1</pre></div>
+      <div class="cmd"><pre data-t>IQDataManager-check.exe migrate-legacy {WORK}\legacy\legacy-copy.db {WORK}\legacy\catalog.db --nas-root {LEGACY} --dry-run &gt; {WORK}\legacy\dry-run.txt 2&gt;&amp;1</pre></div>
       <p class="expect">no "cannot be read" warning for dates such as 12-Apr-2023. A row whose date and date_unix fall on different days still gets a warning.</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">4.3</span><strong>Real run</strong> on the laptop's disk: the same command without <code>--dry-run</code>, and without the <code>&gt;</code> part, so you see the result.
-      <p class="expect"><code>catalog.db</code> and <code>catalog.db.report.txt</code> appear in <code>D:\iqdm-test2\legacy\</code>.</p></div></li>
+      <p class="expect"><code>catalog.db</code> and <code>catalog.db.report.txt</code> appear in <code data-t>{WORK}\legacy</code>.</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">4.4</span><strong>Open the trial catalogue:</strong>
-      <div class="cmd"><pre>IQDataManager.exe --config D:\iqdm-test2\legacy\config.toml --db D:\iqdm-test2\legacy\catalog.db</pre></div>
+      <div class="cmd"><pre data-t>IQDataManager.exe --config {WORK}\legacy\config.toml --db {WORK}\legacy\catalog.db</pre></div>
       <p class="expect">the Viewer lists the recordings at midnight of their day, "archived, not verified", with sizes "unknown".</p></div></li>
     <li><input type="checkbox"><div class="body"><span class="num">4.5</span><strong>Check archive on each recording</strong> (about 40): select it in the Viewer, click Archive / copy, then Check archive.
       <p class="expect">each check says the counts, sizes and times now come from the folder. The Viewer then shows the time of the first file, the size and the coverage.</p>
@@ -250,7 +255,7 @@
 
   <h2>6. Clean up afterwards</h2>
   <ol class="steps">
-    <li><input type="checkbox"><div class="body"><span class="num">6.1</span>Remove <code>D:\iqdm-test2\</code> from the laptop, and <code>D:\iqdm3\db-write-B.txt</code> from PC B.</div></li>
+    <li><input type="checkbox"><div class="body"><span class="num">6.1</span>Remove <code data-t>{WORK}</code> from the laptop, and <code data-t>{PROG}\db-write-B.txt</code> from PC B.</div></li>
     <li><input type="checkbox"><div class="body"><span class="num">6.2</span>Remove <code data-t>{SHARE}\iqdm-test2</code> from the NAS.</div></li>
   </ol>
 </main>
@@ -268,18 +273,29 @@
   // Path substitution: elements marked data-t keep their template text.
   var templated = Array.prototype.slice.call(document.querySelectorAll("[data-t]"));
   templated.forEach(function (el) { el.dataset.t = el.textContent; });
-  var share = document.getElementById("share");
-  var legacy = document.getElementById("legacy");
-  if (state.share) share.value = state.share;
-  if (state.legacy) legacy.value = state.legacy;
+  // Each path field: its token in the templates, and the value used when it is empty.
+  var paths = [
+    { input: document.getElementById("prog"), token: "{PROG}", fallback: "D:\\iqdm3" },
+    { input: document.getElementById("work"), token: "{WORK}", fallback: "D:\\iqdm-test2" },
+    { input: document.getElementById("share"), token: "{SHARE}", fallback: "\\\\nas\\share" },
+    { input: document.getElementById("legacy"), token: "{LEGACY}", fallback: "\\\\nas\\Data\\IQ" }
+  ];
+  paths.forEach(function (p) {
+    if (state[p.input.id]) p.input.value = state[p.input.id];
+  });
+  function clean(text, fallback) {
+    return text.trim().replace(/\\+$/, "") || fallback;  // the templates add the separator
+  }
   function render() {
-    var s = share.value.trim().replace(/\\+$/, "") || "\\\\nas\\share";
-    var l = legacy.value.trim().replace(/\\+$/, "") || "\\\\nas\\Data\\IQ";
     templated.forEach(function (el) {
-      el.textContent = el.dataset.t.split("{SHARE}").join(s).split("{LEGACY}").join(l);
+      var text = el.dataset.t;
+      paths.forEach(function (p) {
+        text = text.split(p.token).join(clean(p.input.value, p.fallback));
+      });
+      el.textContent = text;
     });
   }
-  [share, legacy].forEach(function (input) {
+  paths.map(function (p) { return p.input; }).forEach(function (input) {
     input.addEventListener("input", function () {
       state[input.id] = input.value;
       save();
@@ -354,7 +370,7 @@
   document.getElementById("print").addEventListener("click", function () { window.print(); });
   document.getElementById("reset").addEventListener("click", function () {
     if (!window.confirm("Clear all ticks and notes on this page?")) return;
-    state = { share: state.share, legacy: state.legacy };
+    state = { prog: state.prog, work: state.work, share: state.share, legacy: state.legacy };
     save();
     boxes.forEach(function (box) { box.checked = false; });
     Array.prototype.slice.call(document.querySelectorAll("[data-keep]")).forEach(function (f) { f.value = ""; });
