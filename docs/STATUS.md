@@ -2,42 +2,31 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-06 (Milestone 6 NAS field test run; D71; second visit
-to the NAS pending).
+report. Last updated: 2026-10-06 (Milestone 7 merged; Milestone 8 next).
 
 ## Current state
 
-- **Milestone 7, Packaging and migration, is in progress on branch
-  `m7-packaging-migration`**, from `main` at `283d8a8`. The user approved the plan on
-  2026-10-04. D65–D68 record its decisions: long paths (closes O33), the legacy
-  import, "New database..." in the Settings tab (replaces D30's `--create-db`), and
-  the defaults file in the program folder. After the build check of `dist/m7-1`, the
-  user asked for D69 (the Settings tab's notes in amber with the ⓘ mark) and D70 (a
-  question before leaving the Settings tab or closing the window with unsaved
-  settings). After the field test, D71: the legacy import reads day-only dates such
-  as `12-Apr-2023`, and Check archive takes counts, sizes and times from the folder
-  for entries that never had counts. 1,549 tests pass and 4 skip on the branch.
-- The user ran the packaged legacy import on a synthetic legacy file and the defaults
-  file check with `dist/m7-1` on 2026-10-04; both gave the expected results. The
-  safety hook blocks an agent's shell command that holds a UNC path, so the user runs
-  `migrate-legacy` checks by hand.
-- Still open in Milestone 7: O20 (waits for the NAS field test), the Archive / copy
-  section of the user guide (marked as a draft), the final build and the report.
-- Milestones 0 to 6 are merged into `main` and pushed.
-- **Milestone 6, Archive / copy tab, is merged into `main`** (fast-forward,
-  2026-10-04, pushed). Report: [reports/M6.md](reports/M6.md). The user passed the
-  manual test on this PC on 2026-10-04 with no issues. 1,410 tests pass and 4 skip on
-  `main`; three skips need the symbolic-link privilege, the other runs only off
-  Windows. `ruff check` is clean.
+- **Milestones 0 to 7 are merged into `main`.** Milestone 7, Packaging and migration,
+  was merged as a fast-forward on 2026-10-06 and is not pushed yet. Report:
+  [reports/M7.md](reports/M7.md). 1,549 tests pass and 4 skip on `main`; three skips
+  need the symbolic-link privilege, the other runs only off Windows. `ruff check` is
+  clean.
+- Milestone 7 added the packaged legacy import (D66, D71), "New database..." in the
+  Settings tab (D67), the defaults file in the program folder (D68), the amber notes
+  and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
+  user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
+- **Next: Milestone 8, Release 1.0 (D72).** It starts with the second visit to the
+  NAS, using `dist/m7-4` (built from `main`) and
+  [FIELD_TEST_CHECKLIST.html](FIELD_TEST_CHECKLIST.html), which the build ships:
+  locking between two PCs (O21), Check before delete past the PC's cache with
+  `netstat -e` (D55), and the legacy import of real data with Check archive on each
+  recording, in a trial catalogue. Then O20, version 1.0.0, the release build and
+  notes.
 - **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
   10 GbE link. Every app step passed; results and throughput are in
-  [reports/M6.md](reports/M6.md), "NAS field test results". Two checks are still
-  open: locking between two PCs (O21; one PC only), and whether Check before delete
-  reads past the PC's cache (D55; the check ran with a 5 % sample, and on 10 GbE a
-  time cannot tell). The second visit uses `dist/m7-3` and
-  [FIELD_TEST_CHECKLIST.html](FIELD_TEST_CHECKLIST.html), which the build ships.
-- The user ran a dry run of the legacy import on a copy of the real legacy database.
-  Its `date` holds a day only, so every row warned; D71 followed.
+  [reports/M6.md](reports/M6.md), "NAS field test results".
+- The safety hook blocks an agent's shell command that holds a UNC path, so the user
+  runs `migrate-legacy` and other checks with NAS paths by hand.
 - D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
   when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
 - Scratch databases made before D64, such as `dev/test.db` and `dev/m3.db`, refuse
@@ -63,8 +52,9 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 3a. Settings tab (D29) | Done, merged | `m3a-settings` | `8298a97`–`f772059`, plus the commit that records the merge | [M3a](reports/M3a.md) |
 | 4. Viewer tab | Done, merged | `m4-viewer` | `1f17daa`–`8b8bcce`, `fffe705` (report), `d1fb8c3` (D47), `dd8d95d` (D47 documents), plus the commit that records the merge | [M4](reports/M4.md) |
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
-| 6. Archive / copy tab | Done, merged; NAS field test pending | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
-| 7. Packaging and migration | In progress | `m7-packaging-migration` | | |
+| 6. Archive / copy tab | Done, merged; NAS field test run, two checks moved to Milestone 8 | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
+| 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
+| 8. Release 1.0 (D72) | Not started | | | |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
@@ -84,9 +74,9 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 | ID | Item | Milestone | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
-| O20 | Frozen copy of the version 1 schema for testing future migrations | 7 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
-| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, before the app writes to a real database on the NAS | `tools/db_check.py` exists and passed on this PC, including locking between two processes. The user runs it on the NAS from two PCs. The user started Milestone 3 before this test on 2026-10-02. | M1 check D |
-| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User | None yet | M0 review 24 |
+| O20 | Frozen copy of the version 1 schema for testing future migrations | 8 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
+| O21 | Test on a scratch database on the NAS: UNC open, writes, locking with two PCs | User, in Milestone 8, before the app writes to a real database on the NAS | `db-check create` and `check` passed on the NAS on 2026-10-05. Locking from two PCs is still to run (one PC only). | M1 check D |
+| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User; recommended in Milestone 8 (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | After the field tests | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. | NAS field test, 2026-10-05 |
 
 ## Closed items
@@ -130,7 +120,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D71). The M0 review table in
 
 ## Pending checks for the user
 
-- The second visit to the NAS with `dist/m7-3`, steps in
+- The second visit to the NAS with `dist/m7-4`, steps in
   [FIELD_TEST_CHECKLIST.html](FIELD_TEST_CHECKLIST.html):
   - O21, locking from two PCs (`db-check hold` and `write`). O21 must pass before the
     app writes to a real database on the NAS.
@@ -168,12 +158,14 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   (output of the packaged diagnostics, 81 MB).
 - `dev/test.db` and `dev/m3.db` were made before D64 and refuse archive rows.
 - `dev/m6-manual/` (the manual test on this PC passed on 2026-10-04).
-- `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log` (superseded by
-  `dist/m7-2`), and `dev/m7-legacy/` (the synthetic legacy file, its import and the
-  script that made it) after the Milestone 7 checks.
-- `dist/m7-2/`, `build/work-m7-2/` and `build/m7-2-build.log` once `dist/m7-3` is
-  built. Keep `dist/m7-2/IQDataManager/field-test/` elsewhere if the logs are wanted;
-  they hold the NAS address, so they stay out of the repository.
+- `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log`, and `dev/m7-legacy/`
+  (the synthetic legacy file, its import, the script that made it, an Edge profile
+  and a screenshot) and `dev/m7-checklist/` (failed render attempts).
+- `dist/m7-2/`, `build/work-m7-2/` and `build/m7-2-build.log`. Keep
+  `dist/m7-2/IQDataManager/field-test/` elsewhere if the logs are wanted; they hold
+  the NAS address, so they stay out of the repository.
+- `dist/m7-3/`, `build/work-m7-3/` and `build/m7-3-build.log` (superseded by
+  `dist/m7-4`, built from `main`).
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch

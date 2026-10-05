@@ -158,8 +158,6 @@ The Viewer lists the catalogue.
 
 ## 5. Archive / copy
 
-This section may change after the first test on the NAS.
-
 The tab works on recordings that are already logged. Load one with **Pick in Viewer**,
 or with the Viewer's **Archive / copy** button.
 

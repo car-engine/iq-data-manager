@@ -710,6 +710,12 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    of the admin option `--create-db PATH` that D30 planned), the defaults file in the
    program folder (D68), long paths in the packaged app (D65), short user guide. The
    settings dialog and the config writer moved to Milestone 3a (D29).
+8. **Release 1.0** (D72): the second test on the NAS (locking between two PCs, O21;
+   Check before delete past the PC's cache, D55; the legacy import of real data with
+   Check archive, in a trial catalogue), the version 1 schema frozen when the real
+   catalogue is created (O20), version 1.0.0, a final build from `main` and release
+   notes. Recommended before rollout: a backup of the catalogue (O22), a pilot on one
+   real recording, and the team's `defaults.toml`.
 
 ## 13. Scope
 

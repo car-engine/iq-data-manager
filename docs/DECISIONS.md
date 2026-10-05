@@ -89,6 +89,7 @@ Rules for this file:
 | D69 | Information notes in the Settings tab | 2026-10-04, Milestone 7 | Active |
 | D70 | Unsaved settings | 2026-10-04, Milestone 7 | Active |
 | D71 | Legacy dates and times from the folder | 2026-10-06, Milestone 7 | Active |
+| D72 | Milestone 8: release 1.0 | 2026-10-06, end of Milestone 7 | Active |
 
 ## D1. Sample types
 
@@ -1383,3 +1384,28 @@ and chose the approach.
 
 Affects: SPEC sections 8 and 10, `legacy.py`, `transfer/operations.py`,
 `db/repository.py`, `models.py`.
+
+## D72. Milestone 8: release 1.0
+
+The user decided on 2026-10-06, at the end of Milestone 7, after asking whether the
+app was ready for a first version.
+
+- Milestone 7 closes with its packaging and migration work. The checks that need the
+  NAS and the steps that create the real catalogue form a new milestone, Milestone 8,
+  "Release 1.0".
+- Before the real catalogue is used, these must pass:
+  - O21, locking between two PCs on a scratch database on the NAS;
+  - D55, Check before delete reads past the PC's file cache, shown by the Windows
+    counter of received bytes (`netstat -e`), because on 10 GbE a time cannot tell;
+  - the legacy import of a copy of the real legacy database, and Check archive on
+    each imported recording, in a trial catalogue that the user reviews;
+  - O20, the version 1 schema frozen when the real catalogue is created (D4);
+  - version 1.0.0 in place of 0.1.0, a final build from `main` and release notes.
+- Recommended before rollout: O22 (a backup of the catalogue outside the app), a
+  pilot that archives one real recording and deletes its laptop copy while the user
+  watches, and `defaults.toml` filled with the real paths and the measured copy
+  settings (D68).
+- Not needed for version 1: O37 (small-file speed), a batch Check archive, and code
+  signing.
+
+Affects: SPEC section 12, `docs/STATUS.md`.
