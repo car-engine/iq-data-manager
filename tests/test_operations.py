@@ -23,6 +23,7 @@ from iqdm.models import (
     TransferEntry,
     Verification,
 )
+from iqdm.timeutil import unix_to_iso
 from iqdm.transfer.copier import CopyItem, CopyProgress, copy_files, local_path
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.manifest import read_manifest
@@ -696,6 +697,99 @@ def test_check_fills_in_missing_counts(env):
         (5, 20_000),
         (5, 20_000),
     ]
+
+
+LEGACY_DAY = 1790697600.0  # midnight at UTC+8 before T0: a legacy date_unix (D71)
+
+
+def make_legacy(env, channels="", file_duration_s: float | None = None) -> list[tuple]:
+    """Give channels the state the legacy import leaves: no counts, the day as start.
+
+    Returns the folder's (start, end) per channel, as the archive stored them.
+    """
+    real = [(c.start_unix, c.end_unix) for c in env.recording().channels]
+    where = f" WHERE channel_index IN ({channels})" if channels else ""
+
+    def work(conn) -> None:
+        conn.execute(
+            "UPDATE channels SET n_files = NULL, total_bytes = NULL, start_unix = ?,"  # noqa: S608
+            f" end_unix = ?{where}",  # `where` is fixed text from this test
+            (LEGACY_DAY, LEGACY_DAY + 600),
+        )
+        start = conn.execute("SELECT MIN(start_unix) FROM channels").fetchone()[0]
+        conn.execute("UPDATE recordings SET start_unix = ?, date = ?", (start, "x"))
+        if file_duration_s is not None:
+            conn.execute("UPDATE recordings SET file_duration_s = ?", (file_duration_s,))
+
+    write_transaction(env.db, work)
+    return real
+
+
+def test_check_takes_counts_and_times_from_the_folder_for_a_legacy_entry(env):
+    archived(env)
+    real = make_legacy(env)
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.SKIPPED
+    assert out.notes == (
+        "File counts, sizes and times were not in the database. They are now taken from "
+        "the folder: the start and end of each channel come from its first and last file."
+    )
+    rec = env.recording()
+    assert [(c.n_files, c.total_bytes) for c in rec.channels] == [(5, 20_000), (5, 20_000)]
+    assert [(c.start_unix, c.end_unix) for c in rec.channels] == real
+    assert (rec.start_unix, rec.end_unix) == (real[0][0], max(e for _, e in real))
+    assert rec.date == unix_to_iso(real[0][0])
+    again = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert again.verification is Verification.PASS  # the entry now has counts
+
+
+def test_check_takes_times_only_for_channels_without_counts(env):
+    archived(env)
+    real = make_legacy(env, channels="1")
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.SKIPPED
+    rec = env.recording()
+    assert [(c.start_unix, c.end_unix) for c in rec.channels] == real
+    assert rec.start_unix == real[0][0]
+
+
+def test_check_keeps_the_times_of_an_entry_with_counts(env):
+    """Entries logged by the app are checked as before: times are not compared or set."""
+    archived(env)
+    write_transaction(
+        env.db, lambda c: c.execute("UPDATE channels SET start_unix = start_unix - 5")
+    )
+    before = [(c.start_unix, c.end_unix) for c in env.recording().channels]
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.PASS
+    assert [(c.start_unix, c.end_unix) for c in env.recording().channels] == before
+
+
+def test_check_notes_a_different_file_duration_and_keeps_it(env):
+    archived(env)
+    make_legacy(env, file_duration_s=0.5)
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.SKIPPED
+    assert out.notes.endswith(
+        " The files are 1 s apart, but the entry gives a file duration of 0.5 s. "
+        "Correct it in the Log tab."
+    )
+    rec = env.recording()
+    assert rec.file_duration_s == 0.5
+    assert rec.channels[0].end_unix == rec.channels[0].start_unix + 5.5  # last file + 0.5
+
+
+def test_check_with_a_difference_changes_no_times(env):
+    archived(env)
+    make_legacy(env)
+    rec = env.recording()
+    (Path(rec.storage_root) / rec.rel_path / "2").mkdir()
+    (Path(rec.storage_root) / rec.rel_path / "2" / f"{int(T0)}.dat").write_bytes(bytes(4000))
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.FAIL
+    after = env.recording()
+    assert [c.n_files for c in after.channels] == [None, None]
+    assert after.start_unix == LEGACY_DAY
 
 
 def test_check_of_a_missing_folder_fails(env):

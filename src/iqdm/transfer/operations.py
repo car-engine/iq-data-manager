@@ -22,6 +22,7 @@ from pathlib import Path, PureWindowsPath
 from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import Connection, open_db, write_transaction
+from iqdm.entry import SPACING_TOLERANCE, typical_spacing
 from iqdm.location import (
     DriveResolver,
     Location,
@@ -31,6 +32,7 @@ from iqdm.location import (
 )
 from iqdm.models import (
     ArchiveState,
+    ChannelFromFolder,
     HashMode,
     Operation,
     Recording,
@@ -712,17 +714,19 @@ def check_archive(
 ) -> CheckOutcome:
     """Compare an archived recording's folder with its entry, and record the check.
 
-    Channels without stored counts (legacy entries) get them from the folder, and
-    that check is logged as 'skipped'. A folder that cannot be scanned is a failed
-    check. Raises TransferError for a recording that is not archived, and the
-    scanner's ScanCancelled.
+    Channels without stored counts (legacy entries) get their counts, sizes and times
+    from the folder (D71), and that check is logged as 'skipped'. A file spacing that
+    differs from the stored file duration is noted and not changed. A folder that
+    cannot be scanned is a failed check. Entries with counts are compared as before.
+    Raises TransferError for a recording that is not archived, and the scanner's
+    ScanCancelled.
     """
     rec = _load_recording(db_path, recording_id)
     if rec.archive_state is not ArchiveState.ARCHIVED:
         raise TransferError("Only an archived recording can be checked.")
     folder = recording_folder(rec)
     started_at = now()
-    counts: dict[int, tuple[int, int]] = {}
+    from_folder: dict[int, ChannelFromFolder] = {}
     n_files = total_bytes = None
     try:
         scan = scan_recording(folder, rec.file_duration_s, progress=progress, cancelled=cancelled)
@@ -733,20 +737,34 @@ def check_archive(
         total_bytes = sum(c.total_bytes for c in scan.channels)
         differences = scan_differences(rec, scan)
         found = {c.channel_index: c for c in scan.channels}
-        counts = {
-            c.channel_index: (found[c.channel_index].n_files, found[c.channel_index].total_bytes)
+        from_folder = {
+            c.channel_index: ChannelFromFolder(
+                n_files=found[c.channel_index].n_files,
+                total_bytes=found[c.channel_index].total_bytes,
+                start_unix=found[c.channel_index].start_unix,
+                end_unix=found[c.channel_index].end_unix,
+            )
             for c in rec.channels
             if c.channel_index in found and (c.n_files is None or c.total_bytes is None)
         }
         if differences:
             verification, notes = Verification.FAIL, " ".join(differences)
-            counts = {}
-        elif counts:
+            from_folder = {}
+        elif from_folder:
             verification = Verification.SKIPPED
             notes = (
-                "File counts and sizes were not in the database. "
-                "They are now taken from the folder."
+                "File counts, sizes and times were not in the database. They are now "
+                "taken from the folder: the start and end of each channel come from its "
+                "first and last file."
             )
+            spacing = typical_spacing(scan)
+            if spacing is not None and (
+                abs(spacing - rec.file_duration_s) > SPACING_TOLERANCE * rec.file_duration_s
+            ):
+                notes += (
+                    f" The files are {spacing:g} s apart, but the entry gives a file "
+                    f"duration of {rec.file_duration_s:g} s. Correct it in the Log tab."
+                )
         else:
             verification = Verification.PASS
             notes = "The folder matches the database entry."
@@ -765,8 +783,8 @@ def check_archive(
     )
 
     def record(conn: Connection) -> int:
-        if counts:
-            repository.update_channel_counts(conn, recording_id, counts)
+        if from_folder:
+            repository.update_channels_from_folder(conn, recording_id, from_folder)
         return repository.insert_transfer(conn, entry)
 
     tid = write_transaction(db_path, record)

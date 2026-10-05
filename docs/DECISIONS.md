@@ -88,6 +88,7 @@ Rules for this file:
 | D68 | Defaults file in the program folder | 2026-10-04, Milestone 7 | Active |
 | D69 | Information notes in the Settings tab | 2026-10-04, Milestone 7 | Active |
 | D70 | Unsaved settings | 2026-10-04, Milestone 7 | Active |
+| D71 | Legacy dates and times from the folder | 2026-10-06, Milestone 7 | Active |
 
 ## D1. Sample types
 
@@ -1355,3 +1356,30 @@ The user asked for this on 2026-10-04, after the Milestone 7 build check.
   about a running operation.
 
 Affects: SPEC section 4, `app.py`, `gui/settings_tab.py`.
+
+## D71. Legacy dates and times from the folder
+
+Amends D66. The user reported on 2026-10-06, after the legacy dry run on real data,
+and chose the approach.
+
+- The legacy `date` holds a day only, such as `12-Apr-2023`. `date_unix` follows it,
+  so it gives the day and not the time of the first file. The dry run warned on
+  every row, because the import could not read that form.
+- The import reads `12-Apr-2023` and `12-Apr-2023 11:00:00`, besides the ISO 8601
+  forms. For a text with a day only, it warns when `date_unix`, read at UTC+8, falls
+  on another day. A text with a time keeps the 1 s rule of D66.
+- The real times come from the files. Check archive scans the folder already. For a
+  channel without stored counts, it now also takes the start from the first file and
+  the end from the last file plus the file duration. The recording's date, start and
+  end are derived again from its channels (D7). Only the legacy import leaves
+  channels without counts; the Log tab always stores them.
+- When the files' median spacing differs from the stored file duration by more than
+  1 % (D22), the check's note says so. The value is not changed; the user corrects it
+  in the Log tab's edit mode.
+- Entries with counts are checked as before. Their times are neither compared nor
+  changed.
+- The user runs Check archive once on each imported recording, about 40. The "not
+  verified" mark stays, because no source was compared (D56).
+
+Affects: SPEC sections 8 and 10, `legacy.py`, `transfer/operations.py`,
+`db/repository.py`, `models.py`.

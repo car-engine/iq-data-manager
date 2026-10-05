@@ -165,6 +165,20 @@ class RecordingFilter:
     remarks_text: str | None = None
 
 
+@dataclass(frozen=True, kw_only=True)
+class ChannelFromFolder:
+    """A channel's file count, size and times, as a scan of its folder found them.
+
+    Check archive writes these for an entry that never had counts (D71). The times are
+    None for a channel without files; the stored times then stay.
+    """
+
+    n_files: int
+    total_bytes: int
+    start_unix: float | None = None
+    end_unix: float | None = None
+
+
 @dataclass(kw_only=True)
 class TransferEntry:
     """One transfer_log row. channels None means all channels.

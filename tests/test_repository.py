@@ -10,6 +10,7 @@ from iqdm.models import (
     IN_PLACE_NOTE,
     ArchiveState,
     Channel,
+    ChannelFromFolder,
     HashMode,
     Operation,
     Param,
@@ -21,6 +22,7 @@ from iqdm.models import (
     Verification,
     same_capture,
 )
+from iqdm.timeutil import unix_to_iso
 
 T0 = 1790733600.0  # 2026-09-30T02:00:00Z
 
@@ -539,13 +541,35 @@ def test_update_archive_location(conn, site_id):
         )
 
 
-def test_update_channel_counts(conn, site_id):
+def test_update_channels_from_folder(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
-    repo.update_channel_counts(conn, rid, {0: (7, 28000), 1: (8, 32000)})
+    before = repo.get_recording(conn, rid)
+    start = before.start_unix + 3600
+    repo.update_channels_from_folder(
+        conn,
+        rid,
+        {
+            0: ChannelFromFolder(n_files=7, total_bytes=28000),  # no files' times: kept
+            1: ChannelFromFolder(
+                n_files=8, total_bytes=32000, start_unix=start - 7200, end_unix=start
+            ),
+        },
+    )
     got = repo.get_recording(conn, rid)
     assert [(c.n_files, c.total_bytes) for c in got.channels] == [(7, 28000), (8, 32000)]
+    assert (got.channels[0].start_unix, got.channels[0].end_unix) == (
+        before.channels[0].start_unix,
+        before.channels[0].end_unix,
+    )
+    assert (got.channels[1].start_unix, got.channels[1].end_unix) == (start - 7200, start)
+    # the recording's envelope and date follow its channels (D7)
+    assert got.start_unix == min(before.channels[0].start_unix, start - 7200)
+    assert got.end_unix == max(before.channels[0].end_unix, start)
+    assert got.date == unix_to_iso(got.start_unix)
     with pytest.raises(repo.NotFoundError, match="no channel 5"):
-        repo.update_channel_counts(conn, rid, {5: (1, 1)})
+        repo.update_channels_from_folder(
+            conn, rid, {5: ChannelFromFolder(n_files=1, total_bytes=1)}
+        )
 
 
 # ---------------------------------------------------------------------------

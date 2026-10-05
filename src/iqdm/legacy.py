@@ -25,7 +25,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 
 from iqdm.config import is_unc_path, nas_root_error
@@ -49,7 +49,14 @@ REMARKS_SEPARATOR = " | "
 REPORT_SUFFIX = ".report.txt"
 _CHANNEL_RE = re.compile(r"^(0|[1-9]\d*)$")  # a canonical decimal folder name (D11)
 _DRIVE_RE = re.compile(r"^[A-Za-z]:$")
-_SLASH_FORMATS = ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y/%m/%d")
+# (strptime format, the text holds a day only); ISO 8601 forms are read before these
+_OTHER_FORMATS = (
+    ("%d-%b-%Y", True),  # 12-Apr-2023, the form of the legacy table (D71)
+    ("%d-%b-%Y %H:%M:%S", False),
+    ("%Y/%m/%d", True),
+    ("%Y/%m/%d %H:%M:%S", False),
+    ("%Y/%m/%d %H:%M", False),
+)
 
 
 @dataclass(frozen=True)
@@ -130,29 +137,39 @@ def _text(value: object) -> str | None:
     return text or None
 
 
-def legacy_date_unix(value: object) -> float | None:
-    """Unix seconds of a legacy `date` text read at UTC+8, or None if it cannot be read.
+def read_legacy_date(value: object) -> tuple[datetime, bool] | None:
+    """A legacy `date` text as a time at UTC+8, and whether the text holds a day only.
 
-    Accepts ISO 8601 forms such as '2026-09-18 11:00:00' and '2026-09-18T11:00:00',
-    and the same with slashes. A text with its own offset keeps that offset.
+    Accepts '12-Apr-2023' and '12-Apr-2023 11:00:00' (D71), ISO 8601 forms such as
+    '2026-09-18' and '2026-09-18 11:00:00', and the ISO forms with slashes. A text
+    with its own offset keeps that offset. None when the text cannot be read.
     """
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
     try:
+        return datetime.combine(date.fromisoformat(text), time(), LEGACY_ZONE), True
+    except ValueError:
+        pass
+    try:
         moment = datetime.fromisoformat(text)
     except ValueError:
-        for fmt in _SLASH_FORMATS:
+        for fmt, day_only in _OTHER_FORMATS:
             try:
                 moment = datetime.strptime(text, fmt)  # noqa: DTZ007  (zone set below)
-                break
             except ValueError:
                 continue
-        else:
-            return None
+            return moment.replace(tzinfo=LEGACY_ZONE), day_only
+        return None
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=LEGACY_ZONE)
-    return moment.timestamp()
+    return moment, False
+
+
+def legacy_date_unix(value: object) -> float | None:
+    """Unix seconds of a legacy `date` text read at UTC+8, or None if it cannot be read."""
+    found = read_legacy_date(value)
+    return None if found is None else found[0].timestamp()
 
 
 def split_data_dir(data_dir: str) -> tuple[str, int, str]:
@@ -238,14 +255,28 @@ def _map_row(
 
 
 def _date_warning(row: LegacyRow) -> Problem | None:
-    """A warning when `date` cannot be read or is more than 1 s from `date_unix`."""
+    """A warning when `date` cannot be read or disagrees with `date_unix`.
+
+    A text with a time disagrees when it is more than 1 s away. A text with a day only
+    disagrees when date_unix, read at UTC+8, falls on another day (D71).
+    """
     date_unix = _number(row.date_unix)
     if date_unix is None:  # such a row never reaches a recording
         return None
-    from_text = legacy_date_unix(row.date)
-    if from_text is None:
+    found = read_legacy_date(row.date)
+    if found is None:
         return Problem((row.row,), f"date {row.date!r} cannot be read; date_unix is used")
-    gap = from_text - date_unix
+    moment, day_only = found
+    if day_only:
+        day = datetime.fromtimestamp(date_unix, LEGACY_ZONE).date()
+        if day != moment.date():
+            return Problem(
+                (row.row,),
+                f"date {row.date!r} is another day than date_unix {date_unix:.0f} "
+                f"({day.isoformat()} at UTC+8); date_unix is used",
+            )
+        return None
+    gap = moment.timestamp() - date_unix
     if abs(gap) > DATE_TOLERANCE_S:
         return Problem(
             (row.row,),

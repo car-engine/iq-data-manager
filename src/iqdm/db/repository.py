@@ -21,6 +21,7 @@ from iqdm.models import (
     SAME_TIME_S,
     ArchiveState,
     Channel,
+    ChannelFromFolder,
     Endianness,
     HashMode,
     IqLayout,
@@ -325,18 +326,43 @@ def update_archive_location(
         raise NotFoundError(f"no recording with id {recording_id}")
 
 
-def update_channel_counts(
-    conn: sqlite3.Connection, recording_id: int, counts: Mapping[int, tuple[int, int]]
+def update_channels_from_folder(
+    conn: sqlite3.Connection, recording_id: int, values: Mapping[int, ChannelFromFolder]
 ) -> None:
-    """Set (n_files, total_bytes) per channel_index, e.g. after "Check archive"."""
-    for index, (n_files, total_bytes) in counts.items():
+    """Set each channel's count, size and times from a scan, e.g. after "Check archive".
+
+    `values` maps channel_index to what the scan found. A channel without files keeps
+    its stored times. The recording's date, start_unix and end_unix are then derived
+    again from all its channels (D7, D71).
+    """
+    for index, found in values.items():
         cur = conn.execute(
-            "UPDATE channels SET n_files = ?, total_bytes = ?"
+            "UPDATE channels SET n_files = ?, total_bytes = ?,"
+            " start_unix = COALESCE(?, start_unix), end_unix = COALESCE(?, end_unix)"
             " WHERE recording_id = ? AND channel_index = ?",
-            (n_files, total_bytes, recording_id, index),
+            (
+                found.n_files,
+                found.total_bytes,
+                found.start_unix,
+                found.end_unix,
+                recording_id,
+                index,
+            ),
         )
         if cur.rowcount == 0:
             raise NotFoundError(f"recording {recording_id} has no channel {index}")
+    row = _one(
+        conn,
+        "SELECT MIN(start_unix) AS start, MAX(end_unix) AS end FROM channels"
+        " WHERE recording_id = ?",
+        (recording_id,),
+    )
+    if row is None or row["start"] is None:
+        raise NotFoundError(f"recording {recording_id} has no channels")
+    conn.execute(
+        "UPDATE recordings SET date = ?, start_unix = ?, end_unix = ? WHERE id = ?",
+        (unix_to_iso(row["start"]), row["start"], row["end"], recording_id),
+    )
 
 
 def delete_recording(conn: sqlite3.Connection, recording_id: int) -> None:

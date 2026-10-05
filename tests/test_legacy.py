@@ -16,6 +16,7 @@ from iqdm.legacy import (
     build_plan,
     legacy_date_unix,
     parse_drive_map,
+    read_legacy_date,
     report_text,
     split_data_dir,
 )
@@ -88,6 +89,28 @@ def test_legacy_date_keeps_a_fraction():
 @pytest.mark.parametrize("value", [None, "", "yesterday", "18/09/2026 11:00", 1789700400])
 def test_legacy_date_that_cannot_be_read(value):
     assert legacy_date_unix(value) is None
+    assert read_legacy_date(value) is None
+
+
+MIDNIGHT = datetime(2023, 4, 11, 16, 0, tzinfo=UTC).timestamp()  # 2023-04-12 00:00 at UTC+8
+
+
+@pytest.mark.parametrize("text", ["12-Apr-2023", "12-APR-2023", "2023-04-12", "2023/04/12"])
+def test_a_date_without_a_time_is_a_day(text):
+    """D71: the legacy table holds days such as '12-Apr-2023'."""
+    moment, day_only = read_legacy_date(text)
+    assert day_only
+    assert moment.timestamp() == MIDNIGHT
+
+
+@pytest.mark.parametrize(
+    ("text", "seconds"),
+    [("12-Apr-2023 11:30:00", 11.5 * 3600), ("2023-04-12 11:30:00", 11.5 * 3600)],
+)
+def test_a_date_with_a_time_is_not_a_day(text, seconds):
+    moment, day_only = read_legacy_date(text)
+    assert not day_only
+    assert moment.timestamp() == MIDNIGHT + seconds
 
 
 def test_drive_map():
@@ -298,6 +321,30 @@ def test_a_date_that_cannot_be_read_gives_a_warning():
     plan = plan_of(lrow(5, date="18/09/2026"))
     assert len(plan.recordings) == 1
     assert plan.warnings == [Problem((5,), "date '18/09/2026' cannot be read; date_unix is used")]
+
+
+@pytest.mark.parametrize(
+    "date_unix",
+    [MIDNIGHT, MIDNIGHT + 3600, MIDNIGHT + 86399],  # any time on that day at UTC+8
+)
+def test_a_day_only_date_on_the_same_day_gives_no_warning(date_unix):
+    assert plan_of(lrow(date="12-Apr-2023", date_unix=date_unix)).warnings == []
+
+
+@pytest.mark.parametrize(
+    ("date_unix", "day"),
+    [(MIDNIGHT - 1, "2023-04-11"), (MIDNIGHT + 86400, "2023-04-13")],
+)
+def test_a_day_only_date_on_another_day_gives_a_warning(date_unix, day):
+    plan = plan_of(lrow(6, date="12-Apr-2023", date_unix=date_unix))
+    assert len(plan.recordings) == 1
+    assert plan.warnings == [
+        Problem(
+            (6,),
+            f"date '12-Apr-2023' is another day than date_unix {date_unix:.0f} "
+            f"({day} at UTC+8); date_unix is used",
+        )
+    ]
 
 
 def test_channels_keep_their_own_times():

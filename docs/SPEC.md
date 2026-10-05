@@ -418,9 +418,13 @@ in place until the user deletes it.
   copy.
 - **Check archive**: compare an archived recording's folder with its database entry:
   channels, and file count and total size per channel. It is logged with
-  `operation = 'check'`. Counts the database does not hold (legacy entries) are
-  filled in from the folder, and that check is logged as `'skipped'`. A folder that
-  cannot be scanned is a failed check.
+  `operation = 'check'`. For a channel whose counts the database does not hold
+  (legacy entries), the counts, sizes and times are taken from the folder: start from
+  the first file, end from the last file plus the file duration. The recording's
+  date, start and end follow its channels. That check is logged as `'skipped'`, and
+  its note names a file spacing that differs from the stored file duration (D71). A
+  folder that cannot be scanned is a failed check. Entries with counts keep their
+  times.
 
 Each copy or archive first writes its `transfer_log` row with `started_at`. A row with no
 `finished_at` is a transfer that never completed, for example after a crash. A
@@ -618,8 +622,8 @@ place that deletes files.
 ## 10. Legacy data migration
 
 The current database has one table with columns `date, date_unix, site, band, fc_hz,
-fs_hz, duration_s, data_dir, remarks`. `date` is text at UTC+8; `date_unix` always
-wins over it. `fc_hz` and `fs_hz` are in Hz, `duration_s` in whole seconds. Each
+fs_hz, duration_s, data_dir, remarks`. `date` is text at UTC+8 with a day only, such
+as `12-Apr-2023`; `date_unix` always wins over it, and also gives the day only (D71). `fc_hz` and `fs_hz` are in Hz, `duration_s` in whole seconds. Each
 channel of a multi-channel capture is a separate row whose `data_dir` ends in the
 channel folder, for example `\\192.168.1.50\Data\IQ\recording1\0\` (D66).
 
@@ -645,12 +649,15 @@ Mapping (D66):
 - Each recording gets `archive_state = 'archived'`, `logged_by = 'legacy-import'`,
   the format defaults (`int16`, interleaved I/Q, little-endian, no header,
   1 s files) and the in-place row of D2, so it shows "archived, not verified".
-- A `date` more than 1 s from `date_unix`, or one that cannot be read, gives a warning.
+- A `date` that cannot be read gives a warning. So does a `date` with a time more than
+  1 s from `date_unix`, and a `date` with a day only when `date_unix`, read at UTC+8,
+  falls on another day (D71).
 - Rows that cannot be mapped are written to a report, not guessed. A real run writes
   the report as `<NEW_DB>.report.txt`; a dry run only prints it. All recordings are
   written in one transaction.
 
-A later "Check archive" fills in counts and sizes.
+A later "Check archive" on each imported recording fills in counts and sizes, and
+takes each channel's start and end from its files (D71).
 
 ## 11. Testing
 
