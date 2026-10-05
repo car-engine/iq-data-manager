@@ -42,6 +42,12 @@ from iqdm.transfer.power import keep_awake
 from iqdm.transfer.verify import verify_copy
 
 MB = 1_000_000
+# The check after each copy uses ordinary reads, which Windows may serve from the
+# PC's memory. Check before delete reads past it (D55).
+CHECK_NOTE = (
+    "The check column reads the copies back through this PC's file cache. "
+    "It does not measure reading from the destination."
+)
 FIRST_STAMP = 1790733600  # 2026-09-30T02:00:00Z, the fixtures' start time
 WRITE_BLOCK = 4 * 1024 * 1024
 FSYNC_CHOICES = {"on": (True,), "off": (False,), "both": (True, False)}
@@ -167,6 +173,7 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
         return 2
     total = sum(i.size for i in items)
     print(f"Copying {len(items):,} files, {total / MB:g} MB, to {args.dest_dir} for each run")
+    print(CHECK_NOTE)
     all_passed = True
     with keep_awake():
         for workers in dict.fromkeys(args.workers):

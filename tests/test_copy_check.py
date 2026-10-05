@@ -58,6 +58,7 @@ def test_an_existing_recording_is_the_source(tmp_path, capsys, make_recording):
     code, out, _ = run(capsys, str(dest), "--source", info.root, "--workers", "2", "--fsync", "on")
     assert code == 0
     assert len(result_lines(out)) == 1
+    assert copy_check.CHECK_NOTE in out  # the check column is not a destination read speed
     copied = dest / "workers-2-fsync-on"
     assert (copied / "0" / "1790733600.dat").read_bytes() == (
         tmp_path / "rec0" / "0" / "1790733600.dat"
