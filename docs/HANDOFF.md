@@ -39,7 +39,8 @@ with verification. The team uses the packaged build; the laptops have no Python.
 ## 3. How work proceeds after 1.0
 
 The next work is fixes and adjustments from the team's feedback. Milestones no longer
-apply. Each piece of work follows the same cycle as a milestone did:
+apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md),
+"After release 1.0". Each piece of work follows the same cycle as a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
    with the next free number (O42 is the latest at handoff), a proposed default and
