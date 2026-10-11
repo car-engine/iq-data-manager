@@ -92,6 +92,8 @@ Rules for this file:
 | D72 | Milestone 8: release 1.0 | 2026-10-06, end of Milestone 7 | Active |
 | D73 | A project for each recording | 2026-10-11, Milestone 8 | Active |
 | D74 | Transfer rows in the order they were written | 2026-10-11, Milestone 8 | Active |
+| D75 | File identity in the transfer checks | 2026-10-11, Milestone 8 | Active |
+| D76 | An edit saves only over the entry it opened | 2026-10-11, Milestone 8 | Active |
 
 ## D1. Sample types
 
@@ -1462,3 +1464,50 @@ behind the other's. The user approved the fix.
   as the time server on a network without internet.
 
 Affects: SPEC section 8, `transfer/delete.py`, `db/repository.py`, the user guide.
+
+## D75. File identity in the transfer checks
+
+Found in the release review (finding 1 of
+`docs/reports/2026-10-11-release-review.md`). The user approved the fix on 2026-10-11.
+
+- The destination checks compared path text only. One folder can have two names, for
+  example a NAS reached by host name and by IP address, or a directory junction. A
+  recording logged under one name and archived to the other passed every check. The
+  archive copied nothing, and verification and Check before delete compared each file
+  with itself. Delete laptop copy then deleted the only copy.
+- The app now also compares file identity, as `os.path.samefile` reports it
+  (`location.same_file()`):
+  - The destination check refuses a destination that is the source folder, or that
+    lies inside it, under another name. It also refuses a source folder that lies
+    inside the destination under another name, and a target file already in place
+    that is the source file itself.
+  - Verification fails a destination file that is the source file. This covers the
+    check after a copy, Check before delete and Compare with laptop copy.
+  - Delete keeps a laptop file that is its own NAS copy. It also keeps a file when
+    the identity of either file cannot be read.
+- On Windows the identity is the volume serial number and the file ID. Over SMB the
+  NAS reports them. A NAS with unreliable file IDs could make two different files
+  look like one. The transfer is then refused, and nothing is deleted. The next visit
+  to the NAS checks that a normal archive still passes.
+
+Affects: SPEC section 8, `location.py`, `transfer/pathcheck.py`, `transfer/verify.py`,
+`transfer/delete.py`.
+
+## D76. An edit saves only over the entry it opened
+
+Found in the release review (finding 2 of
+`docs/reports/2026-10-11-release-review.md`). The user approved the fix on 2026-10-11.
+
+- Edit mode writes every column of a recording, including its location, archive state
+  and the channels' counts and times, as they were when the edit opened (D16). An
+  archive, a Check archive or another edit that finished in between was undone by the
+  save. After an archive and a delete, the recording pointed at a laptop folder that
+  no longer existed.
+- The save now reads the stored entry again inside its transaction. If any value that
+  an edit can change differs from the entry the edit opened, the save writes nothing.
+  The Log tab says that the recording changed, keeps the form, and asks the user to
+  open the entry again.
+- The comparison uses the same values as "No changes to save" (D47), so it does not
+  depend on `updated_at`, which has whole seconds only.
+
+Affects: SPEC section 6, `entry.py`, `db/repository.py`, `gui/log_tab.py`.

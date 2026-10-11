@@ -349,6 +349,9 @@ Edit mode (DECISIONS.md D16):
   channels and the number of their parameters.
 - The rescan removes the RF chain rows of those channels from the form at once
   (D20). Rows for the whole recording and for other channels stay.
+- A save writes nothing when the stored entry changed after the edit opened, for
+  example through an archive, a Check archive or another edit. The tab says so, keeps
+  the form and asks the user to open the entry again (D76).
 
 ## 7. Scanner
 
@@ -534,7 +537,10 @@ recording name the same folder. `transfer_log.manifest_path` holds its path and
   bytes still to copy plus `free_space_margin_gb`. Paths must stay within the Windows
   limits (259 characters for a file, 247 for a folder) unless long paths are enabled.
   An archive destination must lie under a NAS root, at a location no other recording
-  uses (D50).
+  uses (D50). Besides the path text, the checks compare file identity, so a folder
+  reached under two names counts as one folder: the destination and the source
+  folder, the folders above them, and each target file already in place and its
+  source file (D75).
 - **Preview** before running: file count, total size, missing seconds per channel,
   estimated time from `network_speed_mb_s` and for the chosen hash mode, the
   destination checks, and the file list.
@@ -545,14 +551,16 @@ recording name the same folder. `transfer_log.manifest_path` holds its path and
   hashes come from the copy where it computed them. When the hash mode is not `none`,
   every file the copy skipped as already in place is also hashed on both sides (D63).
   Files in the destination that are not in the selection are reported and do not
-  fail the verification.
+  fail the verification. A destination file that is the source file under another
+  name fails it (D75).
 - **Deletion**: all deletion goes through `src/iqdm/transfer/delete.py` (D52). It
   needs an archive with a passed verification, a manifest whose SHA-256 matches, and
   a passed check before delete of that archive, written after it (D55; D74 compares
   the order of the rows, not the PCs' clocks). The
   recording must point at the archive's destination. Right before each source file is
   deleted, its destination copy and the source file must still have the manifest
-  size. It deletes only the files in the manifest, never whole trees by pattern, and
+  size, and they must be two different files. A file whose identity cannot be read is
+  kept (D75). It deletes only the files in the manifest, never whole trees by pattern, and
   then removes folders that are empty. The result is logged as a delete row.
 
 ## 9. Architecture
