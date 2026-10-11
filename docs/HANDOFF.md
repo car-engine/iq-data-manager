@@ -141,8 +141,8 @@ Everything open is listed in STATUS.md. This is the summary at handoff.
 3. Set up O22, then run a pilot that archives one real recording, checks it before
    delete and deletes the laptop copy, with the D75 checks above.
 4. Cut over from the legacy logging scripts.
-5. Remove the files listed in STATUS.md, "Files for the user to remove". That list
-   includes `src/iqdm/transfer/scripts/`, an empty package that is still in git.
+5. Remove the files listed in STATUS.md, "Files for the user to remove". All are
+   gitignored build output, scratch data and screenshots.
 
 ### Out of scope for version 1
 

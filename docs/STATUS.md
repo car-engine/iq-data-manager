@@ -152,8 +152,9 @@ The checks of D73, D75 and D76 with `dist/m8-2` passed on this PC on 2026-10-12
 
 ## Files for the user to remove
 
-Agents may not delete files. These are safe to remove by hand. All are gitignored
-except the scripts package near the end of the list.
+Agents may not delete files. These are gitignored and safe to remove by hand. The
+user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48, on
+2026-10-12; its removal was committed.
 
 - `dist/smoke-1/`, `dist/smoke-2/`
 - `build/work-smoke-1/`, `build/work-smoke-2/`
@@ -196,8 +197,6 @@ except the scripts package near the end of the list.
   directory junctions from the review and from the D75 tests. Remove each as a link,
   so that its target is not touched.
 - `dev/scratch.db`, made to check the README's run commands.
-- `src/iqdm/transfer/scripts/`, an empty package left from before D48. No module
-  imports it. This one is in git, so remove it with a commit.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
