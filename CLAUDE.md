@@ -103,9 +103,9 @@ sense to them on its own (DECISIONS.md D38).
 
 ## Workflow
 
-- At the start of a session, read `docs/STATUS.md` and the latest milestone report
-  that it links to in `docs/reports/`.
-- Work in the milestone order in `docs/SPEC.md`. One milestone per branch or session.
+- At the start of a session, read `docs/HANDOFF.md`, `docs/STATUS.md` and the report
+  it links to for the latest work in `docs/reports/`.
+- Work from the open items in `docs/STATUS.md`. One piece of work per branch.
 - For each task: propose a plan first, wait for approval, then implement with tests.
   The safety hook blocks plan files outside the repository, so present plans in chat.
 - Commit in small steps with clear messages. Do not push unless asked.
