@@ -101,10 +101,29 @@ about the open items before writing code.
 At the end of the milestone, Claude writes a report in `docs/reports/` that follows
 `docs/REPORT_TEMPLATE.md` and updates `docs/STATUS.md`.
 
-## Release review
+## After release 1.0
 
-Before version 1.0, a fresh session reviews the whole repository, reports, and then
-fixes what the user approves. Paste this in plan mode:
+Milestones ended with version 1.0.0. For each fix or adjustment from the team's
+feedback, paste this in plan mode, with the open item filled in:
+
+```
+Read CLAUDE.md, docs/HANDOFF.md and docs/STATUS.md, including "Notes for agents".
+Then read the docs/SPEC.md sections and the DECISIONS.md entries that open item
+O<n> touches. Summarise the item and the current behaviour, then propose a plan with
+its test list on a new branch named after the work. Ask me about anything unclear
+before writing code. Do not merge, tag or push without my approval.
+```
+
+For a new request that has no open item yet, ask Claude to add one to STATUS.md first,
+with a proposed default, and approve or change that default.
+
+## Release review (done)
+
+The release review ran on 2026-10-11; its report is
+`docs/reports/2026-10-11-release-review.md`. The prompt below is kept for a review
+before a later major release; update the decision range and the reports it names.
+Before version 1.0, a fresh session reviewed the whole repository, reported, and then
+fixed what the user approved. The prompt was:
 
 ```
 Review IQ Data Manager before release 1.0, then fix what I approve. The work is on

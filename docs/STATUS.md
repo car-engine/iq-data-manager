@@ -1,79 +1,39 @@
 # Project status
 
-Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
-of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-12 (Milestone 8: version 1.0.0 merged into `main` and
-built).
+Read this file at the start of every session, after `CLAUDE.md` and
+[HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
+its report. Last updated: 2026-10-12 (Milestone 8 closed; version 1.0.0 released).
 
 ## Current state
 
-- **Version 1.0.0 is released.** `m8-release` was merged into `main` as a
-  fast-forward on 2026-10-12. `main` and the annotated tag `v1.0.0`, on `674434c`,
-  were pushed the same day. `origin/m8-release` still stops at `e6f0569`, pushed
-  before the release review. The release build is `dist/release-1.0.0`, from `main`
-  at the tag, with [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At
-  `674434c`: 1,607 tests pass and 4 skip; `ruff check` is clean. Report:
-  [reports/M8.md](reports/M8.md), parts 1 to 3. Milestone 8 stays open for the real
-  catalogue (O20) and the rollout.
-  - After the tag, the build stopped shipping `FIELD_TEST_CHECKLIST.html`; the user
-    removed it from `dist/release-1.0.0` by hand. The user guide in that folder still
-    lists it. Builds from later commits list and ship neither.
-  - Part 1: D73 (a project for each recording) and D74 (transfer rows in the order
-    they were written), approved on 2026-10-11.
-  - Part 2: the release review
-    ([reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md))
-    found two blockers. Both are fixed: D75 compares file identity in the destination,
-    verify and delete checks, so one folder under two names can no longer lose its
-    only copy; D76 makes an edit save only over the entry it opened, so it can no
-    longer undo an archive. The other approved findings are fixed too. Findings 14
-    and 15 were left unchanged.
-  - The user's checks of D73, D75 and D76 with `dist/m8-2` passed on 2026-10-12 on
-    the development PC, with a Windows share standing in for the NAS (M8.md, part 2).
-    Check before delete cannot read through a share of the same PC (WinError 87), so
-    the delete step was not testable there. D75 is not yet tried on the NAS.
-- **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
-  between two PCs passed: PC B's write waited for the 30 s hold, retried once and
-  passed after 11.8 s. This closes O21. Check before delete of every file of A
-  (4,000,000,000 bytes) raised the received bytes of `netstat -e` by "3.x GB" by the
-  user's memory; the exact numbers were not kept. Windows shows units of 2^30 bytes
-  as "GB", in which A is 3.73 GB, so the reads went over the network: D55 is taken as
-  confirmed. The legacy import and Check archive in a trial catalogue passed. The two
-  PCs' clocks differed by about 50 s, which led to D74.
-- For the Milestone 8 report: on 2026-10-11 the agent ran `sed -i.bak '' /dev/null`
-  in the shell, against the notes for agents. It named no file of the repository and
-  changed nothing (`git status` was clean).
-- **Milestones 0 to 7 are merged into `main` and pushed.** Milestone 7 was merged as
-  a fast-forward on 2026-10-06 and pushed the same day. Report:
-  [reports/M7.md](reports/M7.md). Of the 4 skipped tests, three need the
-  symbolic-link privilege and the other runs only off Windows.
-- **D73 changes `schema.sql` in place.** Every database made before it (scratch
-  databases on the NAS, the trial legacy catalogue, the `dev/` databases) lacks the
-  project column; the app then reports it as an older version. Make such a database
-  again.
-- Milestone 7 added the packaged legacy import (D66, D71), "New database..." in the
-  Settings tab (D67), the defaults file in the program folder (D68), the amber notes
-  and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
-  user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** the real catalogue with the 1.0.0 build and O20; the cut-over from the
-  legacy logging scripts; the team's `defaults.toml`. Recommended: O22, and a pilot
-  that also checks D75 on the NAS.
-- **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
-  10 GbE link. Every app step passed; results and throughput are in
-  [reports/M6.md](reports/M6.md), "NAS field test results".
-- The safety hook blocks an agent's shell command that holds a UNC path, so the user
-  runs `migrate-legacy` and other checks with NAS paths by hand.
-- D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
-  when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
-- Scratch databases made before D73, such as `dev/test.db` and `dev/m3.db`, count as
-  an older version. Create a new one with `tools/db_check.py create` (or
-  `IQDataManager-check.exe db-check create`).
-- The diagnostics live in `src/iqdm/diagnostics/`; `tools/` holds wrappers, and the
-  build holds the console program `IQDataManager-check.exe` (D57).
-- All text on screen follows CLAUDE.md, section "User-facing text" (D38).
-  `tests/test_user_text.py` checks the Viewer, Log, Settings and Archive / copy tabs.
-- O21 is closed: the local part on 2026-10-02
-  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)), the NAS part on
-  the second visit (2026-10-09).
+- **Version 1.0.0 is released, and Milestones 0 to 8 are closed.** The tag `v1.0.0`
+  is on `674434c`; `main` and the tag are pushed. The release build was made from
+  the tag into `dist/release-1.0.0` on the development PC, with
+  [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At the close: 1,607
+  tests pass and 4 skip (three need the symbolic-link privilege, one runs only off
+  Windows); `ruff check` is clean. Report: [reports/M8.md](reports/M8.md), parts 1 to
+  4.
+- **The next work is fixes and adjustments from the team's feedback.**
+  [HANDOFF.md](HANDOFF.md) describes how such work proceeds, the version and release
+  steps, and the database format after 1.0. Start each piece of work from an open
+  item below.
+- **First task after the release: O20,** the frozen version 1 schema, before any
+  change to `schema.sql`.
+- **The rollout is the user's,** with no code: the team's `defaults.toml`, the real
+  catalogue made with the 1.0.0 build, O22, a pilot that also checks D75 on the NAS,
+  and the cut-over from the legacy logging scripts (HANDOFF.md, section 6).
+- **Databases made before D73** (the trial catalogue of the second NAS visit, the
+  scratch databases on the NAS, and `dev/test.db` and `dev/m3.db`) count as an older
+  version, and the app refuses them. Make a new one with `tools/db_check.py create`
+  or `IQDataManager-check.exe db-check create`.
+- **The build in `dist/release-1.0.0`** still lists `FIELD_TEST_CHECKLIST.html` in its
+  user guide; the user removed the file itself by hand. Builds after the tag ship and
+  list neither. The checklist stays in `docs/` as a record of the second NAS visit.
+- **History** is in the milestone reports. The NAS field test of 2026-10-05:
+  [reports/M6.md](reports/M6.md). The second NAS visit of 2026-10-09 (O21 closed,
+  D55 confirmed, the clock difference behind D74): [reports/M8.md](reports/M8.md),
+  part 1. The release review and its fixes (D75, D76): M8.md, part 2. The
+  `sed -i.bak '' /dev/null` slip of 2026-10-11, which changed nothing: M8.md, part 1.
 
 ## Milestones
 
@@ -90,7 +50,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Archive / copy tab | Done, merged; NAS field test run, two checks moved to Milestone 8 | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
-| 8. Release 1.0 (D72) | 1.0.0 merged and built; real catalogue and rollout open | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`71ee3ed` (fixes and checks); `674434c` (1.0.0), merged into `main` as a fast-forward; plus the commit of part 3 | [M8](reports/M8.md) (parts 1 to 3), [release review](reports/2026-10-11-release-review.md) |
+| 8. Release 1.0 (D72) | Done, with gaps: O20 and the rollout moved to open items and the user (M8.md, part 4) | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`71ee3ed` (fixes and checks); `674434c` (1.0.0, tag `v1.0.0`); `4264491`–`3e9b1d0` (release records, the checklist out of the build); plus the commit of part 4. Merged into `main` as fast-forwards and pushed. | [M8](reports/M8.md) (parts 1 to 4), [release review](reports/2026-10-11-release-review.md) |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
@@ -101,18 +61,23 @@ after Milestone 4) and the documentation review after Milestone 5 (branch
 
 ## Open items
 
-Questions and known gaps that are not yet decided. The default is what an agent
-proposes unless the user decides otherwise. Raise each item in the plan for its
-milestone. When it is decided, record it in `docs/DECISIONS.md`, update `SPEC.md`,
-and move it to "Closed items" below. "M0 review <n>" refers to the table in
-[reports/M0.md](reports/M0.md).
+Requests, faults, questions and known gaps that are not yet decided or done. The
+default is what an agent proposes unless the user decides otherwise. Raise each item
+in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
+update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
+table in [reports/M0.md](reports/M0.md). The next free number is O43.
 
-| ID | Item | Milestone | Proposed default | Origin |
+| ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
+| O20 | Frozen copy of the version 1 schema for testing future migrations. The real catalogue will be made with the 1.0.0 build, so the schema at `v1.0.0` is version 1. | First task after 1.0, before any change to `schema.sql` | Copy `schema.sql` of `v1.0.0` to `tests/schemas/v1.sql`. A test builds a database from it, applies `migrations.upgrade()`, and compares its tables and columns with a database built from the current `schema.sql`. From then on, `schema.sql` changes only together with a migration. | D4; Milestone 8 |
+| O38 | Viewer filters on site, project and band take several choices at once, as a checklist | Next feature release, 1.1.0 | A drop-down list with a checkbox per entry; nothing ticked means all. Project lists "No project" as one entry, so it combines with projects. Several choices of one filter match any of them; different filters must all match, as now. `RecordingFilter` holds tuples (`site_ids`, `project_ids`, `bands`, `without_project`), and `_filter_sql()` uses `IN (...)`; band still matches on the same channel as the frequency range (D43). Amends D43 and the Viewer part of D73. | User, 2026-10-12 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
-| O20 | Frozen copy of the version 1 schema for testing future migrations | 8 | Snapshot `schema.sql` as `tests/schemas/v1.sql` when the first real database is created. | D4 |
-| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User; recommended in Milestone 8 (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
-| O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | After the field tests | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. | NAS field test, 2026-10-05 |
+| O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
+| O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
+| O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
+| O41 | A batch Check archive for many recordings, for example the imported legacy recordings | Not needed for 1.0 (D72); on request | One action that runs Check archive on the selected recordings in turn, each logged as now | D72 |
+| O42 | Code signing of the two programs | Not needed for 1.0 (D72); on request | Sign both executables at the release build, if antivirus or Windows SmartScreen blocks them | D72 |
+| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User, before rollout (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
 
 ## Closed items
 
@@ -156,10 +121,20 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 
 ## Pending checks for the user
 
-- D75 on the NAS, at the next visit or in the pilot: an archive from a laptop passes
-  as before, and so do its Check before delete and Delete laptop copy; an archive of a
-  folder logged under one NAS name to the same folder under another name (host name
-  and IP address) is refused at the preview.
+Things that cannot be tested on the development PC, or were tested only partly.
+
+- **D75 on the NAS,** at the next visit or in the pilot: an archive from a laptop
+  passes as before, and so do its Check before delete and Delete laptop copy; an
+  archive of a folder logged under one NAS name to the same folder under another name
+  (host name and IP address) is refused at the preview. Tested so far with junctions,
+  hard links and a Windows share of the development PC.
+- **D76 across two PCs:** an edit opened on one PC while another PC archives the same
+  recording. Tested on one PC and one database file.
+- **The cost on the NAS** of the D73 check on each connection and of the D75 identity
+  check on each file. Neither was measured; locally neither is measurable. Measure
+  with O37.
+- **Check before delete through a Windows share of the same PC** fails with WinError
+  87 (M8.md, part 2). That is a known limit of such a share; the real NAS passed.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 The Milestone 6 manual test on this PC passed on 2026-10-04. The release review ran on
@@ -169,7 +144,8 @@ The checks of D73, D75 and D76 with `dist/m8-2` passed on this PC on 2026-10-12
 
 ## Files for the user to remove
 
-Agents may not delete files. These are gitignored and safe to remove by hand:
+Agents may not delete files. These are safe to remove by hand. All are gitignored
+except the branches and the scripts package near the end of the list.
 
 - `dist/smoke-1/`, `dist/smoke-2/`
 - `build/work-smoke-1/`, `build/work-smoke-2/`
@@ -212,6 +188,11 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   directory junctions from the review and from the D75 tests. Remove each as a link,
   so that its target is not touched.
 - `dev/scratch.db`, made to check the README's run commands.
+- Merged branches, now that Milestone 8 is closed. `main` holds every commit of
+  them (`git branch --merged main`, 2026-10-12): `docs-review-m5`, `m3a-settings`,
+  `m4-viewer`, `m5-transfer-core`, `m6-move-copy-tab`, `m7-packaging-migration` and
+  `m8-release`, locally; `m8-release` also on GitHub
+  (`git push origin --delete m8-release`).
 - `src/iqdm/transfer/scripts/`, an empty package left from before D48. No module
   imports it. This one is in git, so remove it with a commit.
 - After the NAS field test: the test set on the laptop and the folders the test
@@ -263,9 +244,9 @@ These come from the safety configuration and from experience in this repository.
 - **PyInstaller builds go into new folders** (`dist/smoke-<n>`, `build/work-smoke-<n>`)
   with `PYINSTALLER_CONFIG_DIR=build/pyinstaller-cache`. Never use `--noconfirm` or
   `--clean`. See `README.md` and D8.
-- **Git:** one branch per milestone. Stage files by explicit path; never `git add -A`.
-  Merging, pushing and any git command other than `status`, `diff`, `log`, `add` and
-  `commit` need the user's approval.
+- **Git:** one branch per piece of work (one per milestone until 1.0). Stage files by
+  explicit path; never `git add -A`. Merging, tagging, pushing and any git command
+  other than `status`, `diff`, `log`, `add` and `commit` need the user's approval.
 - **Line endings:** `core.autocrlf=true`, so commits print CRLF warnings. They are
   harmless.
 - **Shell commands** must not leave a command waiting on standard input. A stray
@@ -286,15 +267,17 @@ These come from the safety configuration and from experience in this repository.
   so monkeypatching either name changes the same module.
 - **A widget never shown reports `isVisible()` False.** GUI tests check `isHidden()`.
 - **Code that deletes or overwrites a file** is listed in the Milestone 6 report
-  (earlier: Milestone 5), section "Code paths that delete or overwrite a file".
-  Update that list in the milestone report when such code changes, as
-  `docs/KICKOFF.md` asks for Milestones 5 and 6.
+  (earlier: Milestone 5), section "Code paths that delete or overwrite a file", with
+  the changes in the Milestone 7 report ("Code that creates or overwrites a file")
+  and the Milestone 8 report, part 2. A change to such code lists its own changes in
+  its report, as `docs/KICKOFF.md` asked for Milestones 5 and 6.
 - **A test module must not import a class named `Test...`.** Pytest tries to collect
   it, and a dataclass then raises a collection warning, which the configuration
   turns into an error. Tool classes are named accordingly (`SetSizes` in
   `tools/make_nas_testset.py`).
-- **Reports:** every milestone ends with a report in `docs/reports/` that follows
-  `docs/REPORT_TEMPLATE.md`, and an update to this file.
+- **Reports:** every milestone, and after 1.0 every piece of work, ends with a report
+  in `docs/reports/` that follows `docs/REPORT_TEMPLATE.md`, and an update to this
+  file. After 1.0 the name is `<YYYY-MM-DD>-<topic>.md`.
 - **`ruff format` only on the files you change.** Several files on `main` are not in
   `ruff format` style, and the project checks only `ruff check`. Running the formatter
   on a whole folder rewrapped unrelated code three times in Milestone 3.

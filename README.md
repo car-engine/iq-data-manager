@@ -1,9 +1,11 @@
 # IQ Data Manager
 
 A Windows desktop app that logs RF IQ recordings into a shared SQLite database and
-copies and archives them with verification. Requirements are in `docs/SPEC.md`,
-decisions in `docs/DECISIONS.md`, and progress and open questions in
-`docs/STATUS.md`. Development rules are in `CLAUDE.md`.
+copies and archives them with verification. Version 1.0.0 is released; its notes for
+the team are in `docs/RELEASE_NOTES.md`. Start with `docs/HANDOFF.md` when you pick up
+the repository. Requirements are in `docs/SPEC.md`, decisions in `docs/DECISIONS.md`,
+and progress and open questions in `docs/STATUS.md`. Development rules are in
+`CLAUDE.md`.
 
 ## Set up
 

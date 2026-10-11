@@ -579,6 +579,7 @@ iq-data-manager/
     REPORT_TEMPLATE.md        # format of milestone reports
     reports/                  # one report per milestone: M0.md, M1.md, ...
     KICKOFF.md                # session start-up and resume prompts
+    HANDOFF.md                # state after 1.0, outstanding items, how to proceed
     USER_GUIDE.md             # short guide for users, shipped in the build folder
     RELEASE_NOTES.md          # what each release does and its known limits, shipped too
     mockup/                   # exported GUI mockups
@@ -735,6 +736,12 @@ Each milestone ends with passing tests, `ruff check` clean, a commit, and a repo
    catalogue is created (O20), version 1.0.0, a final build from `main` and release
    notes. Recommended before rollout: a backup of the catalogue (O22), a pilot on one
    real recording, and the team's `defaults.toml`.
+
+Milestone 8 closed on 2026-10-12 with version 1.0.0; O20 and the rollout moved to the
+open items and the user. Later work takes its scope from the open items in
+`docs/STATUS.md`, one piece of work per branch, each with a report, as
+`docs/HANDOFF.md` describes. A new feature or a change of the database format is
+specified here first, with its decision.
 
 ## 13. Scope
 
