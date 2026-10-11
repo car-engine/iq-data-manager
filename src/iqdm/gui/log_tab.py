@@ -55,6 +55,7 @@ FS_FILLED_TOOLTIP = (
     "Type a value to replace it."
 )
 NO_DATABASE = "No database configured. Set the database path in the Settings tab."
+NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
@@ -207,6 +208,11 @@ class LogTab(QWidget):
         self.site_combo.currentIndexChanged.connect(self._schedule_refresh)
         self.add_site_button = QPushButton("Add site")
         self.add_site_button.clicked.connect(self.add_site)
+        self.project_combo = QComboBox()  # optional (D73); the first entry is no project
+        self.project_combo.addItem(NO_PROJECT, None)
+        self.project_combo.currentIndexChanged.connect(self._schedule_refresh)
+        self.add_project_button = QPushButton("Add project")
+        self.add_project_button.clicked.connect(self.add_project)
         self.plan_edit = QLineEdit()
         self.storage_root_edit = _read_only()
         self.rel_path_edit = _read_only()
@@ -218,6 +224,9 @@ class LogTab(QWidget):
         site_row = QHBoxLayout()
         site_row.addWidget(self.site_combo, 1)
         site_row.addWidget(self.add_site_button)
+        project_row = QHBoxLayout()
+        project_row.addWidget(self.project_combo, 1)
+        project_row.addWidget(self.add_project_button)
 
         self.start_label = QLabel()
         self.end_label = QLabel()
@@ -233,9 +242,11 @@ class LogTab(QWidget):
         grid.addWidget(self.duration_spin, 1, 2)
         grid.addWidget(self.logged_by_edit, 1, 3)
         grid.addWidget(QLabel("Site"), 2, 0)
-        grid.addWidget(QLabel("Recording plan reference"), 2, 1, 1, 3)
+        grid.addWidget(QLabel("Project (optional)"), 2, 1)
+        grid.addWidget(QLabel("Recording plan reference"), 2, 2, 1, 2)
         grid.addLayout(site_row, 3, 0)
-        grid.addWidget(self.plan_edit, 3, 1, 1, 3)
+        grid.addLayout(project_row, 3, 1)
+        grid.addWidget(self.plan_edit, 3, 2, 1, 2)
         grid.addWidget(QLabel("Storage root · from folder"), 4, 0, 1, 2)
         grid.addWidget(QLabel("Relative path"), 4, 2)
         grid.addWidget(QLabel("Archive state"), 4, 3)
@@ -399,7 +410,7 @@ class LogTab(QWidget):
                 self._show_stored_channels(self._original, self._inputs_by_index())
         if clears:
             self._choices_id += 1  # drop lists still loading from the old database
-            self._choices_loaded(Choices(sites=[], param_names=[], bands=[]), None)
+            self._choices_loaded(Choices(sites=[], param_names=[], bands=[]), None, None)
             self.clear_form()
             self.reload_choices()
         else:
@@ -412,6 +423,7 @@ class LogTab(QWidget):
         return EntryInput(
             logged_by=self.logged_by_edit.text(),
             site_id=self.site_combo.currentData(),
+            project_id=self.project_combo.currentData(),
             recording_plan_ref=self.plan_edit.text(),
             remarks=self.remarks_edit.toPlainText(),
             file_duration_s=self.duration_spin.value(),
@@ -451,6 +463,7 @@ class LogTab(QWidget):
         self._set_location(None, None)
         self.logged_by_edit.setText(entry.default_logged_by())
         self.site_combo.setCurrentIndex(-1)
+        self.project_combo.setCurrentIndex(0)  # no project
         self.plan_edit.clear()
         self.remarks_edit.clear()
         self._reset_folder_fields()
@@ -693,18 +706,23 @@ class LogTab(QWidget):
     # Database lists
     # =====================================================================
 
-    def reload_choices(self, select_site: int | None = None) -> None:
-        """Load sites, parameter names and bands in a worker."""
+    def reload_choices(
+        self, select_site: int | None = None, select_project: int | None = None
+    ) -> None:
+        """Load sites, projects, parameter names and bands in a worker."""
         db = self.config.db_path
         if not db:
             return
         keep = self.site_combo.currentData() if select_site is None else select_site
+        keep_project = (
+            self.project_combo.currentData() if select_project is None else select_project
+        )
         self._choices_id += 1
         choices_id = self._choices_id  # a later reload replaces this one
 
         def loaded(result: Choices) -> None:
             if choices_id == self._choices_id:
-                self._choices_loaded(result, keep)
+                self._choices_loaded(result, keep, keep_project)
 
         self.runner.start(
             lambda task: entry.load_choices(db),
@@ -712,7 +730,9 @@ class LogTab(QWidget):
             on_failure=lambda exc: self.show_message(f"Cannot read the database: {exc}"),
         )
 
-    def _choices_loaded(self, choices: Choices, select_site: int | None) -> None:
+    def _choices_loaded(
+        self, choices: Choices, select_site: int | None, select_project: int | None
+    ) -> None:
         self._choices = choices
         self.site_combo.blockSignals(True)
         self.site_combo.clear()
@@ -720,6 +740,13 @@ class LogTab(QWidget):
             self.site_combo.addItem(site.name, site.id)
         self.site_combo.setCurrentIndex(self.site_combo.findData(select_site))
         self.site_combo.blockSignals(False)
+        self.project_combo.blockSignals(True)
+        self.project_combo.clear()
+        self.project_combo.addItem(NO_PROJECT, None)
+        for project in choices.projects:
+            self.project_combo.addItem(project.name, project.id)
+        self._select_project(select_project)
+        self.project_combo.blockSignals(False)
         self.param_table.set_param_names(choices.param_names)
         for row in self._channel_rows:
             text = row.band.currentText()
@@ -748,6 +775,29 @@ class LogTab(QWidget):
         site_id = getattr(site, "id", None)
         self.show_message(f"Added site {getattr(site, 'name', '')}.")
         self.reload_choices(select_site=site_id)
+
+    def _select_project(self, project_id: int | None) -> None:
+        """Select a project by id; None or an id not in the list selects no project."""
+        index = 0 if project_id is None else self.project_combo.findData(project_id)
+        self.project_combo.setCurrentIndex(max(index, 0))
+
+    def add_project(self) -> None:
+        db = self.config.db_path
+        if not db:
+            self.show_message(NO_DATABASE)
+            return
+        name, ok = QInputDialog.getText(self, "Add project", "Project name:")
+        if not ok or not name.strip():
+            return
+        self.runner.start(
+            lambda task: entry.add_project(db, name),
+            on_success=lambda project: self._project_added(project),
+            on_failure=lambda exc: self.show_message(f"Project not added: {exc}"),
+        )
+
+    def _project_added(self, project: object) -> None:
+        self.show_message(f"Added project {getattr(project, 'name', '')}.")
+        self.reload_choices(select_project=getattr(project, "id", None))
 
     # =====================================================================
     # Scanning
@@ -1017,6 +1067,7 @@ class LogTab(QWidget):
         self._duration_from_names = False
         self.logged_by_edit.setText(form.logged_by)
         self.site_combo.setCurrentIndex(self.site_combo.findData(form.site_id))
+        self._select_project(form.project_id)
         self.plan_edit.setText(form.recording_plan_ref)
         self.remarks_edit.setPlainText(form.remarks)
         self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(form.dtype))

@@ -28,6 +28,7 @@ from iqdm.models import (
     Endianness,
     IqLayout,
     Param,
+    Project,
     Recording,
     SameStart,
     SampleType,
@@ -104,6 +105,7 @@ class EntryInput:
 
     logged_by: str = ""
     site_id: int | None = None
+    project_id: int | None = None  # optional (D73)
     recording_plan_ref: str = ""
     remarks: str = ""
     file_duration_s: float = 1.0
@@ -134,6 +136,7 @@ class Choices:
     sites: list[Site]
     param_names: list[str]
     bands: list[str]
+    projects: list[Project] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +373,7 @@ def input_from_recording(rec: Recording) -> EntryInput:
     return EntryInput(
         logged_by=rec.logged_by,
         site_id=rec.site_id,
+        project_id=rec.project_id,
         recording_plan_ref=rec.recording_plan_ref or "",
         remarks=rec.remarks or "",
         file_duration_s=rec.file_duration_s,
@@ -1117,6 +1121,7 @@ def build_recording(
         id=None if original is None else original.id,
         logged_by=form.logged_by.strip(),
         site_id=form.site_id,
+        project_id=form.project_id,
         storage_root=storage_root,
         rel_path=rel_path,
         channels=channels,
@@ -1150,6 +1155,7 @@ def _stored_fields(rec: Recording) -> tuple[object, ...]:
     return (
         rec.logged_by,
         rec.site_id,
+        rec.project_id,
         rec.file_duration_s,
         rec.dtype,
         rec.iq_layout,
@@ -1234,10 +1240,11 @@ def save_edit(
 
 
 def load_choices(db_path: Path | str) -> Choices:
-    """Sites, parameter names and bands, read on one read-only connection."""
+    """Sites, projects, parameter names and bands, read on one read-only connection."""
     with open_db(db_path, readonly=True) as conn:
         return Choices(
             sites=repository.list_sites(conn),
+            projects=repository.list_projects(conn),
             param_names=repository.list_param_names(conn),
             bands=repository.list_bands(conn),
         )
@@ -1266,3 +1273,12 @@ def load_recording(db_path: Path | str, recording_id: int) -> Recording:
 def add_site(db_path: Path | str, name: str, *, delays: Sequence[float] | None = None) -> Site:
     """Add a site. Raises DuplicateSiteError if the name exists, ignoring case."""
     return write_transaction(db_path, lambda conn: repository.add_site(conn, name), delays=delays)
+
+
+def add_project(
+    db_path: Path | str, name: str, *, delays: Sequence[float] | None = None
+) -> Project:
+    """Add a project (D73). Raises DuplicateProjectError if the name exists, ignoring case."""
+    return write_transaction(
+        db_path, lambda conn: repository.add_project(conn, name), delays=delays
+    )

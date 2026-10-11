@@ -17,7 +17,7 @@ from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, create_database, open_db
 from iqdm.entry import ItemState
-from iqdm.gui.log_tab import LogTab, channel_headers, scan_summary, time_text
+from iqdm.gui.log_tab import NO_PROJECT, LogTab, channel_headers, scan_summary, time_text
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
@@ -409,6 +409,79 @@ def test_add_duplicate_site_is_reported(qtbot, make_tab, monkeypatch, site_id):
     assert tab.message_label.text().startswith("Site not added:")
 
 
+# ---------------------------------------------------------------------------
+# Projects (DECISIONS.md D73)
+# ---------------------------------------------------------------------------
+
+
+def project_names(tab: LogTab) -> list[str]:
+    return [tab.project_combo.itemText(i) for i in range(tab.project_combo.count())]
+
+
+def test_the_project_starts_empty_and_lists_the_projects(qtbot, make_tab, db_path):
+    entry.add_project(db_path, "Survey")
+    entry.add_project(db_path, "antenna trial")
+    tab = make_tab()
+    assert project_names(tab) == [NO_PROJECT, "antenna trial", "Survey"]
+    assert tab.project_combo.currentData() is None
+    assert tab.current_input().project_id is None
+
+
+def test_add_project_selects_it(qtbot, make_tab, monkeypatch):
+    tab = make_tab()
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("  Radar Trial ", True))
+    tab.add_project()
+    wait_idle(qtbot, tab)
+    qtbot.waitUntil(lambda: tab.project_combo.count() == 2)
+    wait_idle(qtbot, tab)
+    assert tab.project_combo.currentText() == "Radar Trial"
+    assert tab.message_label.text() == "Added project Radar Trial."
+
+
+def test_add_duplicate_project_is_reported(qtbot, make_tab, monkeypatch, db_path):
+    entry.add_project(db_path, "Radar Trial")
+    tab = make_tab()
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("radar trial", True))
+    tab.add_project()
+    wait_idle(qtbot, tab)
+    assert tab.message_label.text().startswith("Project not added:")
+
+
+def test_save_with_and_without_a_project(qtbot, make_tab, make_recording, site_id, db_path):
+    project = entry.add_project(db_path, "Radar Trial").id
+    tab = make_tab()
+    logged_ready(qtbot, tab, make_recording(), site_id)
+    save_and_wait(qtbot, tab)  # no project: optional
+    assert tab.message_label.text() == "Saved as recording 1.", checklist_texts(tab)
+    assert entry.load_recording(db_path, 1).project_id is None
+    tab.clear_form()
+    logged_ready(qtbot, tab, make_recording(), site_id)
+    tab.project_combo.setCurrentIndex(tab.project_combo.findData(project))
+    save_and_wait(qtbot, tab)
+    assert entry.load_recording(db_path, 2).project_id == project
+
+
+def test_edit_changes_the_project_without_a_rescan(
+    qtbot, make_tab, make_recording, site_id, db_path
+):
+    project = entry.add_project(db_path, "Radar Trial").id
+    info = make_recording(n_channels=2)
+    tab = saved_tab(qtbot, make_tab, info, site_id)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.project_combo.currentData() is None
+    tab.project_combo.setCurrentIndex(tab.project_combo.findData(project))
+    save_and_wait(qtbot, tab)
+    assert tab.message_label.text() == "Saved changes to recording 1."
+    assert entry.load_recording(db_path, 1).project_id == project
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.project_combo.currentData() == project
+    tab.project_combo.setCurrentIndex(0)  # back to no project
+    save_and_wait(qtbot, tab)
+    assert entry.load_recording(db_path, 1).project_id is None
+
+
 def test_clear_form_resets_every_field(qtbot, make_tab, make_recording, site_id, monkeypatch):
     monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "userA")
     info = make_recording()
@@ -430,6 +503,7 @@ def test_clear_form_resets_every_field(qtbot, make_tab, make_recording, site_id,
     assert tab.duration_spin.value() == 1.0
     assert tab.header_spin.value() == 0
     assert tab.site_combo.currentIndex() == -1
+    assert tab.project_combo.currentData() is None
     assert tab.storage_root_edit.text() == ""
     assert tab.mode_label.text() == "New entry"
 
