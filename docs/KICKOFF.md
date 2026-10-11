@@ -103,22 +103,22 @@ At the end of the milestone, Claude writes a report in `docs/reports/` that foll
 
 ## Release review
 
-Before version 1.0, a fresh session reviews the whole repository. It finds problems
-and does not fix them. Paste this in plan mode:
+Before version 1.0, a fresh session reviews the whole repository, reports, and then
+fixes what the user approves. Paste this in plan mode:
 
 ```
-Review IQ Data Manager before release 1.0. The work to review is branch m8-release,
-which is not merged into main. Stay on that branch.
+Review IQ Data Manager before release 1.0, then fix what I approve. The work is on
+branch m8-release, which is not merged into main. Stay on that branch.
 
 Read first: CLAUDE.md, docs/STATUS.md (including "Notes for agents"), docs/SPEC.md,
 docs/DECISIONS.md (D1 to D74; D65 to D74 are the newest), docs/USER_GUIDE.md,
-README.md, and docs/reports/M5.md, M6.md and M7.md. Milestone 8 has no report yet;
-STATUS.md describes its state.
+README.md, and docs/reports/M5.md, M6.md, M7.md and M8.md. M8.md is part 1 of the
+current milestone's report.
 
-This is a review only. Do not change code, tests or documents, and do not commit
+Phase 1 is a review only. Do not change code, tests or documents, and do not commit
 fixes. Write your findings to docs/reports/<YYYY-MM-DD>-release-review.md, keep
 numbers exact and name files as links, as docs/REPORT_TEMPLATE.md asks, and commit
-only that file. I decide what gets fixed.
+only that file.
 
 Steps:
 1. Run pytest and ruff check. Record the counts.
@@ -166,6 +166,12 @@ log, add and commit. The safety hook blocks any shell command that contains a UN
 path; do not run such commands and do not look for a workaround, but report what
 was blocked. Write files only with the Write and Edit tools.
 
-When you finish, give in chat: the test and lint counts, the blockers, and your
-recommendation on releasing 1.0.
+At the end of phase 1, give in chat: the test and lint counts, the blockers, and
+your recommendation on releasing 1.0.
+
+Phase 2 fixes the findings. Propose a plan: which findings to fix, how, and the
+tests for each. Wait for my approval. Then implement the approved fixes on
+m8-release in small commits, run pytest and ruff check, record any new decision in
+DECISIONS.md and SPEC.md, add "Part 2" to docs/reports/M8.md, and update
+docs/STATUS.md. Do not merge or push without my approval.
 ```

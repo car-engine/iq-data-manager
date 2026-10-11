@@ -11,7 +11,9 @@ D74).
   `main` at `1f8001b`. The user approved D73 (a project for each recording) and D74
   (transfer rows in the order they were written) on 2026-10-11. Both are built and
   tested on the branch: 1,570 tests pass and 4 skip; `ruff check` is clean. Not yet
-  tried by eye, and not merged.
+  tried by eye, and not merged. Report so far:
+  [reports/M8.md](reports/M8.md), part 1. A fresh session continues with the release
+  review and its fixes ([KICKOFF.md](KICKOFF.md), "Release review").
 - **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
   between two PCs passed: PC B's write waited for the 30 s hold, retried once and
   passed after 11.8 s. This closes O21. Check before delete of every file of A
@@ -71,7 +73,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Archive / copy tab | Done, merged; NAS field test run, two checks moved to Milestone 8 | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
-| 8. Release 1.0 (D72) | In progress | `m8-release` | | |
+| 8. Release 1.0 (D72) | In progress | `m8-release` | `7bb2cca`–`9751b22`, plus the commit of the report (part 1) | [M8](reports/M8.md) (part 1) |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
