@@ -7,9 +7,10 @@ built).
 
 ## Current state
 
-- **Version 1.0.0 is released locally.** `m8-release` was merged into `main` as a
-  fast-forward to `674434c` on 2026-10-12; neither branch is pushed. The release
-  build is `dist/release-1.0.0`, from `main`, with
+- **Version 1.0.0 is released.** `m8-release` was merged into `main` as a
+  fast-forward on 2026-10-12. `main` and the annotated tag `v1.0.0`, on `674434c`,
+  were pushed the same day; `m8-release` itself is not pushed. The release
+  build is `dist/release-1.0.0`, from `main` at the tag, with
   [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At `674434c`: 1,607
   tests pass and 4 skip; `ruff check` is clean. Report:
   [reports/M8.md](reports/M8.md), parts 1 to 3. Milestone 8 stays open for the real
@@ -50,8 +51,7 @@ built).
   Settings tab (D67), the defaults file in the program folder (D68), the amber notes
   and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
   user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** the push of `main` and `m8-release` (the user's
-  approval); the real catalogue with the 1.0.0 build and O20; the cut-over from the
+- **Still to do in Milestone 8:** the real catalogue with the 1.0.0 build and O20; the cut-over from the
   legacy logging scripts; the team's `defaults.toml`. Recommended: O22, and a pilot
   that also checks D75 on the NAS.
 - **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
