@@ -838,12 +838,15 @@ def get_transfer(conn: sqlite3.Connection, transfer_id: int) -> TransferEntry:
 
 
 def list_transfers(conn: sqlite3.Connection, recording_id: int) -> list[TransferEntry]:
-    """Transfer history of one recording, oldest first."""
+    """Transfer history of one recording, oldest first.
+
+    Ordered as the rows were written (D74); start times come from each PC's own clock.
+    """
     return [
         _transfer(r)
         for r in _rows(
             conn,
-            "SELECT * FROM transfer_log WHERE recording_id = ? ORDER BY started_at, id",
+            "SELECT * FROM transfer_log WHERE recording_id = ? ORDER BY id",
             (recording_id,),
         )
     ]
@@ -874,7 +877,7 @@ def list_unfinished_transfers(
     if performed_by is not None:
         sql += " AND t.performed_by = ?"
         params.append(performed_by)
-    sql += " ORDER BY t.started_at DESC, t.id DESC"
+    sql += " ORDER BY t.id DESC"  # as the rows were written, not by any PC's clock (D74)
     return [_transfer(r) for r in _rows(conn, sql, params)]
 
 

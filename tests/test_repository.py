@@ -845,12 +845,12 @@ def test_delete_row_needs_a_passed_archive(conn, site_id):
         )
 
 
-def test_transfers_listed_oldest_first(conn, site_id):
+def test_transfers_listed_in_the_order_they_were_written(conn, site_id):
+    """D74: a later row from a PC with a slow clock can carry an earlier time."""
     rid = repo.insert_recording(conn, recording(site_id))
-    repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T05:00:00Z"))
-    repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T01:00:00Z"))
-    starts = [t.started_at for t in repo.list_transfers(conn, rid)]
-    assert starts == ["2026-10-02T01:00:00Z", "2026-10-02T05:00:00Z"]
+    first = repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T05:00:00Z"))
+    second = repo.insert_transfer(conn, transfer(rid, started_at="2026-10-02T04:59:10Z"))
+    assert [t.id for t in repo.list_transfers(conn, rid)] == [first, second]
 
 
 # ---------------------------------------------------------------------------
@@ -960,6 +960,11 @@ def test_unfinished_newest_first_and_by_user(conn, site_id):
         transfer(rid, destination="D:/b", started_at="2026-10-02T00:00:00Z", performed_by="userB"),
     )
     assert unfinished_ids(conn) == [new, old]
+    # D74: newest by the order written, even when a slow clock gave an earlier time
+    slow = repo.insert_transfer(
+        conn, transfer(rid, destination="D:/c", started_at="2026-09-30T00:00:00Z")
+    )
+    assert unfinished_ids(conn) == [slow, new, old]
     assert unfinished_ids(conn, performed_by="userB") == [new]
     assert unfinished_ids(conn, performed_by="nobody") == []
 

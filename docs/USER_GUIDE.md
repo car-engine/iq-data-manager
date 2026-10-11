@@ -48,6 +48,19 @@ paths, an administrator sets the registry value `LongPathsEnabled` to 1 under
 `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem`, then restarts the
 PC. The same setting is in the Group Policy editor as "Enable Win32 long paths".
 
+### Clocks
+
+The app records when each recording was logged and when each transfer ran, by the
+clock of the PC that did it. A PC whose clock is wrong shows wrong times in the
+history. Copies, archives, checks and deletes work correctly regardless.
+
+- On a PC with internet access, turn on Settings > Time & language > Date & time >
+  "Set time automatically".
+- On a network without internet, an administrator can make the NAS the time server:
+  turn on its time service (often called NTP service), then on each PC run
+  `w32tm /config /manualpeerlist:<NAS address> /syncfromflags:manual /update` as
+  administrator.
+
 ### Copy speed settings
 
 Two settings in the Transfers section depend on the network:

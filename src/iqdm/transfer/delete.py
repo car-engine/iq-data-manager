@@ -77,7 +77,11 @@ NOT_CHECKED = (
 
 
 def checked_before_delete(archive: TransferEntry, transfers: Iterable[TransferEntry]) -> bool:
-    """True when a check before delete of `archive` passed after the archive finished."""
+    """True when a check before delete of `archive` passed, written after the archive.
+
+    "After" is the order of the rows in the shared database (D74). The times come from
+    each PC's own clock, and two PCs can disagree by a minute.
+    """
     if archive.id is None or archive.finished_at is None:
         return False
     return any(
@@ -85,7 +89,8 @@ def checked_before_delete(archive: TransferEntry, transfers: Iterable[TransferEn
         and t.parent_id == archive.id
         and t.verification is Verification.PASS
         and t.finished_at is not None
-        and t.started_at >= archive.finished_at
+        and t.id is not None
+        and t.id > archive.id
         for t in transfers
     )
 

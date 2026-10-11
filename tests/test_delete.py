@@ -25,7 +25,7 @@ from iqdm.transfer.selection import select_from_scan
 
 
 def check_of(archive: TransferEntry, **kw) -> TransferEntry:
-    """A passed check before delete of `archive`, started after it finished (D55)."""
+    """A passed check before delete of `archive`, written after it (D55, D74)."""
     values = {
         "id": 9,
         "recording_id": archive.recording_id,
@@ -330,7 +330,8 @@ def test_no_check_before_delete_is_refused(archived):
         {"parent_id": 6},  # another archive
         {"parent_id": None},  # a Check archive, which reads no file contents
         {"operation": Operation.COPY, "parent_id": None},
-        {"started_at": "2026-10-03T07:59:59Z"},  # before the archive finished
+        {"id": 4},  # written before the archive
+        {"id": None},  # not written
     ],
 )
 def test_only_a_passed_later_check_of_this_archive_counts(archived, change):
@@ -339,6 +340,15 @@ def test_only_a_passed_later_check_of_this_archive_counts(archived, change):
     with pytest.raises(DeleteRefused, match="Check before delete"):
         s.plan()
     assert not checked_before_delete(s.archive, s.history)
+
+
+def test_a_check_from_a_pc_with_a_slow_clock_counts(archived):
+    """D74: on 2026-10-09 one PC's clock ran about 50 s behind the other's."""
+    s = archived()
+    early = "2026-10-03T07:59:10Z"  # 50 s before the archive finished, by another clock
+    s.history = [check_of(s.archive, started_at=early, finished_at="2026-10-03T07:59:40Z")]
+    assert checked_before_delete(s.archive, s.history)
+    assert s.plan().files == s.manifest.files
 
 
 def test_a_check_at_the_finish_time_counts(archived):
