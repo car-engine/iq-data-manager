@@ -954,7 +954,9 @@ class LogTab(QWidget):
                     return
                 allow_removal = True
         self._start_save(
-            lambda task: entry.save_edit(db, rec, allow_channel_removal=allow_removal),
+            lambda task: entry.save_edit(
+                db, rec, original=original, allow_channel_removal=allow_removal
+            ),
             lambda result: self._saved_edit(original.id),
         )
 

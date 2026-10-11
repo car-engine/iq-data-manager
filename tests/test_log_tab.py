@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 from iqdm import entry
 from iqdm.config import Config
 from iqdm.db import repository
-from iqdm.db.connection import DatabaseBusyError, create_database, open_db
+from iqdm.db.connection import DatabaseBusyError, create_database, open_db, write_transaction
 from iqdm.entry import ItemState
 from iqdm.gui.log_tab import NO_PROJECT, LogTab, channel_headers, scan_summary, time_text
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
@@ -556,6 +556,35 @@ def test_edit_metadata_and_save(qtbot, make_tab, make_recording, site_id, db_pat
     assert rec.channels[1].fc_hz == 433_920_000.0
     assert tab.editing is not None
     assert tab.editing.remarks == "edited"
+
+
+def test_an_edit_of_an_entry_archived_meanwhile_is_refused(
+    qtbot, make_tab, make_recording, site_id, db_path
+):
+    """The entry was archived after the edit opened; the save writes nothing (D76)."""
+    info = make_recording(n_channels=2)
+    tab = saved_tab(qtbot, make_tab, info, site_id)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    write_transaction(
+        db_path,
+        lambda conn: repository.update_archive_location(
+            conn, 1, storage_root=NAS, rel_path="2026\\rec", archived_at="2026-10-11T08:00:00Z"
+        ),
+    )
+    saves: list[int] = []
+    tab.saved.connect(saves.append)
+    tab.remarks_edit.setPlainText("typo fixed")
+    save_and_wait(qtbot, tab)
+    assert tab.message_label.text() == (
+        "Not saved: Recording 1 changed after you opened it, for example by an archive or "
+        "a check. Open it again with Edit entry and make the change there."
+    )
+    assert saves == []
+    assert tab.remarks_edit.toPlainText() == "typo fixed"  # the form stays
+    rec = entry.load_recording(db_path, 1)
+    assert (rec.storage_root, rec.archive_state) == (NAS, ArchiveState.ARCHIVED)
+    assert rec.remarks is None
 
 
 def test_an_edit_without_changes_writes_nothing(qtbot, make_tab, make_recording, site_id, db_path):

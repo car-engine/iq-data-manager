@@ -1215,23 +1215,42 @@ def save_new(
     return write_transaction(db_path, work, delays=delays)
 
 
+def changed_text(recording_id: int | None) -> str:
+    """The message when the stored entry changed after the edit opened (D76)."""
+    return (
+        f"Recording {recording_id} changed after you opened it, for example by an archive "
+        "or a check. Open it again with Edit entry and make the change there."
+    )
+
+
 def save_edit(
     db_path: Path | str,
     rec: Recording,
     *,
+    original: Recording,
     allow_channel_removal: bool = False,
     delays: Sequence[float] | None = None,
 ) -> None:
-    """Update a stored recording in one transaction (D7, D16). Writes no transfer row."""
+    """Update a stored recording in one transaction (D7, D16). Writes no transfer row.
+
+    `original` is the recording as the edit loaded it. The stored entry is read again
+    inside the transaction. If anything an edit can change differs from `original`,
+    for example after an archive or a Check archive, the save writes nothing and
+    raises RecordingChangedError (D76). The edit would otherwise put the old location,
+    archive state and channel counts back.
+    """
     if rec.id is None:
         raise ValueError("save_edit needs rec.id")
-    write_transaction(
-        db_path,
-        lambda conn: repository.update_recording(
-            conn, rec, allow_channel_removal=allow_channel_removal
-        ),
-        delays=delays,
-    )
+    if original.id != rec.id:
+        raise ValueError("save_edit needs the original of the same recording")
+
+    def work(conn: Connection) -> None:
+        stored = repository.get_recording(conn, rec.id)
+        if _stored_fields(stored) != _stored_fields(original):
+            raise repository.RecordingChangedError(changed_text(rec.id))
+        repository.update_recording(conn, rec, allow_channel_removal=allow_channel_removal)
+
+    write_transaction(db_path, work, delays=delays)
 
 
 # ---------------------------------------------------------------------------

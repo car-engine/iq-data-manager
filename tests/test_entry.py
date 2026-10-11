@@ -8,7 +8,7 @@ import pytest
 
 from iqdm import entry
 from iqdm.db import repository as repo
-from iqdm.db.connection import DatabaseBusyError, open_db
+from iqdm.db.connection import DatabaseBusyError, open_db, write_transaction
 from iqdm.db.repository import ChannelRemovalError, DuplicateLocationError, DuplicateSiteError
 from iqdm.entry import (
     TIMES,
@@ -30,9 +30,11 @@ from iqdm.entry import (
 from iqdm.location import Location, split_location
 from iqdm.models import (
     ArchiveState,
+    ChannelFromFolder,
     Endianness,
     IqLayout,
     Operation,
+    Recording,
     SameStart,
     SampleType,
     Verification,
@@ -762,7 +764,7 @@ def test_input_from_recording_round_trip(db_path, site_id, make_recording):
     ]
     items = checklist(form, scan=None, original=original)
     assert can_save(items)
-    save_edit(db_path, build_recording(form, scan=None, original=original))
+    save_edit(db_path, build_recording(form, scan=None, original=original), original=original)
     again = entry.load_recording(db_path, original.id)
     for name in (
         "logged_by",
@@ -797,7 +799,7 @@ def test_edit_without_rescan_saves_metadata(db_path, site_id, make_recording):
     )
     assert "File sizes not checked: the folder was not rescanned" in texts(items, ItemState.INFO)
     assert can_save(items)
-    save_edit(db_path, build_recording(form, scan=None, original=original))
+    save_edit(db_path, build_recording(form, scan=None, original=original), original=original)
     again = entry.load_recording(db_path, original.id)
     assert again.remarks == "checked"
     assert again.iq_layout is IqLayout.PLANAR_IQ
@@ -833,7 +835,7 @@ def test_edit_with_rescan_takes_counts_from_the_scan(db_path, site_id, make_reco
     items = checklist(form, scan=scan, original=original)
     assert can_save(items)
     assert "Folder not already in the database" not in texts(items)
-    save_edit(db_path, build_recording(form, scan=scan, original=original))
+    save_edit(db_path, build_recording(form, scan=scan, original=original), original=original)
     again = entry.load_recording(db_path, original.id)
     assert again.channels[0].n_files == 11
     assert again.end_unix == original.end_unix + 1
@@ -849,7 +851,7 @@ def test_edit_keeps_location_and_archive_state(db_path, site_id, make_recording)
     original = entry.load_recording(db_path, rid)
     form = entry.input_from_recording(original)
     form.remarks = "edited"
-    save_edit(db_path, build_recording(form, scan=scan, original=original))
+    save_edit(db_path, build_recording(form, scan=scan, original=original), original=original)
     again = entry.load_recording(db_path, rid)
     assert (again.storage_root, again.rel_path) == (NAS, "rec1")
     assert (again.archive_state, again.archived_at) == (ArchiveState.ARCHIVED, NOW)
@@ -889,10 +891,10 @@ def test_rescan_that_removes_a_channel(db_path, site_id, make_recording):
 
     rec = build_recording(form, scan=one, original=original)
     with pytest.raises(ChannelRemovalError):
-        save_edit(db_path, rec)
+        save_edit(db_path, rec, original=original)
     assert len(entry.load_recording(db_path, original.id).channels) == 2
 
-    save_edit(db_path, rec, allow_channel_removal=True)
+    save_edit(db_path, rec, original=original, allow_channel_removal=True)
     again = entry.load_recording(db_path, original.id)
     assert [c.channel_index for c in again.channels] == [0]
     assert [p.param for p in again.params] == ["SDR"]
@@ -912,7 +914,77 @@ def test_save_edit_needs_an_id(make_recording, db_path):
     scan = scan_of(info)
     rec = build_recording(form_for(scan, 1), scan=scan, location=local_location(info))
     with pytest.raises(ValueError, match=r"rec\.id"):
-        save_edit(db_path, rec)
+        save_edit(db_path, rec, original=rec)
+
+
+# ---------------------------------------------------------------------------
+# An edit saves only over the entry it opened (D76)
+# ---------------------------------------------------------------------------
+
+
+def edited_remarks(original: Recording) -> Recording:
+    form = entry.input_from_recording(original)
+    form.remarks = "typo fixed"
+    return build_recording(form, scan=None, original=original)
+
+
+def archive_elsewhere(conn, rid: int) -> None:
+    """What a passed archive writes: the NAS location and the archived state."""
+    repo.update_archive_location(
+        conn, rid, storage_root=NAS, rel_path="2026\\rec", archived_at=NOW
+    )
+
+
+def check_archive_counts(conn, rid: int) -> None:
+    """What Check archive writes for a legacy channel: counts and times (D71)."""
+    repo.update_channels_from_folder(
+        conn,
+        rid,
+        {0: ChannelFromFolder(n_files=99, total_bytes=396_000, start_unix=T0, end_unix=T0 + 99)},
+    )
+
+
+def another_edit(conn, rid: int) -> None:
+    rec = repo.get_recording(conn, rid)
+    repo.update_recording(conn, replace(rec, remarks="someone else's note"))
+
+
+@pytest.mark.parametrize("change", [archive_elsewhere, check_archive_counts, another_edit])
+def test_an_edit_of_an_entry_that_changed_writes_nothing(db_path, site_id, make_recording, change):
+    original = saved(db_path, site_id, make_recording())
+    write_transaction(db_path, lambda conn: change(conn, original.id))
+    before = entry.load_recording(db_path, original.id)
+
+    with pytest.raises(repo.RecordingChangedError) as caught:
+        save_edit(db_path, edited_remarks(original), original=original)
+    assert str(caught.value) == (
+        f"Recording {original.id} changed after you opened it, for example by an archive "
+        "or a check. Open it again with Edit entry and make the change there."
+    )
+    assert entry.load_recording(db_path, original.id) == before
+
+
+def test_an_archive_stays_after_an_edit_opened_before_it(db_path, site_id, make_recording):
+    """The release review's finding 2: the edit put the laptop location back."""
+    original = saved(db_path, site_id, make_recording())
+    write_transaction(db_path, lambda conn: archive_elsewhere(conn, original.id))
+    with pytest.raises(repo.RecordingChangedError):
+        save_edit(db_path, edited_remarks(original), original=original)
+    again = entry.load_recording(db_path, original.id)
+    assert (again.storage_root, again.archive_state) == (NAS, ArchiveState.ARCHIVED)
+
+    reopened = entry.load_recording(db_path, original.id)
+    save_edit(db_path, edited_remarks(reopened), original=reopened)
+    again = entry.load_recording(db_path, original.id)
+    assert (again.remarks, again.storage_root) == ("typo fixed", NAS)
+    assert again.archive_state is ArchiveState.ARCHIVED
+
+
+def test_save_edit_needs_the_original_of_the_same_recording(db_path, site_id, make_recording):
+    first = saved(db_path, site_id, make_recording())
+    second = saved(db_path, site_id, make_recording())
+    with pytest.raises(ValueError, match="original"):
+        save_edit(db_path, edited_remarks(first), original=second)
 
 
 def test_state_note():

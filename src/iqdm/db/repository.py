@@ -74,6 +74,10 @@ class ChannelRemovalError(RepositoryError):
     """An update would remove channels without allow_channel_removal=True."""
 
 
+class RecordingChangedError(RepositoryError):
+    """The stored recording changed after an edit opened it (D76). Nothing was written."""
+
+
 def _rows(conn: sqlite3.Connection, sql: str, params: Sequence[Any] = ()) -> list[sqlite3.Row]:
     cur = conn.cursor()
     cur.row_factory = sqlite3.Row
