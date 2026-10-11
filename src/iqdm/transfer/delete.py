@@ -6,17 +6,18 @@ verification. prepare_delete() refuses unless all of these hold:
 - the manifest belongs to that archive, and the caller read it with
   manifest.read_manifest(path, archive.manifest_sha256), so it is unchanged;
 - the recording is archived and points at the archive's destination;
-- a check before delete of that archive passed, and it started after the archive
-  finished (D55). That check read the NAS files past the PC's file cache.
+- a check before delete of that archive passed, and its row was written after the
+  archive's row (D55, D74). The order of the rows counts, because each PC writes
+  times from its own clock. That check read the NAS files past the PC's file cache.
 
 delete_source_files() then works file by file. Right before a source file is
 deleted, the NAS copy must be a regular file with the manifest size, and the source
 file must be a regular file with the manifest size inside the source folder. The two
 must be different files by file identity (location.same_file(), D75): one folder
 reached under two names would otherwise lose its only copy. A file that fails a
-check, or whose identity cannot be read, is kept and reported. Only files listed in the manifest are
-deleted. Afterwards, folders that held them, and the source folder itself, are
-removed when they are empty. Nothing is deleted by pattern or by tree.
+check, or whose identity cannot be read, is kept and reported. Only files listed in
+the manifest are deleted. Afterwards, folders that held them, and the source folder
+itself, are removed when they are empty. Nothing is deleted by pattern or by tree.
 """
 
 from collections.abc import Callable, Iterable

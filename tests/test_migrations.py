@@ -133,6 +133,22 @@ def test_incomplete_chain_is_refused_before_backup(db_path):
     assert user_version(db_path) == 1
 
 
+def test_a_file_at_version_1_without_projects_is_refused_by_name(tmp_path):
+    """Made before D73 edited schema.sql in place: same version, no migration."""
+    path = tmp_path / "old.db"
+    raw = sqlite3.connect(path, autocommit=True)
+    raw.execute("CREATE TABLE recordings (id INTEGER PRIMARY KEY)")
+    raw.execute("PRAGMA user_version = 1")
+    raw.close()
+    with pytest.raises(MigrationError) as caught:
+        upgrade(path, now=NOW)
+    text = str(caught.value)
+    assert "is at schema version 1 but lacks " in text
+    assert "projects" in text and "recordings.project_id" in text
+    assert text.endswith("Make the database again.")
+    assert files_in(tmp_path) == ["old.db"]  # no backup written
+
+
 def test_newer_database_is_refused(db_path):
     with pytest.raises(SchemaVersionError):
         upgrade(db_path, migrations=[], latest=0, now=NOW)

@@ -146,6 +146,13 @@ def upgrade(
         if status is not SchemaStatus.NEEDS_UPGRADE:
             raise SchemaVersionError(status, f"cannot upgrade {path}: status {status}")
         steps = _plan(current, target, steps_available)
+        if not steps:  # at the target version, but without parts of schema.sql (D73)
+            missing = ", ".join(version.missing_parts(conn))
+            raise MigrationError(
+                f"{path} is at schema version {current} but lacks {missing}. No migration "
+                "adds them, because schema.sql was edited in place before the first real "
+                "database (D4). Make the database again."
+            )
 
         # Hold the write lock while the backup is taken, so the backup matches the
         # data the first step migrates. Readers are still allowed. A first step that

@@ -1,1 +1,1 @@
-"""Transfer core: selection, path checks, manifests, scripts, verification and deletion."""
+"""Transfer core: selection, path checks, manifests, the copy engine, verification and deletion."""
