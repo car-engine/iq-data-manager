@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from conftest import junction, recording_from
-from iqdm import viewer
+from iqdm import movecopy, viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
@@ -472,6 +472,18 @@ def test_a_stopped_delete_finishes_on_a_second_run(env):
     assert second.result.complete
     assert len(second.result.already_gone) == 4
     assert not env.source.exists()
+
+
+def test_a_delete_with_a_file_already_gone_shows_the_copy_deleted(env):
+    """The release review's finding 3: the tab stayed at "Partly deleted"."""
+    archive_id = archived_and_checked(env)
+    first = sorted((env.source / "0").iterdir())[0]
+    first.rename(env.tmp / "moved-away.dat")  # moved by hand, outside the app
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert out.result.complete
+    assert (len(out.result.deleted), len(out.result.already_gone)) == (9, 1)
+    state = movecopy.laptop_copy(env.recording(), env.transfers())
+    assert state.step is movecopy.LaptopStep.DELETED
 
 
 # ---------------------------------------------------------------------------

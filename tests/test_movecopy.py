@@ -368,9 +368,15 @@ def check(tid=2, parent=1, **kw) -> TransferEntry:
     return row(tid, Operation.CHECK, parent_id=parent, destination=NAS + "\\2026\\rec", **values)
 
 
-def delete(tid, n, parent=1) -> TransferEntry:
+def delete(tid, n, parent=1, *, passed=False) -> TransferEntry:
+    """A delete row that deleted n files. A run that left files behind is a 'fail'."""
     return row(
-        tid, Operation.DELETE, parent_id=parent, n_files=n, started_at="2026-10-03T10:00:00Z"
+        tid,
+        Operation.DELETE,
+        parent_id=parent,
+        n_files=n,
+        started_at="2026-10-03T10:00:00Z",
+        verification=Verification.PASS if passed else Verification.FAIL,
     )
 
 
@@ -407,10 +413,28 @@ def test_a_partly_deleted_copy_counts_what_remains(archived_rec):
     assert state.text == "Partly deleted: 6 files remain in C:\\captures\\rec. Delete the rest."
 
 
+def test_one_file_left_is_named_in_the_singular(archived_rec):
+    state = laptop_copy(archived_rec, [archive(), check(), delete(3, 9)])
+    assert state.text == "Partly deleted: 1 file remains in C:\\captures\\rec. Delete the rest."
+    unknown = laptop_copy(archived_rec, [archive(n_files=None), check(), delete(3, 9)])
+    assert unknown.text.startswith("Partly deleted: Some files remain in C:\\captures\\rec.")
+
+
 def test_every_file_deleted(archived_rec):
-    state = laptop_copy(archived_rec, [archive(), check(), delete(3, 4), delete(4, 6)])
+    state = laptop_copy(archived_rec, [archive(), check(), delete(3, 4), delete(4, 6, passed=True)])
     assert state.step is LaptopStep.DELETED
     assert not state.can_check and not state.can_delete
+
+
+def test_a_passed_delete_with_files_already_gone_is_complete(archived_rec):
+    """The release review's finding 3: 9 deleted, 1 already gone, the row passed."""
+    state = laptop_copy(archived_rec, [archive(), check(), delete(3, 9, passed=True)])
+    assert state.step is LaptopStep.DELETED
+    assert state.text == "The laptop copy in C:\\captures\\rec was deleted."
+    again = laptop_copy(
+        archived_rec, [archive(), check(), delete(3, 9), delete(4, 0, passed=True)]
+    )
+    assert again.step is LaptopStep.DELETED
 
 
 def test_the_latest_archive_at_the_location_counts(archived_rec):

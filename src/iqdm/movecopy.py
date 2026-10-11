@@ -357,15 +357,19 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
     archive = current_archive(rec, transfers)
     if archive is None:
         return LaptopCopy(step=LaptopStep.NONE, archive=None, text="")
-    deleted = sum(
-        t.n_files or 0
+    deletes = [
+        t
         for t in transfers
         if t.operation is Operation.DELETE and t.parent_id == archive.id and t.finished_at
-    )
+    ]
+    deleted = sum(t.n_files or 0 for t in deletes)
+    # A passed delete left no listed file in the laptop folder. It counts only the files
+    # it deleted, not those already gone, so the count alone can stay short.
+    complete = any(t.verification is Verification.PASS for t in deletes)
     total = archive.n_files
     checked = checked_before_delete(archive, transfers)
     folder = archive.source
-    if total is not None and deleted >= total:
+    if complete or (total is not None and deleted >= total):
         return LaptopCopy(
             step=LaptopStep.DELETED,
             archive=archive,
@@ -374,12 +378,15 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
         )
     if deleted:
         left = None if total is None else total - deleted
-        remain = "Some files" if left is None else files_text(left)
+        if left is None:
+            remain = "Some files remain"
+        else:
+            remain = f"{files_text(left)} {'remains' if left == 1 else 'remain'}"
         then = "Delete the rest." if checked else "Check the NAS copy, then delete the rest."
         return LaptopCopy(
             step=LaptopStep.PARTLY_DELETED,
             archive=archive,
-            text=f"Partly deleted: {remain} remain in {folder}. {then}",
+            text=f"Partly deleted: {remain} in {folder}. {then}",
             files_left=left,
             checked=checked,
         )
