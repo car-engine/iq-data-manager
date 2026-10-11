@@ -2,18 +2,25 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-11 (Milestone 8 started: second NAS visit passed; D73,
-D74).
+report. Last updated: 2026-10-12 (Milestone 8: the release review and its fixes,
+D75, D76).
 
 ## Current state
 
 - **Milestone 8, Release 1.0 (D72), is in progress on branch `m8-release`**, from
-  `main` at `1f8001b`. The user approved D73 (a project for each recording) and D74
-  (transfer rows in the order they were written) on 2026-10-11. Both are built and
-  tested on the branch: 1,570 tests pass and 4 skip; `ruff check` is clean. Not yet
-  tried by eye, and not merged. Report so far:
-  [reports/M8.md](reports/M8.md), part 1. A fresh session continues with the release
-  review and its fixes ([KICKOFF.md](KICKOFF.md), "Release review").
+  `main` at `1f8001b`. Not merged. Report: [reports/M8.md](reports/M8.md), parts 1
+  and 2. At `4c81be5`: 1,607 tests pass and 4 skip; `ruff check` is clean. The build
+  is `dist/m8-2`.
+  - Part 1: D73 (a project for each recording) and D74 (transfer rows in the order
+    they were written), approved on 2026-10-11.
+  - Part 2: the release review
+    ([reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md))
+    found two blockers. Both are fixed: D75 compares file identity in the destination,
+    verify and delete checks, so one folder under two names can no longer lose its
+    only copy; D76 makes an edit save only over the entry it opened, so it can no
+    longer undo an archive. The other approved findings are fixed too. Findings 14
+    and 15 were left unchanged.
+  - D73, D75 and D76 are not yet tried by eye. D75 is not yet tried on the NAS.
 - **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
   between two PCs passed: PC B's write waited for the 30 s hold, retried once and
   passed after 11.8 s. This closes O21. Check before delete of every file of A
@@ -38,9 +45,11 @@ D74).
   Settings tab (D67), the defaults file in the program folder (D68), the amber notes
   and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
   user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** the user's check of D73 by eye; the cut-over from
-  the legacy logging scripts; the real catalogue with O20; the team's `defaults.toml`;
-  version 1.0.0, the release build and notes. Recommended: O22 and a pilot.
+- **Still to do in Milestone 8:** the user's checks by eye with `dist/m8-2` (D73,
+  D75, D76); the merge into `main`; version 1.0.0, the release build from `main` and
+  release notes; the cut-over from the legacy logging scripts; the real catalogue
+  with O20; the team's `defaults.toml`. Recommended: O22, and a pilot that also checks
+  D75 on the NAS.
 - **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
   10 GbE link. Every app step passed; results and throughput are in
   [reports/M6.md](reports/M6.md), "NAS field test results".
@@ -48,8 +57,8 @@ D74).
   runs `migrate-legacy` and other checks with NAS paths by hand.
 - D55–D62 closed O36, O11, O34, O35, O1, O10, O25 and O12. D63 hashes skipped files
   when a transfer resumes. D64 renamed the operation "move" to "archive" everywhere.
-- Scratch databases made before D64, such as `dev/test.db` and `dev/m3.db`, refuse
-  archive rows. Create a new one with `tools/db_check.py create` (or
+- Scratch databases made before D73, such as `dev/test.db` and `dev/m3.db`, count as
+  an older version. Create a new one with `tools/db_check.py create` (or
   `IQDataManager-check.exe db-check create`).
 - The diagnostics live in `src/iqdm/diagnostics/`; `tools/` holds wrappers, and the
   build holds the console program `IQDataManager-check.exe` (D57).
@@ -74,7 +83,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Archive / copy tab | Done, merged; NAS field test run, two checks moved to Milestone 8 | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
-| 8. Release 1.0 (D72) | In progress | `m8-release` | `7bb2cca`–`9751b22`, plus the commit of the report (part 1) | [M8](reports/M8.md) (part 1) |
+| 8. Release 1.0 (D72) | In progress | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`4c81be5` (fixes), plus the commit of part 2 | [M8](reports/M8.md) (parts 1 and 2), [release review](reports/2026-10-11-release-review.md) |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
@@ -100,7 +109,7 @@ and move it to "Closed items" below. "M0 review <n>" refers to the table in
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D74). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -140,12 +149,18 @@ Decided items are in `docs/DECISIONS.md` (D1–D74). The M0 review table in
 
 ## Pending checks for the user
 
-- D73 by eye with `dist/m8-1` on a new scratch database: add a project, save with and
+- D73 by eye with `dist/m8-2` on a new scratch database: add a project, save with and
   without one, change it with Edit entry; the Viewer's Project column, filter and
   details row; an old scratch database shows as an older version in the Settings
   tab.
-- The release review by a second agent, with the prompt in
-  [KICKOFF.md](KICKOFF.md), "Release review".
+- D76 by eye with `dist/m8-2`: open a local recording with Edit entry, archive it in
+  the Archive / copy tab, then change a remark in the Log tab and save. The Log tab
+  says that the recording changed and saves nothing; Edit entry again saves the
+  remark, and the recording stays archived.
+- D75 on the NAS, at the next visit or in the pilot: an archive from a laptop passes
+  as before; an archive of a folder logged under one NAS name to the same folder under
+  another name (host name and IP address) is refused at the preview.
+- The release review ran on 2026-10-11 ([reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md)).
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 The Milestone 6 manual test on this PC passed on 2026-10-04.
@@ -186,6 +201,8 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   `dist/m7-4`, built from `main`).
 - `dist/m7-4/`, `build/work-m7-4/` and `build/m7-4-build.log`, after the second NAS
   visit, which used them (superseded by `dist/m8-1`).
+- `dist/m8-1/`, `build/work-m8-1/` and `build/m8-1-build.log` (superseded by
+  `dist/m8-2`).
 - After the release review (2026-10-11): `dist/review-1/`, `build/work-review-1/`,
   `build/review-1-build.log` and `dev/review/` (reproductions, screenshots and a
   scratch database). The pytest folders under `%TEMP%\pytest-of-Perry\` hold
