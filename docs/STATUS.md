@@ -52,6 +52,14 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
 | 8. Release 1.0 (D72) | Done, with gaps: O20 and the rollout moved to open items and the user (M8.md, part 4) | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`71ee3ed` (fixes and checks); `674434c` (1.0.0, tag `v1.0.0`); `4264491`–`3e9b1d0` (release records, the checklist out of the build); plus the commit of part 4. Merged into `main` as fast-forwards and pushed. | [M8](reports/M8.md) (parts 1 to 4), [release review](reports/2026-10-11-release-review.md) |
 
+The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
+with the user's approval, `m8-release` was deleted on GitHub and these merged local
+branches were deleted, at the commits shown: `m8-release` (`b5e6609`),
+`docs-review-m5` (`43f4520`), `m3a-settings` (`f772059`), `m4-viewer` (`dd8d95d`),
+`m5-transfer-core` (`ca5c145`), `m6-move-copy-tab` (`283d8a8`) and
+`m7-packaging-migration` (`1f8001b`). After 1.0, each piece of work has its own branch,
+deleted after its merge.
+
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
 `68fb49c` (D29, D30), `257244c` (documentation review), `77ed32c` (the user's
@@ -145,7 +153,7 @@ The checks of D73, D75 and D76 with `dist/m8-2` passed on this PC on 2026-10-12
 ## Files for the user to remove
 
 Agents may not delete files. These are safe to remove by hand. All are gitignored
-except the branches and the scripts package near the end of the list.
+except the scripts package near the end of the list.
 
 - `dist/smoke-1/`, `dist/smoke-2/`
 - `build/work-smoke-1/`, `build/work-smoke-2/`
@@ -188,11 +196,6 @@ except the branches and the scripts package near the end of the list.
   directory junctions from the review and from the D75 tests. Remove each as a link,
   so that its target is not touched.
 - `dev/scratch.db`, made to check the README's run commands.
-- Merged branches, now that Milestone 8 is closed. `main` holds every commit of
-  them (`git branch --merged main`, 2026-10-12): `docs-review-m5`, `m3a-settings`,
-  `m4-viewer`, `m5-transfer-core`, `m6-move-copy-tab`, `m7-packaging-migration` and
-  `m8-release`, locally; `m8-release` also on GitHub
-  (`git push origin --delete m8-release`).
 - `src/iqdm/transfer/scripts/`, an empty package left from before D48. No module
   imports it. This one is in git, so remove it with a commit.
 - After the NAS field test: the test set on the laptop and the folders the test

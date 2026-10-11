@@ -54,7 +54,10 @@ apply. Each piece of work follows the same cycle as a milestone did:
    requirement in SPEC.md, and the item moved to "Closed items" in STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
    [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md). Update STATUS.md in the same commit.
-7. **Merge and release** only with the user's approval (section 4).
+7. **Merge and release** only with the user's approval (section 4). After the merge,
+   delete the branch with `git branch -d`, which refuses a branch that is not fully
+   merged, and on GitHub if it was pushed. Both need the user's approval. The
+   milestone branches were deleted this way on 2026-10-12 (STATUS.md, "Milestones").
 
 A change that copies, renames or deletes files updates the table "Code paths that
 delete or overwrite a file" (last full list in [reports/M6.md](reports/M6.md), with
