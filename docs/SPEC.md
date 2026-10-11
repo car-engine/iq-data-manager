@@ -607,6 +607,7 @@ iq-data-manager/
       manifest.py             # per-file manifest, written once (D52)
       copier.py               # the copy engine (D48)
       verify.py               # count/size/hash verification
+      uncached.py             # reads files past the PC's file cache (check before delete, D55)
       delete.py               # the only module that deletes files
       estimate.py             # size/time estimates
       operations.py           # copy, archive, check and delete flows with their log rows

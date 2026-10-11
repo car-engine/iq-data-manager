@@ -72,7 +72,7 @@ Rules for this file:
 | D52 | Deletion record and transfer manifest | 2026-10-03, Milestone 5 | Active |
 | D53 | File names come from a rescan | 2026-10-03, Milestone 5 | Active |
 | D54 | NAS field test with the Milestone 6 build | 2026-10-03, Milestone 5 | Active |
-| D55 | Deleting the laptop copy after a check past the cache | 2026-10-03, Milestone 6 | Active |
+| D55 | Deleting the laptop copy after a check past the cache | 2026-10-03, Milestone 6 | Active; D74 compares the order of the rows |
 | D56 | Compare with laptop copy | 2026-10-03, Milestone 6 | Active |
 | D57 | Diagnostics in a console companion program | 2026-10-03, Milestone 6 | Active |
 | D58 | Files copied at once as a setting | 2026-10-03, Milestone 6 | Active |
@@ -1059,6 +1059,8 @@ Closes O36. The user chose this on 2026-10-03, while planning Milestone 6.
 - `delete.py` refuses to delete unless such a check passed after the archive
   finished. A passed check stays valid for a later delete run of the same archive.
   The per-file size checks of D52 still run right before each file.
+- D74 replaced the time comparison of the point above: the check's row must be
+  written after the archive's row.
 - The NAS field test (D54) confirms that the bypass reads from the NAS.
 
 Affects: SPEC sections 3 and 8, `schema.sql`, `transfer/verify.py`,

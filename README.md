@@ -57,10 +57,19 @@ code as `IQDataManager-check.exe COMMAND`, in a console window.
 
 ## Run
 
+Create a development database first. The command refuses a file that exists. Until
+the version 1 schema is frozen (O20), `schema.sql` is edited in place, and the app
+refuses a database made before such an edit as an older version (D73). Make a new
+one under a new name after such an edit.
+
+```
+python tools/db_check.py create dev/scratch.db
+```
+
 ```
 python -m iqdm
-python -m iqdm --smoke-test   # builds the window, quits, exit code 0 on success
-python -m iqdm --db dev/m3.db # uses this database instead of db_path in the config
+python -m iqdm --smoke-test        # builds the window, quits, exit code 0 on success
+python -m iqdm --db dev/scratch.db # uses this database instead of db_path in the config
 python -m iqdm --config my.toml
 ```
 
@@ -78,8 +87,7 @@ nas_roots = ['\\nas\recordings']   # UNC roots; a folder under one is logged as 
 ```
 
 Use single quotes, so TOML keeps the backslashes. A Save from the Settings tab drops
-comments. Create a development database with
-`python tools/db_check.py create dev/m3.db`.
+comments.
 
 ## Build
 

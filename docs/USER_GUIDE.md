@@ -137,8 +137,9 @@ The Log recording tab adds a recording folder to the catalogue.
    the site (or **Add site**), and fill in the plan reference and remarks. Choose the
    project the recording belongs to, or **Add project**. A project is optional; leave
    "No project" if none applies.
-3. **File format.** Sample type, IQ layout, byte order and header size. The defaults
-   are int16, interleaved I then Q, little-endian and no header.
+3. **File format.** Sample type, IQ layout, endianness and header bytes. The defaults
+   are `int16`, `interleaved_iq` (I then Q for each sample), `little` (little-endian)
+   and 0 header bytes.
 4. **Channels.** For each channel, enter the band, the centre frequency in MHz and the
    sample rate. The app fills in the sample rate from the file sizes; check it.
 5. **RF chain.** Rows such as SDR, antenna or LNA, for the whole recording or for one

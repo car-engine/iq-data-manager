@@ -55,8 +55,9 @@ D74).
   build holds the console program `IQDataManager-check.exe` (D57).
 - All text on screen follows CLAUDE.md, section "User-facing text" (D38).
   `tests/test_user_text.py` checks the Viewer, Log, Settings and Archive / copy tabs.
-- The NAS part of O21 is still open. The local part is done
-  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)).
+- O21 is closed: the local part on 2026-10-02
+  ([reports/2026-10-02-db-check.md](reports/2026-10-02-db-check.md)), the NAS part on
+  the second visit (2026-10-09).
 
 ## Milestones
 
@@ -158,9 +159,9 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `build/smoke-1-build.log`, `build/smoke-2-build.log`
 - `build/spec-removed-sections.md`
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
-- `dev/test.db` is the user's scratch database for O21. Move it out of the repository
-  before the NAS test.
-- After the Milestone 3 manual tests: `dev/m3.db` and `fixtures_out/m3-manual/`.
+- `dev/test.db` and `dev/m3.db`. Both were made before D64 and D73, so the app
+  refuses them as older versions. O21 is closed.
+- After the Milestone 3 manual tests: `fixtures_out/m3-manual/`.
 - `dev/m3a-shots/` (Settings tab screenshots), and `dev/m3a-manual/` after the
   Milestone 3a manual tests.
 - `dev/m4-bench/` (timing script and two synthetic databases, 2.5 MB and 25.5 MB),
@@ -174,7 +175,6 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   `build/work-m6-3/` and `build/m6-3-build.log`.
 - `dev/m6-shots/` (screenshots and `shots.py`, 1.3 MB) and `dev/m6-exe-check/`
   (output of the packaged diagnostics, 81 MB).
-- `dev/test.db` and `dev/m3.db` were made before D64 and refuse archive rows.
 - `dev/m6-manual/` (the manual test on this PC passed on 2026-10-04).
 - `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log`, and `dev/m7-legacy/`
   (the synthetic legacy file, its import, the script that made it, an Edge profile
@@ -184,6 +184,16 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
   the NAS address, so they stay out of the repository.
 - `dist/m7-3/`, `build/work-m7-3/` and `build/m7-3-build.log` (superseded by
   `dist/m7-4`, built from `main`).
+- `dist/m7-4/`, `build/work-m7-4/` and `build/m7-4-build.log`, after the second NAS
+  visit, which used them (superseded by `dist/m8-1`).
+- After the release review (2026-10-11): `dist/review-1/`, `build/work-review-1/`,
+  `build/review-1-build.log` and `dev/review/` (reproductions, screenshots and a
+  scratch database). The pytest folders under `%TEMP%\pytest-of-Perry\` hold
+  directory junctions from the review and from the D75 tests. Remove each as a link,
+  so that its target is not touched.
+- `dev/scratch.db`, made to check the README's run commands.
+- `src/iqdm/transfer/scripts/`, an empty package left from before D48. No module
+  imports it. This one is in git, so remove it with a commit.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
