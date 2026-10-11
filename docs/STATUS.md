@@ -20,7 +20,10 @@ D75, D76).
     only copy; D76 makes an edit save only over the entry it opened, so it can no
     longer undo an archive. The other approved findings are fixed too. Findings 14
     and 15 were left unchanged.
-  - D73, D75 and D76 are not yet tried by eye. D75 is not yet tried on the NAS.
+  - The user's checks of D73, D75 and D76 with `dist/m8-2` passed on 2026-10-12 on
+    the development PC, with a Windows share standing in for the NAS (M8.md, part 2).
+    Check before delete cannot read through a share of the same PC (WinError 87), so
+    the delete step was not testable there. D75 is not yet tried on the NAS.
 - **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
   between two PCs passed: PC B's write waited for the 30 s hold, retried once and
   passed after 11.8 s. This closes O21. Check before delete of every file of A
@@ -45,8 +48,7 @@ D75, D76).
   Settings tab (D67), the defaults file in the program folder (D68), the amber notes
   and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
   user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** the user's checks by eye with `dist/m8-2` (D73,
-  D75, D76); the merge into `main`; version 1.0.0, the release build from `main` and
+- **Still to do in Milestone 8:** the merge into `main`; version 1.0.0, the release build from `main` and
   release notes; the cut-over from the legacy logging scripts; the real catalogue
   with O20; the team's `defaults.toml`. Recommended: O22, and a pilot that also checks
   D75 on the NAS.
@@ -149,21 +151,16 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 
 ## Pending checks for the user
 
-- D73 by eye with `dist/m8-2` on a new scratch database: add a project, save with and
-  without one, change it with Edit entry; the Viewer's Project column, filter and
-  details row; an old scratch database shows as an older version in the Settings
-  tab.
-- D76 by eye with `dist/m8-2`: open a local recording with Edit entry, archive it in
-  the Archive / copy tab, then change a remark in the Log tab and save. The Log tab
-  says that the recording changed and saves nothing; Edit entry again saves the
-  remark, and the recording stays archived.
 - D75 on the NAS, at the next visit or in the pilot: an archive from a laptop passes
-  as before; an archive of a folder logged under one NAS name to the same folder under
-  another name (host name and IP address) is refused at the preview.
-- The release review ran on 2026-10-11 ([reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md)).
+  as before, and so do its Check before delete and Delete laptop copy; an archive of a
+  folder logged under one NAS name to the same folder under another name (host name
+  and IP address) is refused at the preview.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
-The Milestone 6 manual test on this PC passed on 2026-10-04.
+The Milestone 6 manual test on this PC passed on 2026-10-04. The release review ran on
+2026-10-11 ([reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md)).
+The checks of D73, D75 and D76 with `dist/m8-2` passed on this PC on 2026-10-12
+([reports/M8.md](reports/M8.md), part 2).
 
 ## Files for the user to remove
 
@@ -295,6 +292,10 @@ These come from the safety configuration and from experience in this repository.
 - **`ruff format` only on the files you change.** Several files on `main` are not in
   `ruff format` style, and the project checks only `ruff check`. Running the formatter
   on a whole folder rewrapped unrelated code three times in Milestone 3.
+- **A Windows share of a local folder** can stand in for the NAS in a manual test,
+  because NAS locations must be UNC paths. Check before delete fails through such a
+  share with WinError 87 (2026-10-12): Windows refuses reads past the cache when a PC
+  serves a share to itself. Test the delete on the real NAS.
 - **Screenshots of the GUI** render offscreen with the light palette. Set
   `QT_QPA_FONTDIR=C:/Windows/Fonts` for readable text. The user runs Windows in dark
   mode, so render with a dark palette too: set the `Base`, `Text`, `Window`,
