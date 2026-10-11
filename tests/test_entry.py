@@ -525,7 +525,7 @@ def test_network_folder_outside_nas_roots_is_information(make_recording):
     )
     items = ready_items(form_for(scan, 1), scan, location)
     assert can_save(items)
-    assert any("outside the configured NAS roots" in t for t in texts(items, ItemState.INFO))
+    assert any("outside the NAS locations in Settings" in t for t in texts(items, ItemState.INFO))
 
 
 def test_duration_change_without_rescan_changes_the_check(make_recording):

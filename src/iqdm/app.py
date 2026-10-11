@@ -31,7 +31,7 @@ from iqdm.transfer.manifest import manifests_dir
 APP_NAME = "IQ Data Manager"
 TAB_COUNT = 4
 CLEAR_LOG_TAB_QUESTION = (
-    "The new database path or NAS roots clear the Log tab form. The form holds input "
+    "The new database file or NAS locations clear the Log tab form. The form holds input "
     "that is not saved.\n\nSave the settings and clear the form?"
 )
 LOG_TAB_SAVING = "The Log tab is saving a recording. Save the settings when it has finished."

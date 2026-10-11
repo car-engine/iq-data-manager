@@ -20,10 +20,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm.app import SETTINGS_UNSAVED_TAB, UNSAVED_QUESTION, UNSAVED_WRONG_VALUE
+from iqdm.app import (
+    CLEAR_LOG_TAB_QUESTION,
+    CLOSE_QUESTION,
+    LOG_TAB_SAVING,
+    LOG_TAB_SAVING_EDIT,
+    SETTINGS_UNSAVED_TAB,
+    TRANSFER_BUSY,
+    TRANSFER_RUNNING,
+    UNSAVED_QUESTION,
+    UNSAVED_WRONG_VALUE,
+)
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
+from iqdm.entry import changed_text
 from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
@@ -38,6 +49,7 @@ from iqdm.models import (
     Recording,
     TransferEntry,
 )
+from iqdm.transfer.operations import FILE_LIST_UNUSABLE
 from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
 
@@ -46,7 +58,8 @@ FORBIDDEN = re.compile(
     r"|db_path|nas_roots|display_utc_offset_hours|coverage_highlight_percent|user_version"
     r"|default_local_copy_root|network_speed_mb_s|default_hash_mode|hash_sample_fraction"
     r"|free_space_margin_gb|copy_workers|transfer_log|parent_id"
-    r"|schema|journal|busy timeout|foreign keys",
+    r"|schema|journal|busy timeout|foreign keys"
+    r"|\bNAS roots?\b|manifest",  # the screen says "NAS locations" and "file list"
     re.IGNORECASE,
 )
 
@@ -90,6 +103,8 @@ def test_forbidden_pattern_catches_the_old_texts():
         "Displayed times only. The database stores UTC (DECISIONS.md D24).",
         "File found. Schema version 1, current. Journal mode delete.",
         "see SPEC section 4",
+        "The folder is on a network share outside the configured NAS roots.",
+        "The file list cannot be used: the manifest changed after it was written",
     ]
     assert offending(old) == old
     assert offending(["Connected. The database is ready to use.", "Show times at UTC offset"]) == []
@@ -146,6 +161,21 @@ def test_project_text_is_plain():
 def test_unsaved_settings_text_is_plain():
     """The tab title and the question about unsaved settings (D70)."""
     assert offending([SETTINGS_UNSAVED_TAB, UNSAVED_QUESTION, UNSAVED_WRONG_VALUE]) == []
+
+
+def test_dialog_and_message_text_is_plain():
+    """Questions and messages that appear outside a tab's widgets."""
+    texts = [
+        CLEAR_LOG_TAB_QUESTION,
+        LOG_TAB_SAVING,
+        LOG_TAB_SAVING_EDIT,
+        TRANSFER_RUNNING,
+        TRANSFER_BUSY,
+        CLOSE_QUESTION,
+        changed_text(12),  # an edit of an entry that changed meanwhile (D76)
+        FILE_LIST_UNUSABLE,
+    ]
+    assert offending(texts) == []
 
 
 def test_log_tab_text_is_plain(qtbot, db_path):

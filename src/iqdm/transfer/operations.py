@@ -76,6 +76,10 @@ CHECK_NEEDS_HASHES = (
     "Check before delete reads the content of the NAS files. Choose a check that hashes "
     "a sample of the files or every file."
 )
+FILE_LIST_UNUSABLE = (
+    "The file list of this archive cannot be read, or it changed after the archive. The "
+    "laptop copy cannot be deleted."
+)
 
 Clock = Callable[[], str]
 
@@ -493,7 +497,7 @@ def _load_archive(
     try:
         manifest = read_manifest(Path(archive.manifest_path), archive.manifest_sha256)
     except ManifestError as exc:
-        raise DeleteRefused([f"The file list cannot be used: {exc}"]) from exc
+        raise DeleteRefused([FILE_LIST_UNUSABLE], detail=str(exc)) from exc
     return archive, rec, transfers, manifest
 
 

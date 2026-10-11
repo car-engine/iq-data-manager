@@ -998,7 +998,7 @@ def checklist(
         items.append(
             ChecklistItem(
                 ItemState.INFO,
-                "The folder is on a network share outside the configured NAS roots, "
+                "The folder is on a network share outside the NAS locations in Settings, "
                 "so it is logged as local.",
             )
         )

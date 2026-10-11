@@ -71,6 +71,7 @@ from iqdm.transfer.operations import (
     preview_transfer,
     run_transfer,
 )
+from iqdm.transfer.pathcheck import files_text
 from iqdm.transfer.selection import SelectionError
 from iqdm.transfer.verify import VerifyProgress
 
@@ -1071,7 +1072,7 @@ class TransferTab(QWidget):
     def _operation_failed(self, exc: Exception) -> None:
         self._end()
         if isinstance(exc, DeleteRefused):
-            self._set_result(ItemState.ERROR, " ".join(exc.reasons) or "Refused.")
+            self._set_result(ItemState.ERROR, " ".join(exc.reasons) or "Refused.", exc.detail)
         elif isinstance(exc, ScanCancelled):
             self._set_result(ItemState.TODO, "Stopped.")
         elif isinstance(exc, ScanError):
@@ -1211,7 +1212,7 @@ class TransferTab(QWidget):
             self,
             "Delete the laptop copy?",
             f"Delete the laptop copy of recording {rec.id}?\n\n"
-            f"{files:,} files{size} in {archive.source} will be deleted. "
+            f"{files_text(files)}{size} in {archive.source} will be deleted. "
             f"The NAS copy in {archive.destination} stays.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -1247,14 +1248,14 @@ class TransferTab(QWidget):
             return
         r = result.result
         if r.complete:
-            self._set_result(ItemState.OK, f"Deleted {len(r.deleted):,} files from the laptop.")
+            self._set_result(ItemState.OK, f"Deleted {files_text(len(r.deleted))} from the laptop.")
         else:
             kept = "; ".join(f"{k.rel_path}: {k.reason}" for k in r.kept[:10])
             stopped = " Stopped before the end." if r.cancelled else ""
             self._set_result(
                 ItemState.INFO if r.cancelled and not r.kept else ItemState.ERROR,
-                f"Deleted {len(r.deleted):,} files.{stopped}"
-                + (f" Kept {len(r.kept):,} files: {kept}" if r.kept else ""),
+                f"Deleted {files_text(len(r.deleted))}.{stopped}"
+                + (f" Kept {files_text(len(r.kept))}: {kept}" if r.kept else ""),
             )
         self._after_change()
 

@@ -28,6 +28,7 @@ from iqdm.transfer.copier import CopyItem, CopyProgress, copy_files, local_path
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.manifest import read_manifest
 from iqdm.transfer.operations import (
+    FILE_LIST_UNUSABLE,
     TransferError,
     TransferRequest,
     check_archive,
@@ -436,8 +437,10 @@ def test_delete_refuses_a_changed_manifest(env):
     archive_id = archived(env)
     manifest = Path(env.transfers()[0].manifest_path)
     manifest.write_text(manifest.read_text(encoding="utf-8") + " ", encoding="utf-8")
-    with pytest.raises(DeleteRefused, match="changed after it was written"):
+    with pytest.raises(DeleteRefused) as caught:
         delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert caught.value.reasons == (FILE_LIST_UNUSABLE,)
+    assert "changed after it was written" in caught.value.detail  # the tooltip
     assert len(tree(env.source)) == 10
     assert len(env.transfers()) == 1
 

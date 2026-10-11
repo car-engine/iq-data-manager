@@ -25,7 +25,9 @@ from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
 from iqdm.models import IN_PLACE_NOTE, ArchiveState, HashMode, Operation, TransferEntry
 from iqdm.movecopy import LaptopStep
 from iqdm.transfer.copier import CopyItem, copy_files
+from iqdm.transfer.delete import DeleteResult, KeptFile
 from iqdm.transfer.manifest import read_manifest
+from iqdm.transfer.operations import FILE_LIST_UNUSABLE, DeleteOutcome
 from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
 
@@ -343,6 +345,34 @@ def test_archive_check_and_delete(env, answers):
     assert tab.result == (ItemState.OK, "Deleted 11 files from the laptop.")
     assert tab.laptop_state().step is LaptopStep.DELETED
     assert not tab.delete_button.isEnabled()
+
+
+def test_a_changed_file_list_is_refused_in_plain_words(env):
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    env.idle(tab)
+    manifest = Path(env.transfers()[0].manifest_path)
+    manifest.write_text(manifest.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    tab.check_delete_button.click()
+    env.idle(tab)
+    assert tab.result == (ItemState.ERROR, FILE_LIST_UNUSABLE)
+    assert "changed after it was written" in tab.result_label.toolTip()
+
+
+def test_delete_results_name_one_file_in_the_singular(env):
+    tab = env.loaded(env.tab())
+    result = DeleteResult(
+        deleted=("0/1790733600.dat",),
+        already_gone=(),
+        kept=(KeptFile(rel_path="0/1790733601.dat", reason="The laptop file changed."),),
+        folders_removed=(),
+    )
+    tab._delete_done(DeleteOutcome(transfer_id=1, result=result))
+    env.idle(tab)
+    assert tab.result == (
+        ItemState.ERROR,
+        "Deleted 1 file. Kept 1 file: 0/1790733601.dat: The laptop file changed.",
+    )
 
 
 def test_check_before_delete_needs_a_hash_mode_that_reads_content(env):

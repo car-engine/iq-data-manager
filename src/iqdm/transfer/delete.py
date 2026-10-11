@@ -30,10 +30,15 @@ from iqdm.transfer.manifest import Manifest, ManifestFile, safe_rel_path
 
 
 class DeleteRefused(Exception):  # noqa: N818  (the user sees it as a refusal)
-    """The preconditions for deleting the laptop copy do not hold. reasons lists them."""
+    """The preconditions for deleting the laptop copy do not hold. reasons lists them.
 
-    def __init__(self, reasons: list[str]) -> None:
+    reasons are plain text for the user. detail holds technical text, such as a file
+    error, which the tab shows in a tooltip.
+    """
+
+    def __init__(self, reasons: list[str], detail: str = "") -> None:
         self.reasons = tuple(reasons)
+        self.detail = detail
         super().__init__(" ".join(self.reasons))
 
 
