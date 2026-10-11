@@ -93,9 +93,9 @@ comments.
 
 `build/iqdm.spec` makes a onedir build with two programs: the windowed
 `IQDataManager.exe` and the console program `IQDataManager-check.exe` (D57). The
-build folder also holds `USER_GUIDE.md`, `FIELD_TEST_CHECKLIST.html` and
-`defaults.example.toml` (D68). Build
-into output folders that do not exist yet. Do not pass `--noconfirm` or `--clean`,
+build folder also holds `USER_GUIDE.md`, `RELEASE_NOTES.md`,
+`FIELD_TEST_CHECKLIST.html` and `defaults.example.toml` (D68). Build into output
+folders that do not exist yet. Do not pass `--noconfirm` or `--clean`,
 because both delete existing output.
 
 ```

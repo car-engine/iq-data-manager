@@ -580,6 +580,7 @@ iq-data-manager/
     reports/                  # one report per milestone: M0.md, M1.md, ...
     KICKOFF.md                # session start-up and resume prompts
     USER_GUIDE.md             # short guide for users, shipped in the build folder
+    RELEASE_NOTES.md          # what each release does and its known limits, shipped too
     mockup/                   # exported GUI mockups
   src/iqdm/
     __main__.py               # python -m iqdm

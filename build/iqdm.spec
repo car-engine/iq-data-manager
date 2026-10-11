@@ -5,7 +5,7 @@
 #                            test: copy-check, db-check, make-test-set (DECISIONS.md D57),
 #                            and the legacy import: migrate-legacy (D66)
 #
-# Next to the programs, the build folder also holds USER_GUIDE.md,
+# Next to the programs, the build folder also holds USER_GUIDE.md, RELEASE_NOTES.md,
 # FIELD_TEST_CHECKLIST.html and defaults.example.toml (D68), written after COLLECT.
 #
 # Build from the repository root into output folders that do not exist yet:
@@ -86,6 +86,7 @@ coll = COLLECT(
 # file.
 for source in (
     ROOT / "docs" / "USER_GUIDE.md",
+    ROOT / "docs" / "RELEASE_NOTES.md",
     ROOT / "docs" / "FIELD_TEST_CHECKLIST.html",
     ROOT / "build" / "defaults.example.toml",
 ):
