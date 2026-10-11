@@ -2,15 +2,18 @@
 
 Read this file at the start of every session, after `CLAUDE.md`. Update it at the end
 of every milestone and after any other significant work, in the same commit as the
-report. Last updated: 2026-10-12 (Milestone 8: the release review and its fixes,
-D75, D76).
+report. Last updated: 2026-10-12 (Milestone 8: version 1.0.0 merged into `main` and
+built).
 
 ## Current state
 
-- **Milestone 8, Release 1.0 (D72), is in progress on branch `m8-release`**, from
-  `main` at `1f8001b`. Not merged. Report: [reports/M8.md](reports/M8.md), parts 1
-  and 2. At `4c81be5`: 1,607 tests pass and 4 skip; `ruff check` is clean. The build
-  is `dist/m8-2`.
+- **Version 1.0.0 is released locally.** `m8-release` was merged into `main` as a
+  fast-forward to `674434c` on 2026-10-12; neither branch is pushed. The release
+  build is `dist/release-1.0.0`, from `main`, with
+  [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At `674434c`: 1,607
+  tests pass and 4 skip; `ruff check` is clean. Report:
+  [reports/M8.md](reports/M8.md), parts 1 to 3. Milestone 8 stays open for the real
+  catalogue (O20) and the rollout.
   - Part 1: D73 (a project for each recording) and D74 (transfer rows in the order
     they were written), approved on 2026-10-11.
   - Part 2: the release review
@@ -37,9 +40,8 @@ D75, D76).
   changed nothing (`git status` was clean).
 - **Milestones 0 to 7 are merged into `main` and pushed.** Milestone 7 was merged as
   a fast-forward on 2026-10-06 and pushed the same day. Report:
-  [reports/M7.md](reports/M7.md). 1,549 tests pass and 4 skip on `main`; three skips
-  need the symbolic-link privilege, the other runs only off Windows. `ruff check` is
-  clean.
+  [reports/M7.md](reports/M7.md). Of the 4 skipped tests, three need the
+  symbolic-link privilege and the other runs only off Windows.
 - **D73 changes `schema.sql` in place.** Every database made before it (scratch
   databases on the NAS, the trial legacy catalogue, the `dev/` databases) lacks the
   project column; the app then reports it as an older version. Make such a database
@@ -48,10 +50,10 @@ D75, D76).
   Settings tab (D67), the defaults file in the program folder (D68), the amber notes
   and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
   user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** the merge into `main`; version 1.0.0, the release build from `main` and
-  release notes; the cut-over from the legacy logging scripts; the real catalogue
-  with O20; the team's `defaults.toml`. Recommended: O22, and a pilot that also checks
-  D75 on the NAS.
+- **Still to do in Milestone 8:** the push of `main` and `m8-release` (the user's
+  approval); the real catalogue with the 1.0.0 build and O20; the cut-over from the
+  legacy logging scripts; the team's `defaults.toml`. Recommended: O22, and a pilot
+  that also checks D75 on the NAS.
 - **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
   10 GbE link. Every app step passed; results and throughput are in
   [reports/M6.md](reports/M6.md), "NAS field test results".
@@ -85,7 +87,7 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 5. Transfer core | Done, merged | `m5-transfer-core` | `a2a7fb5`–`57b3899`, `e340c8c` (report), `9ce023e` (D54 test set), `ca5c145` (D54 documents), plus the commit that records the merge | [M5](reports/M5.md) |
 | 6. Archive / copy tab | Done, merged; NAS field test run, two checks moved to Milestone 8 | `m6-move-copy-tab` | `7f1273b`–`95c9256`, `d6507a6` (report), `47a7f06` (manual-test fix), `ef6ef90` (report of the fix), plus the commit that records the merge | [M6](reports/M6.md) |
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
-| 8. Release 1.0 (D72) | In progress | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`4c81be5` (fixes), plus the commit of part 2 | [M8](reports/M8.md) (parts 1 and 2), [release review](reports/2026-10-11-release-review.md) |
+| 8. Release 1.0 (D72) | 1.0.0 merged and built; real catalogue and rollout open | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`71ee3ed` (fixes and checks); `674434c` (1.0.0), merged into `main` as a fast-forward; plus the commit of part 3 | [M8](reports/M8.md) (parts 1 to 3), [release review](reports/2026-10-11-release-review.md) |
 
 Commits between the milestones on `main`: `814417c` (decisions D1–D3 in the spec),
 `89e94ac` (the user's PowerShell deny rule in `.claude/settings.json`), `6028895` and
@@ -199,7 +201,8 @@ Agents may not delete files. These are gitignored and safe to remove by hand:
 - `dist/m7-4/`, `build/work-m7-4/` and `build/m7-4-build.log`, after the second NAS
   visit, which used them (superseded by `dist/m8-1`).
 - `dist/m8-1/`, `build/work-m8-1/` and `build/m8-1-build.log` (superseded by
-  `dist/m8-2`).
+  `dist/m8-2`), and `dist/m8-2/`, `build/work-m8-2/` and `build/m8-2-build.log`
+  (superseded by `dist/release-1.0.0`, which stays).
 - After the release review (2026-10-11): `dist/review-1/`, `build/work-review-1/`,
   `build/review-1-build.log` and `dev/review/` (reproductions, screenshots and a
   scratch database). The pytest folders under `%TEMP%\pytest-of-Perry\` hold
