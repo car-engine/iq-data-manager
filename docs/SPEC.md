@@ -58,7 +58,8 @@ Schema: `src/iqdm/db/schema.sql` (authoritative). Summary:
 | Table | Purpose |
 | --- | --- |
 | `sites` | Selectable site names, unique case-insensitively. Users can add new ones. |
-| `recordings` | One row per capture session: envelope times, site, file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
+| `projects` | Selectable project names, unique case-insensitively. Users can add new ones (D73). |
+| `recordings` | One row per capture session: envelope times, site, project (optional, D73), file format, storage location, archive state, plan reference, remarks, and `created_at` and `updated_at` (a trigger sets `updated_at` on every update; the Viewer shows it, D47). |
 | `channels` | One row per channel: index, subfolder, band, fc, fs, own start/end, file count, bytes. Single-channel recordings have one row (index 0). |
 | `recording_params` | Flexible RF chain key/value rows. `channel_id` NULL = whole recording, set = one channel. |
 | `transfer_log` | History of archives, copies, archive checks and deletions of laptop copies, including time ranges, channel subset, hash mode, verification result and the path of each transfer's manifest. A delete row, and a check before delete, name the archive they follow in `parent_id` (D52, D55). `dismissed_at` records "Forget" on an unfinished copy or archive. |
@@ -83,7 +84,9 @@ Key semantics:
 - **Schema version**: `PRAGMA user_version`. Changes are numbered migrations in
   `src/iqdm/db/migrations.py`. They run only from an explicit, user-confirmed
   upgrade action, with a backup copy made first (DECISIONS.md D6). Until the first
-  real database exists, `schema.sql` is edited in place as version 1 (D4).
+  real database exists, `schema.sql` is edited in place as version 1 (D4). A file at
+  the current version that lacks a table or column of `schema.sql` counts as an older
+  version (D73).
 
 ### DB access rules
 
@@ -206,12 +209,14 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
 `gui/viewer_tab.py`. Its text follows CLAUDE.md, "User-facing text" (D38).
 
 - **Filters** (D43): start date from and to (`YYYY-MM-DD` at the display offset; the
-  "to" date includes its whole day), site, band, centre frequency range in MHz (band
+  "to" date includes its whole day), site, project (all, no project, or one project;
+  D73), band, centre frequency range in MHz (band
   and range match on the same channel), archive state, "RF chain contains" (a
   parameter's name, value or unit) and "Remarks contain". Filters apply on Apply or
   Enter, and Clear removes them. A wrong value is marked under the filters and runs
   no query. The filter runs in SQL (D40).
-- **Recordings table**: ID, start at the display offset, site, channel count, centre
+- **Recordings table**: ID, start at the display offset, site, project (empty when
+  none), channel count, centre
   frequencies in MHz ("433.92 × 2" when all channels share one), span, coverage
   (minimum across channels), total size, archive state, logged by. Every column
   sorts, numbers as numbers. The model sorts its own rows (D40).
@@ -225,9 +230,10 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
   narrows the details to that channel.
 - **Details panel**: the RF chain that applies (Recording rows, with a channel's own
   rows replacing Recording rows of the same name and naming the replaced value; D28),
-  full path of the recording or channel, format, plan reference, remarks, who logged
+  full path of the recording or channel, format, project, plan reference, remarks, who logged
   it and when, when it last changed (`updated_at`, shown when it differs from the
-  logging time; D47), the "not verified" note, and the transfer history.
+  logging time; D47), the "not verified" note, and the transfer history in the order
+  the rows were written (D74).
 - **Gap detail** (section 7): "Scan for gaps" reads the recording folder in a worker
   with the stored file duration, with progress and Cancel. It shows a coverage
   timeline per channel, the gaps per channel at the display offset (the first 10,
@@ -258,7 +264,8 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    the number of files found so far and has a Cancel button.
 2. **Recording fields**: start and end (from scan, read-only, at the display offset,
    UTC+8 by default; D24), file duration (default 1.0 s), logged by (pre-filled with
-   the Windows login name, editable), site (dropdown plus "Add site"), recording plan
+   the Windows login name, editable), site (dropdown plus "Add site"), project
+   (optional dropdown with an empty choice, plus "Add project"; D73), recording plan
    reference, storage root and relative path (derived from the folder, read-only),
    archive state (derived: `local` unless the folder is under a configured NAS root,
    then `archived`; see DECISIONS.md D2 for the `transfer_log` row written in that
@@ -453,7 +460,8 @@ a preview, a copy, an archive, a check or a deletion. All run in a worker thread
 - **Closing the window** during an operation asks first. Yes stops the operation and
   waits until its row is written.
 - **Unfinished transfers.** The tab lists copies and archives that were stopped,
-  failed or never finished, newest first, for the current user or, on request, for
+  failed or never finished, newest first in the order the rows were written (D74),
+  for the current user or, on request, for
   all users. A later run of the same recording, destination, range and channels
   replaces an earlier one in the list. An archive leaves the list once its recording
   is archived. Resume fills in the form from the row and runs the preview; files
@@ -540,7 +548,8 @@ recording name the same folder. `transfer_log.manifest_path` holds its path and
   fail the verification.
 - **Deletion**: all deletion goes through `src/iqdm/transfer/delete.py` (D52). It
   needs an archive with a passed verification, a manifest whose SHA-256 matches, and
-  a check before delete of that archive that passed after it finished (D55). The
+  a passed check before delete of that archive, written after it (D55; D74 compares
+  the order of the rows, not the PCs' clocks). The
   recording must point at the archive's destination. Right before each source file is
   deleted, its destination copy and the source file must still have the manifest
   size. It deletes only the files in the manifest, never whole trees by pattern, and

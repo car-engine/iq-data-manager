@@ -90,6 +90,8 @@ Rules for this file:
 | D70 | Unsaved settings | 2026-10-04, Milestone 7 | Active |
 | D71 | Legacy dates and times from the folder | 2026-10-06, Milestone 7 | Active |
 | D72 | Milestone 8: release 1.0 | 2026-10-06, end of Milestone 7 | Active |
+| D73 | A project for each recording | 2026-10-11, Milestone 8 | Active |
+| D74 | Transfer rows in the order they were written | 2026-10-11, Milestone 8 | Active |
 
 ## D1. Sample types
 
@@ -1409,3 +1411,54 @@ app was ready for a first version.
   signing.
 
 Affects: SPEC section 12, `docs/STATUS.md`.
+
+## D73. A project for each recording
+
+The user asked for this on 2026-10-11, after the second visit to the NAS, and chose
+each point.
+
+- Each recording can belong to one project, so people can filter for the data of
+  their project. The project is optional.
+- Projects are a list like sites: a `projects` table with names unique without letter
+  case. The Log tab offers a dropdown of the projects in the database, an empty
+  choice, and "Add project". The app has no rename or delete for projects, as for
+  sites (D7).
+- `recordings.project_id` refers to `projects` and may be NULL.
+- The Log tab saves and edits the project like the site; a change needs no rescan.
+- The Viewer shows a Project column after Site, a Project filter (all projects, no
+  project, or one project) and the project in the details panel. The Archive / copy
+  tab shows the project in the recording line.
+- The legacy import leaves the project empty. Projects of legacy recordings are set
+  afterwards with Edit entry.
+- `schema.sql` is edited in place at version 1, because the real catalogue does not
+  exist yet (D4). The change must come before the real catalogue and O20.
+- A database made before this change has version 1 too, so its version number cannot
+  tell it apart. The database check now compares the file with `schema.sql`: a file
+  at the current version that lacks a table or column of `schema.sql` counts as an
+  older version. The Settings tab shows it in red, and the app refuses to read or
+  write it. Scratch databases made before this change are made again.
+
+Affects: SPEC sections 3, 5, 6 and 8, `schema.sql`, `db/version.py`, `models.py`,
+`db/repository.py`, `entry.py`, `viewer.py`, `gui/log_tab.py`, `gui/viewer_tab.py`,
+`gui/transfer_tab.py`.
+
+## D74. Transfer rows in the order they were written
+
+Found on 2026-10-11 in the logs of the second visit: one PC's clock was about 50 s
+behind the other's. The user approved the fix.
+
+- Each PC writes times from its own clock. Three places compared or sorted times
+  that different PCs wrote:
+  - a delete needed a check before delete that started after the archive finished
+    (D55). A check on a slower PC within a minute of an archive would have been
+    refused as missing;
+  - the transfer history of a recording, sorted by start time;
+  - the list of unfinished transfers, newest first by start time.
+- All three now use the order in which the rows were written, `transfer_log.id`. The
+  shared database numbers the rows in that order whatever the clocks say. A check
+  before delete names its archive, so it is always written after it.
+- Synchronised clocks are no longer needed by the app. The times on screen still come
+  from each PC's clock. The user guide recommends automatic time setting, or the NAS
+  as the time server on a network without internet.
+
+Affects: SPEC section 8, `transfer/delete.py`, `db/repository.py`, the user guide.
