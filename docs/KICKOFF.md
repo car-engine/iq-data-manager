@@ -100,3 +100,72 @@ about the open items before writing code.
 
 At the end of the milestone, Claude writes a report in `docs/reports/` that follows
 `docs/REPORT_TEMPLATE.md` and updates `docs/STATUS.md`.
+
+## Release review
+
+Before version 1.0, a fresh session reviews the whole repository. It finds problems
+and does not fix them. Paste this in plan mode:
+
+```
+Review IQ Data Manager before release 1.0. The work to review is branch m8-release,
+which is not merged into main. Stay on that branch.
+
+Read first: CLAUDE.md, docs/STATUS.md (including "Notes for agents"), docs/SPEC.md,
+docs/DECISIONS.md (D1 to D74; D65 to D74 are the newest), docs/USER_GUIDE.md,
+README.md, and docs/reports/M5.md, M6.md and M7.md. Milestone 8 has no report yet;
+STATUS.md describes its state.
+
+This is a review only. Do not change code, tests or documents, and do not commit
+fixes. Write your findings to docs/reports/<YYYY-MM-DD>-release-review.md, keep
+numbers exact and name files as links, as docs/REPORT_TEMPLATE.md asks, and commit
+only that file. I decide what gets fixed.
+
+Steps:
+1. Run pytest and ruff check. Record the counts.
+2. Build into new folders, dist/review-1 and build/work-review-1, with the commands in
+   README.md, "Build". Run the smoke test and the longPathAware check there.
+3. Review the code against SPEC.md and the decisions, most important first:
+   a. Data safety. Every path that deletes, overwrites, renames or creates a file:
+      the tables "Code paths that delete or overwrite a file" in M6.md and "Code that
+      creates or overwrites a file" in M7.md. Confirm that transfer/delete.py is the
+      only module that deletes, that its conditions match SPEC.md section 8
+      "Transfer safety" and D52, D55 and D74, and that no path replaces an existing
+      file.
+   b. The database: schema.sql, db/version.py (the D73 check of a file against
+      schema.sql, which runs on every connection), db/repository.py, migrations, and
+      the connection rules in CLAUDE.md.
+   c. Transfers: copier, verify, selection, pathcheck and operations, including stop,
+      resume (D51, D63) and Check archive (D71).
+   d. The GUI: the four tabs; work that can take more than about 100 ms runs off the
+      Qt main thread; the unsaved-settings question (D70); the project (D73).
+   e. The legacy import (D66, D71) and the console program IQDataManager-check.exe.
+   f. Packaging: build/iqdm.spec, the defaults file (D68), and the files written
+      next to the programs.
+4. Check the documents against the code and against each other. SPEC.md must state
+   the current requirement of every active decision. USER_GUIDE.md must match the
+   labels and behaviour on screen. README.md commands must work. STATUS.md must be
+   current. Report each contradiction.
+5. Check the visible text against CLAUDE.md, "User-facing text".
+6. Where it helps, render the tabs offscreen in light and dark palettes under
+   dev/review/, as "Notes for agents" in STATUS.md describes.
+
+For each finding give: a severity (blocker for 1.0, should fix, or minor), the file
+and line, what is wrong, a concrete failure (input or state, and the wrong result),
+and how you confirmed it (the test you ran or the code you read). Report only what
+you confirmed. List suspicions separately as unconfirmed. Also list what you could
+not check, such as the NAS and real data, and anything a new maintainer would miss
+in the documents.
+
+Known, and not findings: the open items in STATUS.md (O19, O20, O22, O37); the
+version is still 0.1.0, which a release step changes; the user has not yet tried
+D73 by eye.
+
+The safety rules in CLAUDE.md apply in full. Never use network paths, real
+databases, delete commands or robocopy. Git commands are limited to status, diff,
+log, add and commit. The safety hook blocks any shell command that contains a UNC
+path; do not run such commands and do not look for a workaround, but report what
+was blocked. Write files only with the Write and Edit tools.
+
+When you finish, give in chat: the test and lint counts, the blockers, and your
+recommendation on releasing 1.0.
+```

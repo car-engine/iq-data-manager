@@ -53,6 +53,7 @@ code as `IQDataManager-check.exe COMMAND`, in a console window.
 | `tools/db_check.py` | `db-check` | Create a scratch database; check opening, writing and locking (O21). Refuses a database with recordings it did not write. |
 | `tools/copy_check.py` | `copy-check` | Time the copy engine with 1, 4 and 8 files at once, flush on and off. |
 | `tools/make_nas_testset.py` | `make-test-set` | Write the synthetic recordings for the NAS field test (D54). |
+| `tools/migrate_legacy.py` | `migrate-legacy` | Import a copy of the legacy catalogue into a new database (D66, D71). Opens the legacy file read-only; `--dry-run` writes nothing. |
 
 ## Run
 
@@ -84,7 +85,8 @@ comments. Create a development database with
 
 `build/iqdm.spec` makes a onedir build with two programs: the windowed
 `IQDataManager.exe` and the console program `IQDataManager-check.exe` (D57). The
-build folder also holds `USER_GUIDE.md` and `defaults.example.toml` (D68). Build
+build folder also holds `USER_GUIDE.md`, `FIELD_TEST_CHECKLIST.html` and
+`defaults.example.toml` (D68). Build
 into output folders that do not exist yet. Do not pass `--noconfirm` or `--clean`,
 because both delete existing output.
 

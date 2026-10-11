@@ -14,10 +14,15 @@ D74).
   tried by eye, and not merged.
 - **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
   between two PCs passed: PC B's write waited for the 30 s hold, retried once and
-  passed after 11.8 s. This closes O21. The user reports that Check before delete with
-  `netstat -e` and the legacy import with Check archive in a trial catalogue went
-  fine; their numbers are still to be recorded in the Milestone 8 report. The two
+  passed after 11.8 s. This closes O21. Check before delete of every file of A
+  (4,000,000,000 bytes) raised the received bytes of `netstat -e` by "3.x GB" by the
+  user's memory; the exact numbers were not kept. Windows shows units of 2^30 bytes
+  as "GB", in which A is 3.73 GB, so the reads went over the network: D55 is taken as
+  confirmed. The legacy import and Check archive in a trial catalogue passed. The two
   PCs' clocks differed by about 50 s, which led to D74.
+- For the Milestone 8 report: on 2026-10-11 the agent ran `sed -i.bak '' /dev/null`
+  in the shell, against the notes for agents. It named no file of the repository and
+  changed nothing (`git status` was clean).
 - **Milestones 0 to 7 are merged into `main` and pushed.** Milestone 7 was merged as
   a fast-forward on 2026-10-06 and pushed the same day. Report:
   [reports/M7.md](reports/M7.md). 1,549 tests pass and 4 skip on `main`; three skips
@@ -132,10 +137,12 @@ Decided items are in `docs/DECISIONS.md` (D1–D74). The M0 review table in
 
 ## Pending checks for the user
 
-- Numbers from the second visit, for the Milestone 8 report: the two `netstat -e`
-  readings around Check before delete, how many legacy recordings Check archive set
-  and whether any failed or named a file duration, and `copy-check-A.txt` with 16
-  files at once if it ran.
+- D73 by eye with `dist/m8-1` on a new scratch database: add a project, save with and
+  without one, change it with Edit entry; the Viewer's Project column, filter and
+  details row; an old scratch database shows as an older version in the Settings
+  tab.
+- The release review by a second agent, with the prompt in
+  [KICKOFF.md](KICKOFF.md), "Release review".
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 The Milestone 6 manual test on this PC passed on 2026-10-04.
