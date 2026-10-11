@@ -13,12 +13,11 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
-from importlib import resources
 from pathlib import Path
 from urllib.parse import quote
 
 from iqdm.db import version
-from iqdm.db.version import SchemaStatus, schema_status
+from iqdm.db.version import SchemaStatus, missing_parts, schema_sql, schema_status
 
 Connection = sqlite3.Connection
 """Connection type for type hints outside db/, which may not import sqlite3 (D7)."""
@@ -41,11 +40,6 @@ class SchemaVersionError(DatabaseError):
     def __init__(self, status: SchemaStatus, message: str) -> None:
         super().__init__(message)
         self.status = status
-
-
-def schema_sql() -> str:
-    """The bundled schema.sql text."""
-    return resources.files("iqdm.db").joinpath("schema.sql").read_text(encoding="utf-8")
 
 
 def verify_schema_in_memory() -> int:
@@ -181,6 +175,7 @@ class DatabaseInfo:
     user_version: int | None = None
     status: SchemaStatus | None = None
     settings: Mapping[str, str | int] | None = None
+    missing: tuple[str, ...] = ()  # tables and columns of schema.sql the file lacks (D73)
     problem: DatabaseProblem | None = None
     error: str | None = None
 
@@ -216,6 +211,7 @@ def inspect_database(path: Path | str) -> DatabaseInfo:
         user_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
         status = schema_status(conn, latest)
         settings = connection_settings(conn)
+        missing = tuple(missing_parts(conn)) if user_version == latest else ()
     except sqlite3.Error as exc:
         return DatabaseInfo(
             path=str(p),
@@ -233,6 +229,7 @@ def inspect_database(path: Path | str) -> DatabaseInfo:
         user_version=user_version,
         status=status,
         settings=settings,
+        missing=missing,
     )
 
 

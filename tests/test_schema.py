@@ -81,7 +81,14 @@ def count(conn, table) -> int:
 def test_version_and_tables(conn):
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_schema WHERE type = 'table'")}
-    assert tables == {"sites", "recordings", "channels", "recording_params", "transfer_log"}
+    assert tables == {
+        "sites",
+        "projects",
+        "recordings",
+        "channels",
+        "recording_params",
+        "transfer_log",
+    }
 
 
 def test_defaults(conn):
@@ -338,6 +345,30 @@ def test_site_names_unique_ignoring_case(conn):
     add_site(conn, "LocationA")
     with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
         add_site(conn, "locationa")
+
+
+def add_project(conn, name="ProjectA") -> int:
+    sql = "INSERT INTO projects (name) VALUES (?) RETURNING id"
+    return conn.execute(sql, (name,)).fetchone()[0]
+
+
+def test_project_names_unique_ignoring_case(conn):
+    """D73: projects are a list like sites."""
+    add_project(conn, "Radar Trial")
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
+        add_project(conn, "radar trial")
+
+
+def test_a_recording_has_one_project_or_none(conn):
+    none = add_recording(conn, rel_path="a")
+    pid = add_project(conn)
+    tagged = add_recording(conn, rel_path="b", project_id=pid)
+    rows = dict(conn.execute("SELECT id, project_id FROM recordings").fetchall())
+    assert rows == {none: None, tagged: pid}
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        add_recording(conn, rel_path="c", project_id=pid + 99)
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        conn.execute("DELETE FROM projects WHERE id = ?", (pid,))  # still in use
 
 
 def test_location_unique(conn):

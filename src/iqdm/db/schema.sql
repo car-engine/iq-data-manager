@@ -19,6 +19,17 @@ CREATE TABLE sites (
 
 
 -- ------------------------------------------------------------------
+-- Projects: selectable list in the GUI, users can add new ones.
+-- A recording belongs to one project or none (docs/DECISIONS.md D73).
+-- ------------------------------------------------------------------
+CREATE TABLE projects (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- unique ignoring case, as for sites
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+
+-- ------------------------------------------------------------------
 -- Recordings: one row per capture session (single or multi-channel)
 -- ------------------------------------------------------------------
 CREATE TABLE recordings (
@@ -38,6 +49,7 @@ CREATE TABLE recordings (
     file_duration_s     REAL NOT NULL DEFAULT 1.0 CHECK (file_duration_s > 0),
 
     site_id             INTEGER NOT NULL REFERENCES sites(id),
+    project_id          INTEGER REFERENCES projects(id),     -- NULL: no project (D73)
 
     -- File format (shared by all channels). Samples are always complex IQ.
     dtype               TEXT NOT NULL DEFAULT 'int16'
@@ -70,6 +82,7 @@ CREATE TABLE recordings (
 
 CREATE INDEX idx_recordings_start ON recordings(start_unix);
 CREATE INDEX idx_recordings_site  ON recordings(site_id);
+CREATE INDEX idx_recordings_project ON recordings(project_id);
 
 CREATE TRIGGER trg_recordings_updated_at
 AFTER UPDATE ON recordings

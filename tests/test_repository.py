@@ -120,6 +120,72 @@ def test_list_and_find_sites(conn):
 
 
 # ---------------------------------------------------------------------------
+# Projects (D73)
+# ---------------------------------------------------------------------------
+
+
+def test_add_list_and_get_projects(conn):
+    for name in ["  radar trial ", "Antenna Survey"]:
+        repo.add_project(conn, name)
+    projects = repo.list_projects(conn)
+    assert [p.name for p in projects] == ["Antenna Survey", "radar trial"]
+    assert repo.get_project(conn, projects[1].id).name == "radar trial"
+    with pytest.raises(repo.NotFoundError):
+        repo.get_project(conn, 999)
+
+
+def test_add_project_refuses_empty_and_duplicate_names(conn):
+    with pytest.raises(ValueError, match="empty"):
+        repo.add_project(conn, "  ")
+    repo.add_project(conn, "Radar Trial")
+    with pytest.raises(repo.DuplicateProjectError):
+        repo.add_project(conn, "RADAR TRIAL")
+
+
+def test_a_recording_keeps_and_changes_its_project(conn, site_id):
+    first = repo.add_project(conn, "Radar Trial").id
+    second = repo.add_project(conn, "Survey").id
+    rid = repo.insert_recording(conn, recording(site_id, project_id=first))
+    assert repo.get_recording(conn, rid).project_id == first
+    rec = repo.get_recording(conn, rid)
+    rec.project_id = second
+    repo.update_recording(conn, rec)
+    assert repo.get_recording(conn, rid).project_id == second
+    rec.project_id = None
+    repo.update_recording(conn, rec)
+    assert repo.get_recording(conn, rid).project_id is None
+
+
+def test_a_recording_without_a_project(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    assert repo.get_recording(conn, rid).project_id is None
+
+
+def test_an_unknown_project_is_refused(conn, site_id):
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        repo.insert_recording(conn, recording(site_id, project_id=999))
+
+
+def test_the_list_names_the_project_and_filters_by_it(conn, site_id):
+    radar = repo.add_project(conn, "Radar Trial").id
+    survey = repo.add_project(conn, "Survey").id
+    a = repo.insert_recording(conn, recording(site_id, rel_path="a", project_id=radar))
+    b = repo.insert_recording(conn, recording(site_id, rel_path="b", project_id=survey))
+    c = repo.insert_recording(conn, recording(site_id, rel_path="c"))
+    names = {s.id: s.project_name for s in repo.list_recordings(conn)}
+    assert names == {a: "Radar Trial", b: "Survey", c: None}
+
+    def ids(**kw) -> set[int]:
+        return {s.id for s in repo.list_recordings(conn, RecordingFilter(**kw))}
+
+    assert ids(project_id=radar) == {a}
+    assert ids(without_project=True) == {c}
+    assert ids(project_id=survey, site_id=site_id) == {b}
+    with pytest.raises(ValueError, match="no project"):
+        ids(project_id=radar, without_project=True)
+
+
+# ---------------------------------------------------------------------------
 # Insert and read
 # ---------------------------------------------------------------------------
 

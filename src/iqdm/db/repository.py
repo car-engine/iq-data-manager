@@ -27,6 +27,7 @@ from iqdm.models import (
     IqLayout,
     Operation,
     Param,
+    Project,
     Recording,
     RecordingFilter,
     RecordingSummary,
@@ -50,6 +51,10 @@ class NotFoundError(RepositoryError):
 
 
 class DuplicateSiteError(RepositoryError):
+    pass
+
+
+class DuplicateProjectError(RepositoryError):
     pass
 
 
@@ -132,6 +137,49 @@ def find_site(conn: sqlite3.Connection, name: str) -> Site | None:
 
 
 # ---------------------------------------------------------------------------
+# Projects (D73): a list like sites
+# ---------------------------------------------------------------------------
+
+
+def _project(row: sqlite3.Row) -> Project:
+    return Project(id=row["id"], name=row["name"], created_at=row["created_at"])
+
+
+def add_project(conn: sqlite3.Connection, name: str) -> Project:
+    """Add a project. Names are unique ignoring case."""
+    clean = name.strip()
+    if not clean:
+        raise ValueError("project name is empty")
+    try:
+        row = _one(
+            conn,
+            "INSERT INTO projects (name) VALUES (?) RETURNING id, name, created_at",
+            (clean,),
+        )
+    except sqlite3.IntegrityError as exc:
+        if _is_unique_violation(exc, "projects.name"):
+            raise DuplicateProjectError(f"project {clean!r} already exists") from exc
+        raise
+    if row is None:
+        raise RepositoryError(f"inserting project {clean!r} returned no row")
+    return _project(row)
+
+
+def list_projects(conn: sqlite3.Connection) -> list[Project]:
+    rows = _rows(
+        conn, "SELECT id, name, created_at FROM projects ORDER BY name COLLATE NOCASE"
+    )
+    return [_project(r) for r in rows]
+
+
+def get_project(conn: sqlite3.Connection, project_id: int) -> Project:
+    row = _one(conn, "SELECT id, name, created_at FROM projects WHERE id = ?", (project_id,))
+    if row is None:
+        raise NotFoundError(f"no project with id {project_id}")
+    return _project(row)
+
+
+# ---------------------------------------------------------------------------
 # Recordings: writes
 # ---------------------------------------------------------------------------
 
@@ -157,6 +205,7 @@ def _recording_values(rec: Recording) -> tuple[Any, ...]:
         end,
         rec.file_duration_s,
         rec.site_id,
+        rec.project_id,
         str(rec.dtype),
         str(rec.iq_layout),
         str(rec.endianness),
@@ -232,9 +281,9 @@ def insert_recording(conn: sqlite3.Connection, rec: Recording) -> int:
     try:
         row = conn.execute(
             "INSERT INTO recordings (logged_by, date, start_unix, end_unix, file_duration_s,"
-            " site_id, dtype, iq_layout, endianness, header_bytes, storage_root, rel_path,"
-            " archive_state, archived_at, recording_plan_ref, remarks)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            " site_id, project_id, dtype, iq_layout, endianness, header_bytes, storage_root,"
+            " rel_path, archive_state, archived_at, recording_plan_ref, remarks)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             _recording_values(rec),
         ).fetchone()
     except sqlite3.IntegrityError as exc:
@@ -270,7 +319,8 @@ def update_recording(
     try:
         cur = conn.execute(
             "UPDATE recordings SET logged_by = ?, date = ?, start_unix = ?, end_unix = ?,"
-            " file_duration_s = ?, site_id = ?, dtype = ?, iq_layout = ?, endianness = ?,"
+            " file_duration_s = ?, site_id = ?, project_id = ?, dtype = ?, iq_layout = ?,"
+            " endianness = ?,"
             " header_bytes = ?, storage_root = ?, rel_path = ?, archive_state = ?,"
             " archived_at = ?, recording_plan_ref = ?, remarks = ? WHERE id = ?",
             (*_recording_values(rec), rec.id),
@@ -431,6 +481,7 @@ def get_recording(conn: sqlite3.Connection, recording_id: int) -> Recording:
         id=row["id"],
         logged_by=row["logged_by"],
         site_id=row["site_id"],
+        project_id=row["project_id"],
         storage_root=row["storage_root"],
         rel_path=row["rel_path"],
         channels=channels,
@@ -517,6 +568,13 @@ def _filter_sql(flt: RecordingFilter | None) -> tuple[str, list[Any]]:
     if flt.site_id is not None:
         clauses.append("r.site_id = ?")
         params.append(flt.site_id)
+    if flt.without_project and flt.project_id is not None:
+        raise ValueError("a filter cannot ask for a project and for no project")
+    if flt.project_id is not None:
+        clauses.append("r.project_id = ?")
+        params.append(flt.project_id)
+    if flt.without_project:
+        clauses.append("r.project_id IS NULL")
     if flt.archive_state is not None:
         clauses.append("r.archive_state = ?")
         params.append(str(flt.archive_state))
@@ -562,7 +620,7 @@ def list_recordings(
     recordings = _rows(
         conn,
         "SELECT r.id, r.date, r.start_unix, r.end_unix, r.file_duration_s,"  # noqa: S608
-        " r.archive_state, r.logged_by, s.name AS site_name,"
+        " r.archive_state, r.logged_by, s.name AS site_name, p.name AS project_name,"
         " (r.archive_state = 'archived' AND EXISTS (SELECT 1 FROM transfer_log t"
         "  WHERE t.recording_id = r.id AND t.operation = 'check'"
         "  AND t.verification = 'skipped' AND t.notes = ?"
@@ -571,6 +629,7 @@ def list_recordings(
         "   AND c.verification = 'pass' AND c.destination IS NOT NULL"
         "   AND c.parent_id IS NULL))) AS unverified"
         " FROM recordings r JOIN sites s ON s.id = r.site_id"
+        " LEFT JOIN projects p ON p.id = r.project_id"
         f" WHERE {where}"
         " ORDER BY r.start_unix DESC, r.id DESC",
         [IN_PLACE_NOTE, *params],
@@ -608,6 +667,7 @@ def list_recordings(
                 archive_state=ArchiveState(r["archive_state"]),
                 logged_by=r["logged_by"],
                 unverified=bool(r["unverified"]),
+                project_name=r["project_name"],
             )
         )
     return summaries

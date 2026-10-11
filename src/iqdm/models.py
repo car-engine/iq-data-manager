@@ -68,6 +68,15 @@ class Site:
 
 
 @dataclass(kw_only=True)
+class Project:
+    """A project that recordings can belong to (D73). Names are unique ignoring case."""
+
+    name: str
+    id: int | None = None
+    created_at: str | None = None
+
+
+@dataclass(kw_only=True)
 class Channel:
     """One channel of a recording. end_unix is exclusive."""
 
@@ -116,6 +125,7 @@ class Recording:
     header_bytes: int = 0
     archive_state: ArchiveState = ArchiveState.LOCAL
     archived_at: str | None = None
+    project_id: int | None = None  # None: no project (D73)
     recording_plan_ref: str | None = None
     remarks: str | None = None
     id: int | None = None
@@ -142,6 +152,7 @@ class RecordingSummary:
     archive_state: ArchiveState
     logged_by: str
     unverified: bool = False  # archived in place on the NAS, never checked (D2)
+    project_name: str | None = None  # None: no project (D73)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -151,12 +162,15 @@ class RecordingFilter:
     Start bounds apply to the recording's start: from inclusive, before exclusive.
     Band and the fc range must match on the same channel. Text filters match a part of
     the text, ignoring letter case for ASCII letters. RF chain text matches a
-    parameter's name, value or unit.
+    parameter's name, value or unit. without_project keeps the recordings that have no
+    project; it cannot be combined with project_id (D73).
     """
 
     start_from_unix: float | None = None
     start_before_unix: float | None = None
     site_id: int | None = None
+    project_id: int | None = None
+    without_project: bool = False
     band: str | None = None
     fc_min_hz: float | None = None
     fc_max_hz: float | None = None

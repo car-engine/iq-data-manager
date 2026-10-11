@@ -148,6 +148,8 @@ def database_status(info: DatabaseInfo) -> DatabaseStatus:
             f"foreign keys {'on' if s.get('foreign_keys') else 'off'}, "
             f"busy timeout {s.get('busy_timeout')} ms."
         )
+        if info.missing:
+            details += f"\nMissing from the schema: {', '.join(info.missing)}."
     match info.problem:
         case DatabaseProblem.NOT_FOUND:
             return DatabaseStatus(

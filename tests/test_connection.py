@@ -1,5 +1,6 @@
 """Tests for iqdm.db.connection and iqdm.db.version. All databases live in tmp_path."""
 
+import re
 import sqlite3
 import sys
 
@@ -15,6 +16,7 @@ from iqdm.db.connection import (
     database_status,
     inspect_database,
     open_db,
+    schema_sql,
     sqlite_uri,
     write_transaction,
 )
@@ -171,6 +173,43 @@ def test_older_database_is_refused(db_path, monkeypatch):
     for readonly in (False, True):
         with pytest.raises(SchemaVersionError, match="older schema"):
             connect(db_path, readonly=readonly)
+
+
+def schema_before_projects() -> str:
+    """schema.sql as it was before D73: no projects table, no recordings.project_id."""
+    text = schema_sql()
+    text = re.sub(r"CREATE TABLE projects \(.*?\);\n", "", text, flags=re.DOTALL)
+    text = re.sub(r"\n\s*project_id\s+INTEGER REFERENCES projects\(id\),[^\n]*", "", text)
+    text = text.replace("CREATE INDEX idx_recordings_project ON recordings(project_id);\n", "")
+    assert "projects" not in text.replace("-- Projects", "")
+    return text
+
+
+def make_old_database(path) -> None:
+    raw = sqlite3.connect(path, autocommit=True)
+    raw.executescript(schema_before_projects())
+    raw.close()
+
+
+def test_a_database_made_before_an_edit_of_schema_sql_is_older(tmp_path):
+    """D73: same version number, older schema; reads and writes are refused."""
+    path = tmp_path / "before-d73.db"
+    make_old_database(path)
+    assert database_status(path) is SchemaStatus.NEEDS_UPGRADE
+    for readonly in (False, True):
+        with pytest.raises(SchemaVersionError, match="older schema"):
+            connect(path, readonly=readonly)
+    info = inspect_database(path)
+    assert (info.user_version, info.status) == (1, SchemaStatus.NEEDS_UPGRADE)
+    assert info.missing == ("projects", "recordings.project_id")
+
+
+def test_a_current_database_misses_nothing(db_path):
+    with open_db(db_path, readonly=True) as conn:
+        assert version.missing_parts(conn) == []
+    assert inspect_database(db_path).missing == ()
+    assert set(version.expected_columns()) >= {"projects", "recordings", "transfer_log"}
+    assert "project_id" in version.expected_columns()["recordings"]
 
 
 def test_foreign_database_is_refused(tmp_path):
