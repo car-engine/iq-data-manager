@@ -5,13 +5,15 @@ path-text checks is never opened, so those tests touch no drive or network.
 """
 
 import dataclasses
+import os
 from pathlib import Path, PureWindowsPath
 
 import pytest
 
-from conftest import recording_from
+from conftest import junction, recording_from
 from iqdm.models import Operation
 from iqdm.scan.scanner import scan_recording
+from iqdm.transfer import pathcheck
 from iqdm.transfer.pathcheck import (
     GB,
     MAX_FILE_PATH,
@@ -127,6 +129,65 @@ def test_windows_path():
 def test_only_a_copy_or_an_archive_has_a_destination(selection, tmp_path):
     with pytest.raises(ValueError, match="copy or an archive"):
         check(selection, tmp_path / "out", operation=Operation.CHECK)
+
+
+# ---------------------------------------------------------------------------
+# File identity: one folder under two names (D75)
+# ---------------------------------------------------------------------------
+
+
+def test_the_source_under_another_name_is_refused(selection, tmp_path):
+    alias = junction(tmp_path / "alias", selection.source)
+    for operation in (Operation.COPY, Operation.ARCHIVE):
+        result = check(selection, alias, operation, nas_roots=(str(tmp_path),))
+        assert result.errors == (
+            "The destination is the source folder, under another name. Choose another folder.",
+        )
+        assert result.existing == frozenset()
+
+
+def test_a_folder_inside_the_source_under_another_name_is_refused(selection, tmp_path):
+    alias = junction(tmp_path / "alias", selection.source)
+    assert check(selection, alias / "0" / "copy").errors == (
+        "The destination lies inside the source folder, under another name. Choose another "
+        "folder.",
+    )
+
+
+def test_a_folder_that_holds_the_source_under_another_name_is_refused(selection, tmp_path):
+    alias = junction(tmp_path / "elsewhere" / "alias", selection.source.parent)
+    assert check(selection, alias).errors == (
+        "The source folder lies inside the destination, under another name. Choose a new "
+        "folder for the copy.",
+    )
+
+
+def test_target_files_that_are_the_source_files_are_refused(selection, tmp_path):
+    dest = tmp_path / "out"
+    linked = [f.rel_path for f in selection.files[:2]]
+    for rel in linked:  # hard links: one file with two names
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        os.link(selection.source / rel, dest / rel)
+    copy_in(selection, dest, [selection.files[2].rel_path])
+    result = check(selection, dest)
+    assert result.errors == (
+        f"Files in the destination are the source files themselves, under another name "
+        f"(2 files): {', '.join(sorted(linked))}. Choose another folder.",
+    )
+
+
+def test_a_folder_without_file_ids_is_refused(selection, tmp_path, monkeypatch):
+    monkeypatch.setattr(pathcheck, "same_file", lambda a, b: None)
+    (tmp_path / "out").mkdir()
+    assert check(selection, tmp_path / "out").errors == (pathcheck.UNKNOWN_IDENTITY,)
+
+
+def test_separate_folders_on_one_drive_pass_the_identity_check(selection, tmp_path):
+    dest = tmp_path / "out"
+    copy_in(selection, dest, [f.rel_path for f in selection.files])
+    result = check(selection, dest)
+    assert result.ok, result.errors
+    assert len(result.existing) == selection.n_files
 
 
 # ---------------------------------------------------------------------------

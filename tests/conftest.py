@@ -68,6 +68,21 @@ def recording_from(info: FixtureInfo, *, site_id: int = 1, **kw) -> Recording:
     return Recording(**values)
 
 
+def junction(link: Path, target: Path) -> Path:
+    """A directory junction at `link` that points at `target`: one folder, two names.
+
+    Junctions need no privilege on Windows. Tests that use one skip elsewhere. Both
+    paths must lie under tmp_path.
+    """
+    if os.name != "nt":
+        pytest.skip("directory junctions exist on Windows only")
+    import _winapi
+
+    link.parent.mkdir(parents=True, exist_ok=True)
+    _winapi.CreateJunction(str(target), str(link))
+    return link
+
+
 @pytest.fixture
 def entry_for() -> Callable[..., Recording]:
     """recording_from() as a fixture: entry_for(info, **Recording overrides)."""

@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from conftest import recording_from
+from conftest import junction, recording_from
 from iqdm.models import HashMode
 from iqdm.scan.scanner import scan_recording
+from iqdm.transfer import verify as verify_module
 from iqdm.transfer.copier import CopyItem, copy_files, local_path
 from iqdm.transfer.selection import select_from_scan
 from iqdm.transfer.verify import (
@@ -72,6 +73,37 @@ def test_a_missing_file_fails(copied):
     assert [(p.rel_path, p.kind) for p in result.problems] == [
         (items[0].rel_path, ProblemKind.MISSING)
     ]
+
+
+@pytest.mark.parametrize("mode", list(HashMode))
+def test_a_destination_that_is_the_source_fails(copied, tmp_path, mode):
+    """One folder under two names: each file compared with itself (D75)."""
+    source, _, items = copied
+    alias = junction(tmp_path / "alias", source)
+    result = verify_copy(source, alias, items, hash_mode=mode, sample_fraction=0.05)
+    assert not result.passed
+    assert {p.kind for p in result.problems} == {ProblemKind.SAME_FILE}
+    assert len(result.problems) == len(items)
+    assert result.problems[0].message == (
+        "The destination file is the source file under another name."
+    )
+
+
+def test_a_file_without_a_file_id_fails(copied, monkeypatch):
+    monkeypatch.setattr(verify_module, "same_file", lambda a, b: None)
+    result = verify(copied, HashMode.NONE)
+    assert not result.passed
+    assert {p.kind for p in result.problems} == {ProblemKind.SAME_FILE}
+
+
+def test_a_missing_source_file_does_not_stop_the_identity_check(copied):
+    """After a partial delete the laptop file is gone; the manifest hash is used (D55)."""
+    source, dest, items = copied
+    rel = items[0].rel_path
+    digest = hashlib.sha256(local_path(dest, rel).read_bytes()).hexdigest()
+    local_path(source, rel).rename(source / "moved-away.dat")
+    result = verify(copied, source_hashes={rel: digest}, uncached=True)
+    assert result.passed, result.problems
 
 
 def test_a_size_difference_fails(copied):

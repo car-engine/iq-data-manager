@@ -15,6 +15,10 @@ Source hashes computed by the copy engine are used where they exist; other sourc
 files are read. Files in the destination's folders that the selection does not list
 are reported in `extra` and do not fail the verification.
 
+A destination file that is the source file under another name fails, and so does one
+whose identity the storage cannot tell (location.same_file(), DECISIONS.md D75). A
+file compared with itself would pass every other check.
+
 Reading a file straight after writing it to a network share may be served from the
 PC's cache. uncached=True reads the destination files past that cache; the check
 before delete uses it (D55).
@@ -28,6 +32,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from iqdm.location import same_file
 from iqdm.models import HashMode
 from iqdm.transfer.copier import CHUNK_BYTES, CopyItem, local_path
 from iqdm.transfer.uncached import read_chunks
@@ -38,6 +43,7 @@ class ProblemKind(StrEnum):
     SIZE = "size"
     HASH = "hash"
     UNREADABLE = "unreadable"
+    SAME_FILE = "same file"  # the destination file is the source file (D75)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -229,6 +235,21 @@ def _check_file(
             rel_path=rel,
             kind=ProblemKind.SIZE,
             message=f"{size:,} bytes in the destination, {item.size:,} in the source.",
+        )
+    try:
+        same = same_file(local_path(source, rel), dst)
+    except OSError:
+        same = False  # no source file to compare, as after a partial delete
+    if same is not False:
+        return FileProblem(
+            rel_path=rel,
+            kind=ProblemKind.SAME_FILE,
+            message=(
+                "The destination file is the source file under another name."
+                if same
+                else "The storage reports no file ID, so the destination file cannot be "
+                "told apart from the source file."
+            ),
         )
     if not hashed:
         return None

@@ -11,8 +11,10 @@ verification. prepare_delete() refuses unless all of these hold:
 
 delete_source_files() then works file by file. Right before a source file is
 deleted, the NAS copy must be a regular file with the manifest size, and the source
-file must be a regular file with the manifest size inside the source folder. A file
-that fails a check is kept and reported. Only files listed in the manifest are
+file must be a regular file with the manifest size inside the source folder. The two
+must be different files by file identity (location.same_file(), D75): one folder
+reached under two names would otherwise lose its only copy. A file that fails a
+check, or whose identity cannot be read, is kept and reported. Only files listed in the manifest are
 deleted. Afterwards, folders that held them, and the source folder itself, are
 removed when they are empty. Nothing is deleted by pattern or by tree.
 """
@@ -21,7 +23,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 
-from iqdm.location import join_location
+from iqdm.location import join_location, same_file
 from iqdm.models import ArchiveState, Operation, Recording, TransferEntry, Verification
 from iqdm.transfer.copier import local_path
 from iqdm.transfer.manifest import Manifest, ManifestFile, safe_rel_path
@@ -184,6 +186,17 @@ def _keep_reason(plan: DeletePlan, f: ManifestFile, src: Path, dst: Path) -> str
         return "The laptop file changed after the copy."
     if not _inside(src, plan.source):
         return "The laptop file lies outside the recording folder."
+    try:
+        same = same_file(src, dst)
+    except OSError as exc:
+        return f"Cannot tell whether the NAS copy is a separate file: {exc}"
+    if same is None:
+        return (
+            "Cannot tell whether the NAS copy is a separate file. The storage reports no "
+            "file ID."
+        )
+    if same:
+        return "The NAS copy is this laptop file under another name."
     return None
 
 

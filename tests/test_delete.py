@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from conftest import recording_from
+from conftest import junction, recording_from
 from iqdm.models import ArchiveState, HashMode, Operation, TransferEntry, Verification
 from iqdm.scan.scanner import scan_recording
+from iqdm.transfer import delete as delete_module
 from iqdm.transfer.copier import CopyItem, copy_files, local_path
 from iqdm.transfer.delete import (
     NOT_CHECKED,
@@ -184,6 +185,44 @@ def test_a_file_already_gone_is_reported_and_a_rerun_finishes(archived):
     assert second.deleted == (rel,)
     assert len(second.already_gone) == 7
     assert not s.source.exists()
+
+
+def test_a_nas_copy_that_is_the_laptop_file_keeps_every_file(archived, tmp_path):
+    """One folder under two names: the "NAS copy" is the laptop file itself (D75)."""
+    s = archived()
+    before = files_under(s.source)
+    plan = dataclasses.replace(s.plan(), destination=junction(tmp_path / "alias", s.source))
+    result = delete_source_files(plan)
+    assert not result.complete
+    assert result.deleted == ()
+    assert {k.reason for k in result.kept} == {
+        "The NAS copy is this laptop file under another name."
+    }
+    assert len(result.kept) == len(s.manifest.files)
+    assert files_under(s.source) == before
+
+
+def test_a_file_whose_identity_is_unknown_is_kept(archived, monkeypatch):
+    s = archived()
+    monkeypatch.setattr(delete_module, "same_file", lambda a, b: None)
+    result = delete_source_files(s.plan())
+    assert result.deleted == ()
+    assert {k.reason for k in result.kept} == {
+        "Cannot tell whether the NAS copy is a separate file. The storage reports no file ID."
+    }
+
+
+def test_a_file_whose_identity_cannot_be_read_is_kept(archived, monkeypatch):
+    s = archived()
+
+    def unreadable(a, b):
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(delete_module, "same_file", unreadable)
+    result = delete_source_files(s.plan())
+    assert result.deleted == ()
+    assert all(k.reason.startswith("Cannot tell whether the NAS copy") for k in result.kept)
+    assert len(files_under(s.source)) > len(s.manifest.files)  # files and their folders
 
 
 def test_a_link_in_place_of_a_laptop_file_is_kept(archived, tmp_path):

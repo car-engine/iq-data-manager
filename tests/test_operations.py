@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import recording_from
+from conftest import junction, recording_from
 from iqdm import viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
@@ -229,6 +229,21 @@ def test_archive_outside_the_nas_is_refused(env):
     assert any(
         e.startswith("An archive goes to a folder in one of the NAS") for e in preview.errors
     )
+
+
+def test_an_archive_to_the_laptop_folder_under_another_name_is_refused(env):
+    """The release review's finding 1 (D75): a NAS name for the laptop folder itself.
+
+    Before D75 the archive copied nothing, passed, and Delete laptop copy then deleted
+    the only copy.
+    """
+    alias = junction(env.nas / "2026" / env.source.name, env.source)
+    preview = env.preview(env.request(dest=alias))
+    assert preview.errors == (
+        "The destination is the source folder, under another name. Choose another folder.",
+    )
+    assert len(tree(env.source)) == 10
+    assert env.transfers() == []
 
 
 def test_two_archives_at_once_keep_the_first(env):

@@ -2,15 +2,16 @@
 
 Rules in DECISIONS.md D14. Paths are handled as Windows paths with PureWindowsPath and
 ntpath, so split_location() and its tests run on any OS and touch no file. Only
-mapped_drive_unc() calls Windows.
+mapped_drive_unc() calls Windows, and only same_file() reads file information.
 """
 
 import ntpath
+import os
 import re
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
 from iqdm.models import ArchiveState
 
@@ -132,6 +133,29 @@ def split_location(
         archive_state=ArchiveState.LOCAL,
         outside_nas_roots=_is_unc(path),
     )
+
+
+def same_file(a: str | os.PathLike[str], b: str | os.PathLike[str]) -> bool | None:
+    """True when two paths name one file or folder, by file identity (D75).
+
+    Path text can differ for one folder: a NAS reached by host name and by IP address,
+    or a directory junction. The identity is the volume serial number and the file ID
+    (st_dev and st_ino), with links and junctions followed. False for two volumes or
+    two file IDs. None when both lie on one volume and either file ID is 0, so the
+    answer is unknown. Raises OSError when either path cannot be read.
+    """
+    (dev_a, ino_a), (dev_b, ino_b) = _identity(a), _identity(b)
+    if dev_a != dev_b:
+        return False
+    if ino_a == 0 or ino_b == 0:
+        return None
+    return ino_a == ino_b
+
+
+def _identity(path: str | os.PathLike[str]) -> tuple[int, int]:
+    """st_dev and st_ino of a path, with links and junctions followed."""
+    st = Path(path).stat()
+    return st.st_dev, st.st_ino
 
 
 def mapped_drive_unc(drive: str) -> str | None:

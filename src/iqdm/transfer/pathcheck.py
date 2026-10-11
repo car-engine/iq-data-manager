@@ -7,6 +7,11 @@ Path text is compared as Windows paths with PureWindowsPath, which ignores lette
 case and compares whole components, as location.py does. A mapped drive letter is
 replaced by its UNC path first, so a drive path and a UNC path to the same folder
 compare equal.
+
+Path text alone misses a folder with two names, for example a NAS reached by host
+name and by IP address, or a directory junction. The folders that exist are therefore
+also compared by file identity with location.same_file() (DECISIONS.md D75), and so
+is each target file already in place with its source file.
 """
 
 import ntpath
@@ -19,7 +24,13 @@ from pathlib import Path, PureWindowsPath
 from typing import NamedTuple
 
 from iqdm.entry import format_size
-from iqdm.location import DriveResolver, LocationError, mapped_drive_unc, split_location
+from iqdm.location import (
+    DriveResolver,
+    LocationError,
+    mapped_drive_unc,
+    same_file,
+    split_location,
+)
 from iqdm.models import ArchiveState, Operation
 from iqdm.transfer.selection import Selection
 
@@ -117,6 +128,62 @@ def _path_errors(source: PureWindowsPath, dest: PureWindowsPath, dest_text: str)
     if source.is_relative_to(dest):
         return ["The source folder is inside the destination. Choose a new folder for the copy."]
     return []
+
+
+UNKNOWN_IDENTITY = (
+    "The app cannot tell whether the destination is a separate folder from the source, "
+    "because the storage reports no file IDs. Choose a destination on another drive or "
+    "share."
+)
+
+
+def _existing(path: Path) -> list[Path]:
+    """path and its parent folders, those that exist, deepest first."""
+    return [p for p in (path, *path.parents) if p.exists()]
+
+
+def _same(a: Path, b: Path) -> bool | None:
+    """same_file(), with False when either path cannot be read."""
+    try:
+        return same_file(a, b)
+    except OSError:
+        return False
+
+
+def _identity_errors(source: Path, dest: Path) -> list[str]:
+    """The source and the destination folder compared by file identity (D75)."""
+    for folder in _existing(dest):
+        same = _same(folder, source)
+        if same is None:
+            return [UNKNOWN_IDENTITY]
+        if same:
+            where = "is the source folder" if folder == dest else "lies inside the source folder"
+            return [f"The destination {where}, under another name. Choose another folder."]
+    for folder in _existing(source)[1:]:
+        same = _same(folder, dest)
+        if same is None:
+            return [UNKNOWN_IDENTITY]
+        if same:
+            return [
+                "The source folder lies inside the destination, under another name. "
+                "Choose a new folder for the copy."
+            ]
+    return []
+
+
+def _same_file_errors(source: Path, dest: Path, existing: set[str]) -> list[str]:
+    """Target files in place that are their source files under another name (D75)."""
+    same = []
+    for rel in sorted(existing):
+        parts = rel.split("/")
+        if _same(source.joinpath(*parts), dest.joinpath(*parts)) is not False:
+            same.append(rel)
+    if not same:
+        return []
+    return [
+        f"Files in the destination are the source files themselves, under another name "
+        f"({files_text(len(same))}): {_names(same)}. Choose another folder."
+    ]
 
 
 def _archive_errors(
@@ -228,6 +295,8 @@ def check_destination(
     errors += _path_errors(source_win, dest_win, dest_text)
     if operation is Operation.ARCHIVE:
         errors += _archive_errors(dest_text, nas_roots, resolve_drive)
+    if not errors:  # the same condition under which the folder is read below
+        errors += _identity_errors(Path(selection.source), dest)
 
     targets = {f.rel_path: f.size for f in selection.files}
     existing: set[str] = set()
@@ -242,6 +311,7 @@ def check_destination(
             errors.append(f"Cannot read the destination folder: {exc}")
         else:
             errors += _content_errors(listing, targets, selection, operation, existing, notes)
+            errors += _same_file_errors(Path(selection.source), dest, existing)
 
     bytes_to_copy = sum(size for rel, size in targets.items() if rel not in existing)
     if not errors:

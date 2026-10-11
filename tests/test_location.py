@@ -1,7 +1,8 @@
 """Tests for iqdm.location (DECISIONS.md D14).
 
 The paths are example strings. split_location() only parses them; no test opens a
-network path or a drive other than the one that holds tmp_path.
+network path or a drive other than the one that holds tmp_path. The same_file() tests
+use folders under tmp_path, or a replaced location._identity().
 """
 
 import sys
@@ -9,11 +10,14 @@ from pathlib import Path
 
 import pytest
 
+from conftest import junction
+from iqdm import location
 from iqdm.location import (
     Location,
     LocationError,
     join_location,
     mapped_drive_unc,
+    same_file,
     split_location,
 )
 from iqdm.models import ArchiveState
@@ -187,3 +191,54 @@ def test_mapped_drive_unc_is_none_for_the_local_drive_of_tmp_path(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason="non-Windows behaviour")
 def test_mapped_drive_unc_is_none_off_windows():
     assert mapped_drive_unc("Z:") is None
+
+
+# ---------------------------------------------------------------------------
+# File identity (D75)
+# ---------------------------------------------------------------------------
+
+
+def test_same_file_tells_one_folder_under_two_names(tmp_path):
+    folder = tmp_path / "rec"
+    folder.mkdir()
+    alias = junction(tmp_path / "alias", folder)
+    assert same_file(folder, alias) is True
+    assert same_file(folder, folder) is True
+    other = tmp_path / "other"
+    other.mkdir()
+    assert same_file(folder, other) is False
+
+
+def test_same_file_tells_a_file_from_its_copy(tmp_path):
+    a = tmp_path / "a.dat"
+    a.write_bytes(b"x")
+    b = tmp_path / "b.dat"
+    b.write_bytes(b"x")
+    assert same_file(a, b) is False
+    assert same_file(a, junction(tmp_path / "alias", tmp_path) / "a.dat") is True
+
+
+def fake_identity(values: dict[str, tuple[int, int]]):
+    """location._identity replaced by (st_dev, st_ino) per path name."""
+    return lambda path: values[Path(path).name]
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ({"a": (1, 7), "b": (1, 7)}, True),
+        ({"a": (1, 7), "b": (1, 8)}, False),
+        ({"a": (1, 7), "b": (2, 7)}, False),  # two volumes
+        ({"a": (1, 0), "b": (2, 0)}, False),  # two volumes, no file IDs
+        ({"a": (1, 0), "b": (1, 0)}, None),  # one volume, no file IDs
+        ({"a": (1, 7), "b": (1, 0)}, None),
+    ],
+)
+def test_same_file_without_file_ids_is_unknown(monkeypatch, values, expected):
+    monkeypatch.setattr(location, "_identity", fake_identity(values))
+    assert same_file("C:/x/a", "C:/x/b") is expected
+
+
+def test_same_file_raises_for_a_missing_path(tmp_path):
+    with pytest.raises(OSError):
+        same_file(tmp_path, tmp_path / "missing")
