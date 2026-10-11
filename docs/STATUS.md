@@ -9,7 +9,9 @@ D74).
 
 - **Milestone 8, Release 1.0 (D72), is in progress on branch `m8-release`**, from
   `main` at `1f8001b`. The user approved D73 (a project for each recording) and D74
-  (transfer rows in the order they were written) on 2026-10-11.
+  (transfer rows in the order they were written) on 2026-10-11. Both are built and
+  tested on the branch: 1,570 tests pass and 4 skip; `ruff check` is clean. Not yet
+  tried by eye, and not merged.
 - **The second visit to the NAS (2026-10-09) passed,** with `dist/m7-4`. Locking
   between two PCs passed: PC B's write waited for the 30 s hold, retried once and
   passed after 11.8 s. This closes O21. The user reports that Check before delete with
@@ -29,8 +31,8 @@ D74).
   Settings tab (D67), the defaults file in the program folder (D68), the amber notes
   and the unsaved-settings question (D69, D70), long paths (D65, closes O33) and the
   user guide ([USER_GUIDE.md](USER_GUIDE.md)), all shipped in the build folder.
-- **Still to do in Milestone 8:** D73 and D74 (this branch); the cut-over from the
-  legacy logging scripts; the real catalogue with O20; the team's `defaults.toml`;
+- **Still to do in Milestone 8:** the user's check of D73 by eye; the cut-over from
+  the legacy logging scripts; the real catalogue with O20; the team's `defaults.toml`;
   version 1.0.0, the release build and notes. Recommended: O22 and a pilot.
 - **The NAS field test (D54) ran on 2026-10-05** with `dist/m7-2`, on a laptop with a
   10 GbE link. Every app step passed; results and throughput are in

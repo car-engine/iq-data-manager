@@ -134,7 +134,9 @@ The Log recording tab adds a recording folder to the catalogue.
    with channel folders `0`, `1` and so on is one recording with several channels.
    Click **Scan folder**.
 2. **Recording.** Start and end come from the scan. Check the file duration, choose
-   the site (or **Add site**), and fill in the plan reference and remarks.
+   the site (or **Add site**), and fill in the plan reference and remarks. Choose the
+   project the recording belongs to, or **Add project**. A project is optional; leave
+   "No project" if none applies.
 3. **File format.** Sample type, IQ layout, byte order and header size. The defaults
    are int16, interleaved I then Q, little-endian and no header.
 4. **Channels.** For each channel, enter the band, the centre frequency in MHz and the
@@ -146,7 +148,8 @@ The **Before saving** checklist shows what is still to do and what is wrong. **S
 entry** is possible when the checklist shows no error and nothing to do.
 
 A folder that is already logged shows **Edit existing entry**. In edit mode, a change
-to the sample rate, sample type, header or file duration needs a new scan first.
+to the sample rate, sample type, header or file duration needs a new scan first. The
+site, the project, the remarks and the RF chain change without a scan.
 
 A folder under a NAS location is logged as archived. The Viewer shows it as "archived,
 not verified" until a comparison with the laptop copy passes (section 5).
@@ -155,8 +158,9 @@ not verified" until a comparison with the laptop copy passes (section 5).
 
 The Viewer lists the catalogue.
 
-- **Filters.** Start date, site, band, frequency range, archive state, RF chain text
-  and remarks. Click **Apply**, or press Enter.
+- **Filters.** Start date, site, project, band, frequency range, archive state, RF
+  chain text and remarks. Click **Apply**, or press Enter. The project filter can
+  also show the recordings that have no project.
 - **Recordings and channels.** Select a recording to see its channels and details,
   including the RF chain and the transfer history. Select a channel to narrow the
   details to it.
@@ -270,6 +274,8 @@ This is for the administrator, once, when the shared catalogue is created.
 5. Put the new database on the NAS and set it as the database file on each PC, or in
    `defaults.toml`.
 6. Run **Check archive** once on each imported recording, in the Archive / copy tab.
+7. Set the project of each imported recording with **Edit entry**. The legacy table
+   has no projects, so imported recordings start with none.
 
 The legacy table holds only the day of each recording. Until Check archive runs, an
 imported recording starts at midnight of its day, and its file counts and sizes are
