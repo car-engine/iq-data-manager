@@ -22,9 +22,9 @@ from iqdm.timeutil import display_time, offset_label
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 ID_ROLE = Qt.ItemDataRole.UserRole + 2
 
-COL_ID, COL_START, COL_SITE, COL_CH, COL_FC, COL_SPAN, COL_COVERAGE, COL_SIZE = range(8)
-COL_STATE, COL_LOGGED_BY = 8, 9
-COLUMN_COUNT = 10
+COL_ID, COL_START, COL_SITE, COL_PROJECT, COL_CH, COL_FC = range(6)
+COL_SPAN, COL_COVERAGE, COL_SIZE, COL_STATE, COL_LOGGED_BY = range(6, 11)
+COLUMN_COUNT = 11
 _RIGHT = (COL_ID, COL_CH, COL_SPAN, COL_COVERAGE, COL_SIZE)  # numbers align right
 
 UNKNOWN_COVERAGE_TOOLTIP = "The number of files is not in the database."
@@ -39,6 +39,7 @@ def headers(zone: str) -> tuple[str, ...]:
         "ID",
         f"Start ({zone})",
         "Site",
+        "Project",
         "Ch",
         "Centre freq (MHz)",
         "Span",
@@ -169,49 +170,53 @@ class RecordingTableModel(QAbstractTableModel):
 
     def _text(self, s: RecordingSummary, col: int) -> str:
         match col:
-            case 0:
+            case 0:  # COL_ID
                 return str(s.id)
-            case 1:
+            case 1:  # COL_START
                 return display_time(s.start_unix, self._offset)[:16]
-            case 2:
+            case 2:  # COL_SITE
                 return s.site_name
-            case 3:
+            case 3:  # COL_PROJECT, empty when the recording has none (D73)
+                return s.project_name or ""
+            case 4:  # COL_CH
                 return str(s.channel_count)
-            case 4:
+            case 5:  # COL_FC
                 return viewer.fc_summary(s.fc_hz)
-            case 5:
+            case 6:  # COL_SPAN
                 return viewer.span_text(s.end_unix - s.start_unix)
-            case 6:
+            case 7:  # COL_COVERAGE
                 text = viewer.coverage_text(s.coverage)
                 return f"{MARKS[ItemState.INFO]} {text}" if self.is_low(s) else text
-            case 7:
+            case 8:  # COL_SIZE
                 return viewer.size_text(s.total_bytes)
-            case 8:
+            case 9:  # COL_STATE
                 return viewer.state_text(s.archive_state, s.unverified)
-            case _:
+            case _:  # COL_LOGGED_BY
                 return s.logged_by
 
     def _sort_key(self, s: RecordingSummary, col: int) -> object:
         match col:
-            case 0:
+            case 0:  # COL_ID
                 return s.id
-            case 1:
+            case 1:  # COL_START
                 return s.start_unix
-            case 2:
+            case 2:  # COL_SITE
                 return s.site_name.casefold()
-            case 3:
+            case 3:  # COL_PROJECT: recordings without a project sort first
+                return (s.project_name or "").casefold()
+            case 4:  # COL_CH
                 return s.channel_count
-            case 4:
+            case 5:  # COL_FC
                 return s.fc_hz[0] if s.fc_hz else -1.0
-            case 5:
+            case 6:  # COL_SPAN
                 return s.end_unix - s.start_unix
-            case 6:
+            case 7:  # COL_COVERAGE
                 return -1.0 if s.coverage is None else s.coverage
-            case 7:
+            case 8:  # COL_SIZE
                 return -1 if s.total_bytes is None else s.total_bytes
-            case 8:
+            case 9:  # COL_STATE
                 return viewer.state_text(s.archive_state, s.unverified)
-            case _:
+            case _:  # COL_LOGGED_BY
                 return s.logged_by.casefold()
 
     def _tooltip(self, s: RecordingSummary, col: int) -> str | None:

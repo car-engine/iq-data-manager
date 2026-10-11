@@ -58,6 +58,9 @@ FOLDER_NOT_OPENED = "Cannot open the folder. Check that it exists and the networ
 SCAN_HINT = "Scan the recording folder to see where data is missing."
 SELECT_HINT = "Select a recording to see its channels."
 DETAILS_HINT = "Select a recording or a channel for details."
+NO_PROJECT_FILTER = "No project"  # the filter choice for recordings without a project (D73)
+NO_PROJECT_DATA = "none"  # its item data; project items carry their id
+NO_PROJECT_TEXT = "None"  # the details panel for a recording without a project
 
 
 def channel_headers(zone: str) -> tuple[str, ...]:
@@ -169,6 +172,7 @@ class ViewerTab(QWidget):
         self.start_from_label = QLabel()
         self.start_to_label = QLabel()
         self.site_combo = QComboBox()
+        self.project_combo = QComboBox()  # all, no project, or one project (D73)
         self.band_combo = QComboBox()
         self.fc_min_edit = QLineEdit()
         self.fc_min_edit.setPlaceholderText("min")
@@ -213,6 +217,7 @@ class ViewerTab(QWidget):
             (self.start_from_label, self.start_from_edit),
             (self.start_to_label, self.start_to_edit),
             (QLabel("Site"), self.site_combo),
+            (QLabel("Project"), self.project_combo),
             (QLabel("Band"), self.band_combo),
         ):
             layout.addWidget(label)
@@ -330,12 +335,14 @@ class ViewerTab(QWidget):
         self.param_hint = QLabel("No RF chain details were logged.")
         self.path_label = QLabel()
         self.format_label = QLabel()
+        self.project_label = QLabel()
         self.plan_label = QLabel()
         self.remarks_label = QLabel()
         self.logged_label = QLabel()
         for label in (
             self.path_label,
             self.format_label,
+            self.project_label,
             self.plan_label,
             self.remarks_label,
             self.logged_label,
@@ -349,6 +356,7 @@ class ViewerTab(QWidget):
         form = QFormLayout()
         form.addRow("Path", self.path_label)
         form.addRow("Format", self.format_label)
+        form.addRow("Project", self.project_label)
         form.addRow("Plan", self.plan_label)
         form.addRow("Remarks", self.remarks_label)
         form.addRow("Logged", self.logged_label)
@@ -482,6 +490,13 @@ class ViewerTab(QWidget):
         for s in choices.sites:
             self.site_combo.addItem(s.name, s.id)
         self.site_combo.setCurrentIndex(max(0, self.site_combo.findData(site)))
+        project = self.project_combo.currentData()
+        self.project_combo.clear()
+        self.project_combo.addItem("All projects", None)
+        self.project_combo.addItem(NO_PROJECT_FILTER, NO_PROJECT_DATA)
+        for p in choices.projects:
+            self.project_combo.addItem(p.name, p.id)
+        self.project_combo.setCurrentIndex(max(0, self.project_combo.findData(project)))
         self.band_combo.clear()
         self.band_combo.addItem("All bands", None)
         for b in choices.bands:
@@ -557,10 +572,13 @@ class ViewerTab(QWidget):
     # =====================================================================
 
     def filter_input(self) -> viewer.FilterInput:
+        project = self.project_combo.currentData()
         return viewer.FilterInput(
             start_from=self.start_from_edit.text(),
             start_to=self.start_to_edit.text(),
             site_id=self.site_combo.currentData(),
+            project_id=project if isinstance(project, int) else None,
+            without_project=project == NO_PROJECT_DATA,
             band=self.band_combo.currentData() or "",
             fc_min=self.fc_min_edit.text(),
             fc_max=self.fc_max_edit.text(),
@@ -587,7 +605,7 @@ class ViewerTab(QWidget):
             self.remarks_edit,
         ):
             edit.clear()
-        for combo in (self.site_combo, self.band_combo, self.state_combo):
+        for combo in (self.site_combo, self.project_combo, self.band_combo, self.state_combo):
             combo.setCurrentIndex(0)
         self._show_filter_errors(())
         self._filter = None
@@ -738,6 +756,7 @@ class ViewerTab(QWidget):
             for label in (
                 self.path_label,
                 self.format_label,
+                self.project_label,
                 self.plan_label,
                 self.remarks_label,
                 self.logged_label,
@@ -776,6 +795,7 @@ class ViewerTab(QWidget):
         self.param_table.setVisible(bool(rows))
         self.param_hint.setVisible(not rows)
         self.format_label.setText(viewer.format_text(rec))
+        self.project_label.setText(details.project_name or NO_PROJECT_TEXT)
         self.plan_label.setText(rec.recording_plan_ref or "")
         self.remarks_label.setText(rec.remarks or "")
         logged = f"by {rec.logged_by}"

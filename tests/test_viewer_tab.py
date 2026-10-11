@@ -16,14 +16,21 @@ from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
 from iqdm.entry import ItemState
 from iqdm.gui.log_tab import NO_DATABASE
-from iqdm.gui.viewer_tab import FOLDER_NOT_OPENED, ViewerTab
+from iqdm.gui.viewer_tab import (
+    FOLDER_NOT_OPENED,
+    NO_PROJECT_FILTER,
+    NO_PROJECT_TEXT,
+    ViewerTab,
+)
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
 from iqdm.gui.widgets.recording_model import (
     COL_COVERAGE,
     COL_ID,
+    COL_PROJECT,
     COL_SIZE,
     COL_START,
     COL_STATE,
+    COLUMN_COUNT,
     ID_ROLE,
 )
 from iqdm.models import (
@@ -237,11 +244,12 @@ def test_list_shows_every_recording_newest_first(tab, catalogue):
 
 def test_cells_show_plain_text(tab, catalogue):
     gappy = catalogue["gappy"]
-    texts = [cell(tab, gappy, c) for c in range(10)]
+    texts = [cell(tab, gappy, c) for c in range(COLUMN_COUNT)]
     assert texts == [
         str(gappy),
         "2026-09-30 10:00",
         "SiteA",
+        "",  # no project (D73)
         "2",
         "145.8 \N{MULTIPLICATION SIGN} 2",
         "20 s",
@@ -380,6 +388,54 @@ def test_band_filter_and_clear(qtbot, tab, catalogue):
     assert len(shown_ids(tab)) == 3
     assert tab.band_combo.currentIndex() == 0
     assert tab.active_filter is None
+
+
+@pytest.fixture
+def with_project(make_tab, db_path, catalogue) -> tuple[ViewerTab, int]:
+    """The catalogue with "full" in project "Radar Trial" and an unused project."""
+
+    def tag(conn) -> int:
+        project = repo.add_project(conn, "Radar Trial").id
+        repo.add_project(conn, "Antenna Survey")
+        conn.execute(
+            "UPDATE recordings SET project_id = ? WHERE id = ?", (project, catalogue["full"])
+        )
+        return project
+
+    project = write_transaction(db_path, tag)
+    return make_tab(Config(db_path=str(db_path))), project
+
+
+def test_project_column_filter_and_details(qtbot, with_project, catalogue):
+    """D73: optional; the filter offers all, no project, and each project."""
+    tab, project = with_project
+    assert header(tab, COL_PROJECT) == "Project"
+    assert cell(tab, catalogue["full"], COL_PROJECT) == "Radar Trial"
+    assert cell(tab, catalogue["gappy"], COL_PROJECT) == ""
+    names = [tab.project_combo.itemText(i) for i in range(tab.project_combo.count())]
+    assert names == ["All projects", NO_PROJECT_FILTER, "Antenna Survey", "Radar Trial"]
+
+    tab.project_combo.setCurrentIndex(tab.project_combo.findData(project))
+    apply(qtbot, tab)
+    assert shown_ids(tab) == [catalogue["full"]]
+    tab.project_combo.setCurrentIndex(tab.project_combo.findText(NO_PROJECT_FILTER))
+    apply(qtbot, tab)
+    assert shown_ids(tab) == [catalogue["gappy"], catalogue["legacy"]]
+    tab.clear_button.click()
+    wait_idle(qtbot, tab)
+    assert tab.project_combo.currentIndex() == 0
+    assert len(shown_ids(tab)) == 3
+
+    select(qtbot, tab, catalogue["full"])
+    assert tab.project_label.text() == "Radar Trial"
+    select(qtbot, tab, catalogue["gappy"])
+    assert tab.project_label.text() == NO_PROJECT_TEXT
+
+
+def test_the_project_column_sorts_by_name(qtbot, with_project, catalogue):
+    tab, _ = with_project
+    tab.table.sortByColumn(COL_PROJECT, Qt.SortOrder.DescendingOrder)
+    assert shown_ids(tab)[0] == catalogue["full"]
 
 
 def test_site_and_state_filters(qtbot, tab, catalogue):

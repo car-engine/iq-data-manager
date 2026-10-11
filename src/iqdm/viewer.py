@@ -8,7 +8,7 @@ A recording logged in place on the NAS is marked as not verified (D2, D44).
 
 import math
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 
@@ -23,6 +23,7 @@ from iqdm.models import (
     Channel,
     Operation,
     Param,
+    Project,
     Recording,
     RecordingFilter,
     RecordingSummary,
@@ -53,6 +54,8 @@ class FilterInput:
     start_from: str = ""
     start_to: str = ""
     site_id: int | None = None
+    project_id: int | None = None
+    without_project: bool = False  # recordings that have no project (D73)
     band: str = ""
     fc_min: str = ""
     fc_max: str = ""
@@ -97,6 +100,8 @@ def parse_filter(form: FilterInput, offset_hours: float) -> FilterResult:
             start_from_unix=start_from,
             start_before_unix=None if start_to is None else start_to + DAY_S,
             site_id=form.site_id,
+            project_id=None if form.without_project else form.project_id,
+            without_project=form.without_project,
             band=form.band.strip() or None,
             fc_min_hz=fc_min,
             fc_max_hz=fc_max,
@@ -487,6 +492,7 @@ class ListResult:
 class ViewerChoices:
     sites: list[Site]
     bands: list[str]
+    projects: list[Project] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -494,6 +500,7 @@ class Details:
     recording: Recording
     site_name: str
     transfers: list[TransferEntry]
+    project_name: str | None = None  # None: no project (D73)
 
 
 def load_list(db_path: Path | str, flt: RecordingFilter | None) -> ListResult:
@@ -504,7 +511,11 @@ def load_list(db_path: Path | str, flt: RecordingFilter | None) -> ListResult:
 
 def load_choices(db_path: Path | str) -> ViewerChoices:
     with open_db(db_path, readonly=True) as conn:
-        return ViewerChoices(sites=repository.list_sites(conn), bands=repository.list_bands(conn))
+        return ViewerChoices(
+            sites=repository.list_sites(conn),
+            bands=repository.list_bands(conn),
+            projects=repository.list_projects(conn),
+        )
 
 
 def load_details(db_path: Path | str, recording_id: int) -> Details:
@@ -514,6 +525,11 @@ def load_details(db_path: Path | str, recording_id: int) -> Details:
             recording=rec,
             site_name=repository.get_site(conn, rec.site_id).name,
             transfers=repository.list_transfers(conn, recording_id),
+            project_name=(
+                None
+                if rec.project_id is None
+                else repository.get_project(conn, rec.project_id).name
+            ),
         )
 
 

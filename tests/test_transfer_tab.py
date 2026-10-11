@@ -187,6 +187,22 @@ def test_loading_a_local_recording_prepares_an_archive(env):
     )
 
 
+def test_the_recording_line_names_its_project(env):
+    """D73: the project follows the site; a recording without one shows none."""
+    tab = env.loaded(env.tab())
+    assert "Radar Trial" not in tab.source_label.text()
+
+    def tag(conn) -> None:
+        project = repo.add_project(conn, "Radar Trial").id
+        conn.execute("UPDATE recordings SET project_id = ? WHERE id = ?", (project, env.rid))
+
+    write_transaction(env.db, tag)
+    tab = env.loaded(env.tab())
+    assert " \N{MIDDLE DOT} SiteA \N{MIDDLE DOT} Radar Trial \N{MIDDLE DOT} " in (
+        tab.source_label.text()
+    )
+
+
 def test_a_copy_fills_in_the_local_copy_folder(env):
     """D60: the local copy folder and the recording's relative path."""
     tab = env.loaded(env.tab())

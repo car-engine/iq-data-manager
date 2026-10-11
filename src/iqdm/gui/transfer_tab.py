@@ -140,6 +140,7 @@ class TransferTab(QWidget):
         self._clock = clock
 
         self._rec: Recording | None = None
+        self._project: str | None = None  # of the recording shown (D73)
         self._transfers: list[TransferEntry] = []
         self._load_id = 0
         self._list_id = 0
@@ -600,6 +601,7 @@ class TransferTab(QWidget):
         self._rec = result.recording
         self._transfers = list(result.transfers)
         self._site = result.site_name
+        self._project = result.project_name
         self._set_message(ItemState.OK, "")
         if not (keep_form and same):
             self._fill_form_for(result.recording)
@@ -622,6 +624,7 @@ class TransferTab(QWidget):
         self._rec = None
         self._transfers = []
         self._site = ""
+        self._project = None
         self._set_channel_boxes(())
         self.id_spin.setValue(0)
         self.dest_edit.clear()
@@ -720,8 +723,9 @@ class TransferTab(QWidget):
         size = sum(c.total_bytes or 0 for c in rec.channels)
         state = viewer.state_text(rec.archive_state, viewer.is_unverified(rec, self._transfers))
         start = "" if rec.start_unix is None else display_time(rec.start_unix, self._offset)
+        project = "" if self._project is None else f" \N{MIDDLE DOT} {self._project}"  # D73
         self.source_label.setText(
-            f"{rec.id} \N{MIDDLE DOT} {start} ({zone}) \N{MIDDLE DOT} {self._site} "
+            f"{rec.id} \N{MIDDLE DOT} {start} ({zone}) \N{MIDDLE DOT} {self._site}{project} "
             f"\N{MIDDLE DOT} {len(rec.channels)} ch \N{MIDDLE DOT} {', '.join(fcs)} MHz "
             f"\N{MIDDLE DOT} {format_size(size)} \N{MIDDLE DOT} {state}"
         )
