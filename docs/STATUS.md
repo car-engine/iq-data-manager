@@ -9,12 +9,15 @@ built).
 
 - **Version 1.0.0 is released.** `m8-release` was merged into `main` as a
   fast-forward on 2026-10-12. `main` and the annotated tag `v1.0.0`, on `674434c`,
-  were pushed the same day; `m8-release` itself is not pushed. The release
-  build is `dist/release-1.0.0`, from `main` at the tag, with
-  [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At `674434c`: 1,607
-  tests pass and 4 skip; `ruff check` is clean. Report:
+  were pushed the same day. `origin/m8-release` still stops at `e6f0569`, pushed
+  before the release review. The release build is `dist/release-1.0.0`, from `main`
+  at the tag, with [RELEASE_NOTES.md](RELEASE_NOTES.md) in the program folder. At
+  `674434c`: 1,607 tests pass and 4 skip; `ruff check` is clean. Report:
   [reports/M8.md](reports/M8.md), parts 1 to 3. Milestone 8 stays open for the real
   catalogue (O20) and the rollout.
+  - After the tag, the build stopped shipping `FIELD_TEST_CHECKLIST.html`; the user
+    removed it from `dist/release-1.0.0` by hand. The user guide in that folder still
+    lists it. Builds from later commits list and ship neither.
   - Part 1: D73 (a project for each recording) and D74 (transfer rows in the order
     they were written), approved on 2026-10-11.
   - Part 2: the release review

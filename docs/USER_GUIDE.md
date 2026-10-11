@@ -20,8 +20,7 @@ example as a zip file, and keep its contents together. It holds:
   (section 8);
 - `USER_GUIDE.md`, this guide;
 - `RELEASE_NOTES.md`, what this version does and its known limits;
-- `defaults.example.toml`, a template for the shared settings;
-- `FIELD_TEST_CHECKLIST.html`, the steps of the current test on the NAS.
+- `defaults.example.toml`, a template for the shared settings.
 
 ### Shared settings for new PCs
 
