@@ -329,9 +329,13 @@ Values filled in after a scan:
 - **File duration**, from the median step between file timestamps (D22), until the
   user changes the field. Edit mode keeps the stored duration.
 
-Choosing another folder for a new entry resets the file duration, the file format,
-the channel rows and the RF chain rows to their defaults (D26). Logged by, site,
-plan reference and remarks stay.
+Choosing another folder for a new entry resets only the values that come from the
+scan: start and end, the channel rows, fs and the file duration (D79). Every other
+field stays: logged by, site, project, plan reference, remarks, the file format, the
+band and fc of each channel number, and the RF chain rows. After the scan, the kept
+values of a channel the new folder lacks are removed, and the message line says so.
+A note in the "Before saving" panel names what was kept. Clear form resets every
+field.
 
 A folder named like a channel folder (1 to 3 digits, such as `0`) gets an
 information line and a "Use parent folder" button. It does not block saving (D27).
