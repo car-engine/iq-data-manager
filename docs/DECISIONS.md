@@ -97,6 +97,7 @@ Rules for this file:
 | D77 | Version 1 schema frozen | 2026-10-20, after 1.0.0 | Active |
 | D78 | Viewer filters with several choices | 2026-10-20, version 1.1 | Active |
 | D79 | A new folder keeps the previous entry's fields | 2026-10-20, version 1.1 | Active |
+| D80 | Log tab templates in files | 2026-10-20, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1602,3 +1603,45 @@ after each folder made logging several folders slow. The user approved the plan 
   see it.
 
 Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`, the user guide.
+
+## D80. Log tab templates in files
+
+Closes O44. The user asked for it on 2026-10-20, for common hardware set-ups such as a
+USRP and its antennas. The user chose files over a table in the catalogue, and asked
+that a template can hold any field, site and project included, with the fields chosen
+on export.
+
+- A template is a TOML file with `format_version = 1`. Teams share templates by
+  keeping the files in a common folder. The catalogue does not change, so no
+  migration is needed.
+- A template can hold any field the user types: logged by, site, project, plan
+  reference, remarks, the file format (sample type, IQ layout, endianness, header
+  bytes), band and fc by channel number, and the RF chain rows. It never holds a value
+  from the scan: start and end, file counts, fs, file duration, or the folder and its
+  location.
+- Every field is optional. "Export template..." opens a dialog with one tick box per
+  field group. Each box shows the form's current value or a count. Empty fields start
+  unticked, and Save needs at least one ticked box. Blank RF chain rows, and channels
+  with neither band nor fc, are left out.
+- "Import template..." changes only the fields the file holds. RF chain rows in the
+  file replace the form's rows; a file without RF chain rows leaves them. Band and fc
+  go to the rows of the same channel number, and wait for a later scan for channels
+  not shown yet (D79). The message line names the fields that were set.
+- Site and project are stored by name, because ids differ between catalogues. Import
+  matches them without letter case. A name the catalogue does not hold is not added:
+  the field stays as it was, and the message line names it. An empty project means
+  "no project". The user left the question of adding names open, and the plan's
+  default applies.
+- In edit mode, import follows D16: a sample type or header from a template needs a
+  rescan before the save.
+- A file that is not a template, comes from a newer version, holds no field, holds an
+  unknown entry or a wrong value is refused with a plain message, and the form does
+  not change.
+- Export writes `<name>.new` next to the chosen file, reads it back, and then renames
+  it over the chosen file. The file dialog does not ask about an existing file; the tab
+  asks once, defaulting to No. The file dialogs start in the folder used last in the
+  session. The app keeps no setting for it, because Qt's settings store would write to
+  the Windows registry, also in tests.
+
+Affects: SPEC sections 4 and 6, `templates.py`, `gui/log_tab.py`,
+`gui/widgets/template_fields.py`, the user guide.

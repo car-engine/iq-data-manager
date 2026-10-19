@@ -10,15 +10,24 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QInputDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
-from iqdm import entry
+from iqdm import entry, templates
 from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, create_database, open_db, write_transaction
 from iqdm.entry import ItemState
-from iqdm.gui.log_tab import NO_PROJECT, LogTab, channel_headers, scan_summary, time_text
+from iqdm.gui.log_tab import (
+    NO_PROJECT,
+    REPLACE_TEMPLATE_TITLE,
+    LogTab,
+    channel_headers,
+    replace_template_question,
+    scan_summary,
+    time_text,
+)
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
+from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
 from iqdm.models import ArchiveState, Endianness, IqLayout, Operation, SampleType
@@ -1084,6 +1093,163 @@ def test_edit_mode_shows_no_kept_note(qtbot, make_tab, make_recording, site_id):
     wait_idle(qtbot, tab)
     assert tab.kept_note.isHidden()
     assert tab.channel_widgets(0)[1].text() == "145.8"  # the stored value
+
+
+# ---------------------------------------------------------------------------
+# Templates (D80)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def project_id(db_path) -> int:
+    return entry.add_project(db_path, "Radar Trial").id
+
+
+def filled_tab(qtbot, make_tab, make_recording, site_id, project_id) -> LogTab:
+    """A tab with a scanned two-channel folder and every typed field filled in."""
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    fill_channels(tab)
+    choose_site(tab, site_id)
+    tab._select_project(project_id)
+    tab.logged_by_edit.setText("userA")
+    tab.plan_edit.setText("plan-9")
+    tab.remarks_edit.setPlainText("USRP set-up")
+    tab.layout_combo.setCurrentIndex(tab.layout_combo.findData(IqLayout.PLANAR_IQ))
+    tab.param_table.add_row(entry.ParamInput(param="SDR", value="USRP B210"))
+    tab.param_table.add_row(entry.ParamInput(param="Antenna", value="Yagi", channel_index=1))
+    return tab
+
+
+def typed_fields(tab: LogTab) -> tuple:
+    form = tab.current_input()
+    return (
+        form.logged_by,
+        form.site_id,
+        form.project_id,
+        form.recording_plan_ref,
+        form.remarks,
+        str(form.dtype),
+        str(form.iq_layout),
+        str(form.endianness),
+        form.header_bytes,
+        [(c.channel_index, c.band, c.fc_mhz) for c in form.channels],
+        form.params,
+    )
+
+
+def test_export_then_import_gives_the_same_form(
+    qtbot, make_tab, make_recording, site_id, project_id, tmp_path
+):
+    tab = filled_tab(qtbot, make_tab, make_recording, site_id, project_id)
+    before = typed_fields(tab)
+    path = tmp_path / "templates" / "usrp.toml"
+    path.parent.mkdir()
+    tab.export_template(path, set(templates.TemplateField))
+    assert tab.message_label.text() == f"Template saved: {path}"
+    tab.clear_form()
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    tab.import_template(path)
+    assert typed_fields(tab) == before
+    assert tab.message_label.text().startswith("Template loaded: logged by, site, project")
+    fs = tab.channel_widgets(0)[2]
+    assert fs.text() == "1 kHz"  # from the scan, not from the template
+
+
+def test_export_of_some_fields_imports_only_those(
+    qtbot, make_tab, make_recording, site_id, project_id, tmp_path
+):
+    tab = filled_tab(qtbot, make_tab, make_recording, site_id, project_id)
+    path = tmp_path / "rf.toml"
+    tab.export_template(path, {templates.TemplateField.RF_CHAIN})
+    tab.clear_form()
+    tab.plan_edit.setText("plan-10")
+    tab.import_template(path)
+    assert [p.param for p in tab.param_table.rows()] == ["SDR", "Antenna"]
+    assert tab.plan_edit.text() == "plan-10"
+    assert tab.site_combo.currentData() is None
+    assert tab.layout_combo.currentData() == IqLayout.INTERLEAVED_IQ
+
+
+def test_import_before_a_scan_fills_the_channels_when_the_scan_ends(
+    qtbot, make_tab, make_recording, tmp_path
+):
+    path = tmp_path / "vhf.toml"
+    templates.write_template(
+        path,
+        templates.LogTemplate(
+            sample_type=SampleType.INT16,
+            channels=(templates.TemplateChannel(index=1, band="UHF", fc_mhz="435"),),
+        ),
+    )
+    tab = make_tab()
+    tab.import_template(path)
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    assert tab.channel_widgets(1)[0].currentText() == "UHF"
+    assert tab.channel_widgets(1)[1].text() == "435"
+    assert tab.channel_widgets(0)[1].text() == ""
+
+
+def test_import_names_a_site_the_catalogue_lacks(qtbot, make_tab, site_id, tmp_path):
+    path = tmp_path / "site.toml"
+    templates.write_template(path, templates.LogTemplate(site="Hilltop", logged_by="userB"))
+    tab = make_tab()
+    choose_site(tab, site_id)
+    tab.import_template(path)
+    assert tab.site_combo.currentData() == site_id
+    assert tab.logged_by_edit.text() == "userB"
+    assert "Site 'Hilltop' is not in the catalogue." in tab.message_label.text()
+
+
+def test_a_wrong_template_changes_nothing(qtbot, make_tab, tmp_path):
+    path = tmp_path / "bad.toml"
+    path.write_text('format_version = 1\nsample_type = "int12"\n', encoding="utf-8")
+    tab = make_tab()
+    tab.import_template(path)
+    assert tab.message_label.text().startswith("Template not loaded: 'sample_type'")
+    assert tab.dtype_combo.currentData() == SampleType.INT16
+
+
+def test_the_export_dialog_starts_with_empty_fields_unticked(qtbot, make_tab, site_id):
+    tab = make_tab()
+    choose_site(tab, site_id)
+    tab.param_table.add_row(entry.ParamInput(param="SDR", value="X310"))
+    rows = {field: (text, ticked) for field, text, ticked in tab.template_field_rows()}
+    field = templates.TemplateField
+    assert rows[field.SITE] == ("Site: SiteA", True)
+    assert rows[field.PROJECT] == (f"Project: {NO_PROJECT}", False)
+    assert rows[field.PLAN] == ("Recording plan reference: empty", False)
+    assert rows[field.CHANNELS] == ("Band and fc of each channel: 0 channels", False)
+    assert rows[field.RF_CHAIN] == ("RF chain: 1 row", True)
+    assert rows[field.FORMAT][1] is True
+
+    dialog = TemplateFieldsDialog(tab.template_field_rows())
+    qtbot.addWidget(dialog)
+    ok = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
+    assert field.SITE in dialog.chosen()
+    for box in dialog.boxes.values():
+        box.setChecked(False)
+    assert not ok.isEnabled()  # at least one field
+
+
+def test_export_asks_before_it_replaces_a_template(qtbot, make_tab, tmp_path, monkeypatch):
+    path = tmp_path / "usrp.toml"
+    templates.write_template(path, templates.LogTemplate(site="Lab"))
+    tab = make_tab()
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", lambda *a, **kw: (str(tmp_path / "usrp"), "")
+    )
+    asked = []
+
+    def question(parent, title, text, *args):
+        asked.append((title, text))
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", question)
+    tab.export_template(fields={templates.TemplateField.FORMAT})
+    assert asked == [(REPLACE_TEMPLATE_TITLE, replace_template_question(path))]
+    assert templates.read_template(path) == templates.LogTemplate(site="Lab")
+    assert tab.message_label.text() == "Template not saved."
 
 
 # ---------------------------------------------------------------------------

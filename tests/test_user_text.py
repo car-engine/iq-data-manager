@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from iqdm import templates
 from iqdm.app import (
     CLEAR_LOG_TAB_QUESTION,
     CLOSE_QUESTION,
@@ -42,10 +43,16 @@ from iqdm.entry import (
     missing_channels_text,
 )
 from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
-from iqdm.gui.log_tab import LogTab
+from iqdm.gui.log_tab import (
+    REPLACE_TEMPLATE_TITLE,
+    TEMPLATE_FILTER,
+    LogTab,
+    replace_template_question,
+)
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import NO_PROJECT_FILTER, NO_PROJECT_TEXT, ViewerTab
+from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.models import (
     IN_PLACE_NOTE,
     ArchiveState,
@@ -189,6 +196,40 @@ def test_log_tab_text_is_plain(qtbot, db_path):
     qtbot.addWidget(tab)
     qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
     texts = visible_texts(tab) + [item.text for item in tab.checklist.items]
+    assert offending(texts) == []
+
+
+def test_template_text_is_plain(qtbot, db_path, tmp_path):
+    """The export dialog, the replace question and the import messages (D80)."""
+    tab = LogTab(Config(db_path=str(db_path)))
+    qtbot.addWidget(tab)
+    qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
+    dialog = TemplateFieldsDialog(tab.template_field_rows())
+    qtbot.addWidget(dialog)
+    tpl = templates.LogTemplate(site="Hilltop", project="Survey", header_bytes=0)
+    applied = templates.apply_template(EntryInput(), tpl, [], [])
+    texts = [
+        *visible_texts(dialog),
+        dialog.windowTitle(),
+        REPLACE_TEMPLATE_TITLE,
+        replace_template_question(tmp_path / "usrp.toml"),
+        templates.applied_text(tpl, applied.notes),
+        TEMPLATE_FILTER,
+    ]
+    for data in (
+        {"site": "x"},
+        {"format_version": 1},
+        {"format_version": 1, "colour": 1},
+        {"format_version": 1, "sample_type": "int12"},
+        {"format_version": 1, "header_bytes": -1},
+        {"format_version": 1, "channels": [{"band": "VHF"}]},
+        {"format_version": 1, "rf_chain": [{"applies_to": "all"}]},
+    ):
+        try:
+            templates.from_toml_data(data)
+        except templates.TemplateError as exc:
+            texts.append(str(exc))
+    assert len(texts) > 12
     assert offending(texts) == []
 
 

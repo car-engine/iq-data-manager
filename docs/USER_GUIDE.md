@@ -156,6 +156,16 @@ kept; check it for the new folder. If the new folder lacks a channel, the values
 that channel are removed, and the line under the buttons says which. **Clear form**
 starts again from empty fields.
 
+**Templates.** A template file holds fields you use often, such as the USRP, the
+antennas and the band and frequency of each channel.
+
+- **Export template...** asks which fields to save; empty fields start unticked.
+  Then choose a file name. Keep shared templates in a common folder.
+- **Import template...** fills in the fields the file holds and leaves the others.
+  The sample rate, the times and the file duration always come from the scan.
+- A site or project that is not in the catalogue is named under the buttons and not
+  chosen. Choose it, or add it with **Add site** or **Add project**.
+
 A folder that is already logged shows **Edit existing entry**. In edit mode, a change
 to the sample rate, sample type, header or file duration needs a new scan first. The
 site, the project, the remarks and the RF chain change without a scan.

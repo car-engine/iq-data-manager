@@ -36,12 +36,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import entry
+from iqdm import entry, templates
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
 from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.param_table import ParamTable
+from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import Task, TaskRunner
 from iqdm.location import DriveResolver, Location, LocationError, mapped_drive_unc, split_location
 from iqdm.models import Endianness, IqLayout, Recording, SameStart, SampleType
@@ -59,6 +60,12 @@ NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
+TEMPLATE_FILTER = "Templates (*.toml)"
+REPLACE_TEMPLATE_TITLE = "Replace the template?"
+
+
+def replace_template_question(path: Path) -> str:
+    return f"{path} already exists. Replace it with the fields you chose?"
 
 
 def channel_headers(zone: str) -> tuple[str, ...]:
@@ -139,6 +146,7 @@ class LogTab(QWidget):
         # D79: band and fc by channel number, kept for the next folder's scan.
         self._carried: dict[int, ChannelInput] = {}
         self._kept = False  # the form holds values kept from the previous entry (D79)
+        self._template_folder = ""  # the folder of the last template file, this session
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -325,9 +333,18 @@ class LogTab(QWidget):
         self.save_button.clicked.connect(self.save)
         self.clear_button = QPushButton("Clear form")
         self.clear_button.clicked.connect(self.clear_form)
+        self.import_button = QPushButton("Import template...")
+        self.import_button.setToolTip("Fill in the form from a template file.")
+        self.import_button.clicked.connect(lambda: self.import_template())
+        self.export_button = QPushButton("Export template...")
+        self.export_button.setToolTip("Save fields of this form to a template file.")
+        self.export_button.clicked.connect(lambda: self.export_template())
         self.message_label = QLabel()
         self.message_label.setWordWrap(True)
 
+        template_buttons = QHBoxLayout()
+        template_buttons.addWidget(self.import_button, 1)
+        template_buttons.addWidget(self.export_button, 1)
         buttons = QHBoxLayout()
         buttons.addWidget(self.save_button, 1)
         buttons.addWidget(self.clear_button)
@@ -338,6 +355,7 @@ class LogTab(QWidget):
         layout.addWidget(self.edit_existing_button)
         layout.addWidget(self.use_parent_button)
         layout.addWidget(self.state_note)
+        layout.addLayout(template_buttons)
         layout.addLayout(buttons)
         layout.addWidget(self.message_label)
         return box
@@ -1153,6 +1171,168 @@ class LogTab(QWidget):
         self.show_message(message)
         self.refresh_checklist()
 
+    # =====================================================================
+    # Templates (DECISIONS.md D80)
+    # =====================================================================
+
+    def _names(self) -> tuple[str, str]:
+        """The chosen site's name ("" for none) and project's name ("" for no project)."""
+        site = self.site_combo.currentText() if self.site_combo.currentData() is not None else ""
+        project = (
+            self.project_combo.currentText()
+            if self.project_combo.currentData() is not None
+            else ""
+        )
+        return site, project
+
+    def _carried_for_template(self) -> dict[int, ChannelInput]:
+        return self._carried if self._original is None else {}
+
+    def template_field_rows(self) -> list[tuple[templates.TemplateField, str, bool]]:
+        """The export dialog's rows: field, text with the current value, ticked or not."""
+        form = self.current_input()
+        site, project = self._names()
+        tpl = templates.template_from_input(
+            form,
+            templates.TemplateField,
+            site_name=site,
+            project_name=project,
+            carried=self._carried_for_template(),
+        )
+        filled = templates.filled_fields(form, site, project)
+        channels = len(tpl.channels or ())
+        rows = len(tpl.rf_chain or ())
+        values = {
+            templates.TemplateField.LOGGED_BY: form.logged_by.strip() or "empty",
+            templates.TemplateField.SITE: site or "none chosen",
+            templates.TemplateField.PROJECT: project or NO_PROJECT,
+            templates.TemplateField.PLAN: _short(form.recording_plan_ref) or "empty",
+            templates.TemplateField.REMARKS: _short(form.remarks) or "empty",
+            templates.TemplateField.FORMAT: (
+                f"{form.dtype}, {form.iq_layout}, {form.endianness}-endian, "
+                f"header {form.header_bytes:,} {'byte' if form.header_bytes == 1 else 'bytes'}"
+            ),
+            templates.TemplateField.CHANNELS: (
+                f"{channels} {'channel' if channels == 1 else 'channels'}"
+            ),
+            templates.TemplateField.RF_CHAIN: f"{rows} {'row' if rows == 1 else 'rows'}",
+        }
+        return [
+            (f, f"{templates.FIELD_LABELS[f]}: {values[f]}", f in filled)
+            for f in templates.TemplateField
+        ]
+
+    def export_template(
+        self,
+        path: Path | None = None,
+        fields: set[templates.TemplateField] | None = None,
+    ) -> None:
+        """Save the chosen fields of the form to a template file.
+
+        Without `fields`, a dialog asks which fields to save. Without `path`, a file
+        dialog asks where. Tests pass both.
+        """
+        if fields is None:
+            dialog = TemplateFieldsDialog(self.template_field_rows(), self)
+            if dialog.exec() != TemplateFieldsDialog.DialogCode.Accepted:
+                return
+            fields = dialog.chosen()
+        if path is None:
+            chosen, _filter = QFileDialog.getSaveFileName(
+                self,
+                "Export template",
+                self._template_folder,
+                TEMPLATE_FILTER,
+                options=QFileDialog.Option.DontConfirmOverwrite,  # asked below, once
+            )
+            if not chosen:
+                return
+            path = Path(chosen)
+            if path.suffix.lower() != templates.FILE_SUFFIX:
+                path = path.with_name(path.name + templates.FILE_SUFFIX)
+            if path.exists() and not self._confirm_replace(path):
+                self.show_message("Template not saved.")
+                return
+        site, project = self._names()
+        tpl = templates.template_from_input(
+            self.current_input(),
+            fields,
+            site_name=site,
+            project_name=project,
+            carried=self._carried_for_template(),
+        )
+        try:
+            templates.write_template(path, tpl)
+        except templates.TemplateError as exc:
+            self.show_message(f"Template not saved: {exc}")
+            return
+        self._template_folder = str(path.parent)
+        self.show_message(f"Template saved: {path}")
+
+    def _confirm_replace(self, path: Path) -> bool:
+        answer = QMessageBox.question(
+            self,
+            REPLACE_TEMPLATE_TITLE,
+            replace_template_question(path),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def import_template(self, path: Path | None = None) -> None:
+        """Fill in the form from a template file. Fields it does not hold stay."""
+        if path is None:
+            chosen, _filter = QFileDialog.getOpenFileName(
+                self, "Import template", self._template_folder, TEMPLATE_FILTER
+            )
+            if not chosen:
+                return
+            path = Path(chosen)
+        try:
+            tpl = templates.read_template(path)
+        except templates.TemplateError as exc:
+            self.show_message(f"Template not loaded: {exc}")
+            return
+        self._template_folder = str(path.parent)
+        applied = templates.apply_template(
+            self.current_input(), tpl, self._choices.sites, self._choices.projects
+        )
+        self._set_template_fields(tpl, applied)
+        self.show_message(templates.applied_text(tpl, applied.notes))
+        self.refresh_checklist()
+
+    def _set_template_fields(self, tpl: templates.LogTemplate, applied: templates.Applied) -> None:
+        """Put the fields the template holds into the widgets. The others stay."""
+        form = applied.form
+        if tpl.logged_by is not None:
+            self.logged_by_edit.setText(form.logged_by)
+        if tpl.site is not None and form.site_id is not None:
+            self.site_combo.setCurrentIndex(self.site_combo.findData(form.site_id))
+        if tpl.project is not None:
+            self._select_project(form.project_id)
+        if tpl.recording_plan_ref is not None:
+            self.plan_edit.setText(form.recording_plan_ref)
+        if tpl.remarks is not None:
+            self.remarks_edit.setPlainText(form.remarks)
+        if tpl.sample_type is not None:
+            self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(tpl.sample_type))
+        if tpl.iq_layout is not None:
+            self.layout_combo.setCurrentIndex(self.layout_combo.findData(tpl.iq_layout))
+        if tpl.endianness is not None:
+            self.endian_combo.setCurrentIndex(self.endian_combo.findData(tpl.endianness))
+        if tpl.header_bytes is not None:
+            self.header_spin.setValue(tpl.header_bytes)
+        if tpl.channels is not None:
+            if self._original is None:
+                self._carried.update(applied.channels)  # for rows a later scan shows (D79)
+            for row in self._channel_rows:
+                value = applied.channels.get(row.index)
+                if value is not None:
+                    row.band.setCurrentText(value.band)
+                    row.fc.setText(value.fc_mhz)
+        if tpl.rf_chain is not None:
+            self.param_table.set_rows(list(form.params))
+
 
 # =========================================================================
 # Helpers
@@ -1258,3 +1438,9 @@ def _cell(text: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
     return item
+
+
+def _short(text: str, limit: int = 40) -> str:
+    """The first line of `text`, cut at `limit` characters, for the export dialog."""
+    line = text.strip().splitlines()[0] if text.strip() else ""
+    return line if len(line) <= limit else line[: limit - 1] + "\N{HORIZONTAL ELLIPSIS}"

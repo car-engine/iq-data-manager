@@ -109,6 +109,9 @@ A missing file gives the defaults, which have no `db_path`. Unknown keys are ign
 when the file is read, and kept when the Settings tab writes it (DECISIONS.md D15).
 `--config PATH` reads and writes another file, and `--db PATH` overrides `db_path`.
 
+Log tab template files (section 6, D80) are TOML files too, but they are not
+configuration: the app reads one only when the user imports it.
+
 **Defaults file** (D68). The packaged app looks for `defaults.toml` in the folder of
 `IQDataManager.exe`. While the settings file in use does not exist, the app reads its
 settings from `defaults.toml`, which has the same format and rules. The Settings tab
@@ -336,6 +339,14 @@ band and fc of each channel number, and the RF chain rows. After the scan, the k
 values of a channel the new folder lacks are removed, and the message line says so.
 A note in the "Before saving" panel names what was kept. Clear form resets every
 field.
+
+Templates (D80): "Export template..." saves fields of the form to a TOML file, and
+"Import template..." fills them in again. A template can hold any field the user
+types: logged by, site and project (by name), plan reference, remarks, the file
+format, band and fc by channel number, and the RF chain rows. It never holds a value
+from the scan. Every field is optional; export asks which fields to save, and import
+changes only the fields the file holds. A site or project name that the catalogue does
+not hold is named on the message line and not added.
 
 A folder named like a channel folder (1 to 3 digits, such as `0`) gets an
 information line and a "Use parent folder" button. It does not block saving (D27).
