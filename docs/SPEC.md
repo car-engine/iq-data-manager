@@ -83,9 +83,11 @@ Key semantics:
   without explicit handling.
 - **Schema version**: `PRAGMA user_version`. Changes are numbered migrations in
   `src/iqdm/db/migrations.py`. They run only from an explicit, user-confirmed
-  upgrade action, with a backup copy made first (DECISIONS.md D6). Until the first
-  real database exists, `schema.sql` is edited in place as version 1 (D4). A file at
-  the current version that lacks a table or column of `schema.sql` counts as an older
+  upgrade action, with a backup copy made first (DECISIONS.md D6). Version 1 is the
+  schema of release 1.0.0, frozen in `tests/schemas/v1.sql` (D77). A change to
+  `schema.sql` comes with a numbered migration, and a test checks that a version 1
+  database, upgraded, has the structure of the current `schema.sql`. A file at the
+  current version that lacks a table or column of `schema.sql` counts as an older
   version (D73).
 
 ### DB access rules

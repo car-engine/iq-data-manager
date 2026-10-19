@@ -3,9 +3,9 @@
 Kept apart from connection.py and migrations.py so that both can import it.
 
 A file at the current version must also hold every table and column of schema.sql
-(D73). Until the first real database exists, schema.sql is edited in place at
-version 1 (D4), so a file made before such an edit has the right version number and
-an older schema.
+(D73). Before the release of 1.0.0, schema.sql was edited in place at version 1
+(D4), so a file made before such an edit has the right version number and an older
+schema. Version 1 is frozen since then (D77).
 """
 
 import sqlite3

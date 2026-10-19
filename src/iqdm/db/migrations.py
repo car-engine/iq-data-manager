@@ -11,8 +11,8 @@ user-confirmed action. Its sequence:
    leaves the database at the last good version.
 4. Run PRAGMA quick_check.
 
-Until the first real database exists, schema.sql is edited in place (DECISIONS.md D4) and
-MIGRATIONS stays empty.
+Version 1 is frozen in tests/schemas/v1.sql (DECISIONS.md D77). A change to schema.sql
+comes with a step in MIGRATIONS and a higher LATEST_VERSION. MIGRATIONS is still empty.
 """
 
 import sqlite3

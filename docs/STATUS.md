@@ -2,7 +2,8 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-12 (Milestone 8 closed; version 1.0.0 released).
+its report. Last updated: 2026-10-20 (O20 done on branch `o20-freeze-schema-v1`; work
+for version 1.1 started).
 
 ## Current state
 
@@ -17,11 +18,15 @@ its report. Last updated: 2026-10-12 (Milestone 8 closed; version 1.0.0 released
   [HANDOFF.md](HANDOFF.md) describes how such work proceeds, the version and release
   steps, and the database format after 1.0. Start each piece of work from an open
   item below.
-- **First task after the release: O20,** the frozen version 1 schema, before any
-  change to `schema.sql`.
-- **The rollout is the user's,** with no code: the team's `defaults.toml`, the real
-  catalogue made with the 1.0.0 build, O22, a pilot that also checks D75 on the NAS,
-  and the cut-over from the legacy logging scripts (HANDOFF.md, section 6).
+- **Version 1.1 is in progress.** The plan, approved by the user on 2026-10-20, is in
+  [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41), one branch each, then
+  the release of 1.1.0. Work after 1.0 is listed under "Work after 1.0" below.
+- **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
+  needs a numbered migration (HANDOFF.md, section 5).
+- **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
+  1.0.0 build, and a real archive, its Check before delete and the delete of the
+  laptop copy passed, with the D75 checks on the NAS. Still the user's: O22 and the
+  cut-over from the legacy logging scripts, if not yet done.
 - **Databases made before D73** (the trial catalogue of the second NAS visit, the
   scratch databases on the NAS, and `dev/test.db` and `dev/m3.db`) count as an older
   version, and the app refuses them. Make a new one with `tools/db_check.py create`
@@ -52,6 +57,14 @@ Scope of each milestone: `docs/SPEC.md` section 12.
 | 7. Packaging and migration | Done, merged | `m7-packaging-migration` | `e271362`–`cfa6d25`, plus the commit of the report | [M7](reports/M7.md) |
 | 8. Release 1.0 (D72) | Done, with gaps: O20 and the rollout moved to open items and the user (M8.md, part 4) | `m8-release` | `7bb2cca`–`9751b22` and `e6f0569` (part 1); `e016add` (review report)–`71ee3ed` (fixes and checks); `674434c` (1.0.0, tag `v1.0.0`); `4264491`–`3e9b1d0` (release records, the checklist out of the build); plus the commit of part 4. Merged into `main` as fast-forwards and pushed. | [M8](reports/M8.md) (parts 1 to 4), [release review](reports/2026-10-11-release-review.md) |
 
+### Work after 1.0
+
+One branch per piece of work (HANDOFF.md, section 3).
+
+| Item | Status | Branch | Commits | Report |
+| --- | --- | --- | --- | --- |
+| O20, version 1 schema frozen (D77) | Done, not merged | `o20-freeze-schema-v1` | `a5e121a` (PLAN.md), plus the commit of the work and its report | [2026-10-20-o20-freeze-schema](reports/2026-10-20-o20-freeze-schema.md) |
+
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
 branches were deleted, at the commits shown: `m8-release` (`b5e6609`),
@@ -73,18 +86,19 @@ Requests, faults, questions and known gaps that are not yet decided or done. The
 default is what an agent proposes unless the user decides otherwise. Raise each item
 in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
-table in [reports/M0.md](reports/M0.md). The next free number is O43.
+table in [reports/M0.md](reports/M0.md). The next free number is O46.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O20 | Frozen copy of the version 1 schema for testing future migrations. The real catalogue will be made with the 1.0.0 build, so the schema at `v1.0.0` is version 1. | First task after 1.0, before any change to `schema.sql` | Copy `schema.sql` of `v1.0.0` to `tests/schemas/v1.sql`. A test builds a database from it, applies `migrations.upgrade()`, and compares its tables and columns with a database built from the current `schema.sql`. From then on, `schema.sql` changes only together with a migration. | D4; Milestone 8 |
+| O43 | A new Log tab entry keeps the fields of the previous one. Only the values that come from the scan are reset. | 1.1.0 (approved 2026-10-20) | Keep logged by, site, project, plan reference, remarks, sample type, IQ layout, endianness, header bytes, band and fc per channel number, and the RF chain rows. Reset start and end, file counts, fs (filled in again from the scan, D21) and file duration (set again from the file names, D22). A note in the "Before saving" panel lists the kept format values. After a scan, settings for channels the new folder lacks are removed, and the message line names them. Clear form still resets everything. Replaces D26. | User, 2026-10-20 |
+| O44 | Import and export a Log tab template file, for example for common hardware set-ups | 1.1.0 (approved 2026-10-20) | A TOML file that can hold every field the user types: logged by, site, project, plan reference, remarks, sample type, IQ layout, endianness, header bytes, band and fc per channel number, and the RF chain rows. Values that come from the scan are never in it. Every field is optional. Export asks which fields to save. Import changes only the fields the file holds. A site or project name the catalogue does not hold is not added; the message line names it. | User, 2026-10-20 |
+| O45 | A queue in the Archive / copy tab: add several archives and copies, then Start; Pause pauses the whole queue | 1.1.0 (approved 2026-10-20) | Items come from a Viewer multi-selection or from the tab's form. Each item holds its own operation, destination, channels, range and check mode, and Edit takes it back into the form. Each item is previewed again just before it runs. Pause stops the running item safely, and Start resumes it, skipping the files already copied. Optional Check before delete after each archive. Check archive items close O41. The queue lives in memory. Details: [PLAN.md](../PLAN.md), section 5. | User, 2026-10-20 |
 | O38 | Viewer filters on site, project and band take several choices at once, as a checklist | Next feature release, 1.1.0 | A drop-down list with a checkbox per entry; nothing ticked means all. Project lists "No project" as one entry, so it combines with projects. Several choices of one filter match any of them; different filters must all match, as now. `RecordingFilter` holds tuples (`site_ids`, `project_ids`, `bands`, `without_project`), and `_filter_sql()` uses `IN (...)`; band still matches on the same channel as the frequency range (D43). Amends D43 and the Viewer part of D73. | User, 2026-10-12 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
-| O41 | A batch Check archive for many recordings, for example the imported legacy recordings | Not needed for 1.0 (D72); on request | One action that runs Check archive on the selected recordings in turn, each logged as now | D72 |
-| O42 | Code signing of the two programs | Not needed for 1.0 (D72); on request | Sign both executables at the release build, if antivirus or Windows SmartScreen blocks them | D72 |
+| O41 | A batch Check archive for many recordings, for example the imported legacy recordings | 1.1.0, with O45 (user, 2026-10-20) | Check archive items in the O45 queue, each logged as now | D72 |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User, before rollout (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
 
 ## Closed items
@@ -126,23 +140,28 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O12 | `finish_transfer` replaces `notes` | D62 (2026-10-03) |
 | O33 | Long paths in the packaged app (`longPathAware`) | D65 (2026-10-04) |
 | O21 | Scratch database on the NAS: UNC open, writes, locking with two PCs | Passed on the NAS: `create` and `check` on 2026-10-05, locking from two PCs on 2026-10-09 (Milestone 8) |
+| O20 | Frozen copy of the version 1 schema | D77 (2026-10-20) |
+| O42 | Code signing of the two programs | Closed by the user on 2026-10-20: "no issue" |
 
 ## Pending checks for the user
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **D75 on the NAS,** at the next visit or in the pilot: an archive from a laptop
-  passes as before, and so do its Check before delete and Delete laptop copy; an
-  archive of a folder logged under one NAS name to the same folder under another name
-  (host name and IP address) is refused at the preview. Tested so far with junctions,
-  hard links and a Windows share of the development PC.
-- **D76 across two PCs:** an edit opened on one PC while another PC archives the same
-  recording. Tested on one PC and one database file.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
 - **Check before delete through a Windows share of the same PC** fails with WinError
   87 (M8.md, part 2). That is a known limit of such a share; the real NAS passed.
+
+On 2026-10-20 the user reported that the pilot passed. These two checks are closed
+on that report:
+
+- **D75 on the NAS:** an archive from a laptop passes as before, and so do its Check
+  before delete and Delete laptop copy; an archive of a folder logged under one NAS
+  name to the same folder under another name is refused at the preview.
+- **D76 across two PCs:** an edit opened on one PC while another PC archives the same
+  recording. The user answered "all passed" to a question that named this check. The
+  agent asked the user to say so if it was not tested.
 
 The Milestone 1 exe check (`dist/smoke-2/`) was confirmed by the user on 2026-10-02.
 The Milestone 6 manual test on this PC passed on 2026-10-04. The release review ran on

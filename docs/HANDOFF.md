@@ -43,7 +43,7 @@ apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md
 "After release 1.0". Each piece of work follows the same cycle as a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
-   with the next free number (O42 is the latest at handoff), a proposed default and
+   with the next free number (STATUS.md names it; O45 is the latest on 2026-10-20), a proposed default and
    its origin.
 2. **Plan.** Propose a plan with its test list in chat, and wait for approval
    (CLAUDE.md, "Workflow"). The safety hook blocks plan files outside the
@@ -51,7 +51,7 @@ apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D77 is next), the current
+5. **Record the decision.** A new entry in DECISIONS.md (D78 is next on 2026-10-20), the current
    requirement in SPEC.md, and the item moved to "Closed items" in STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
    [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md). Update STATUS.md in the same commit.
@@ -89,12 +89,11 @@ in its report. KICKOFF.md asked this for Milestones 5 and 6, and it still applie
 
 ## 5. The database format after 1.0
 
-- Until the real catalogue exists, `schema.sql` is still edited in place at version 1
-  (D4). The real catalogue will be made with the 1.0.0 build, so treat the schema at
-  `v1.0.0` as the frozen version 1 from now on. Do not edit `schema.sql` in place.
-- **O20 is the first task after the release:** snapshot `schema.sql` of `v1.0.0` as
-  `tests/schemas/v1.sql`, with a test that a database built from it, migrated, equals
-  one built from the current `schema.sql`.
+- **Version 1 is frozen** (O20, D77, 2026-10-20). The real catalogue was made with
+  the 1.0.0 build. `tests/schemas/v1.sql` holds `schema.sql` of `v1.0.0`.
+  `tests/test_schema_freeze.py` checks that a database built from it and upgraded has
+  the structure of the current `schema.sql`. While `LATEST_VERSION` is 1, it also
+  fails any change to a statement of `schema.sql`. Do not edit `schema.sql` in place.
 - **The first real schema change** brings three things together: a numbered
   migration in `src/iqdm/db/migrations.py` with `LATEST_VERSION` raised (D6), the
   "Upgrade database" action in the Settings tab (O19), and a backup before the upgrade
@@ -107,7 +106,9 @@ in its report. KICKOFF.md asked this for Milestones 5 and 6, and it still applie
 
 ## 6. Outstanding items
 
-Everything open is listed in STATUS.md. This is the summary at handoff.
+Everything open is listed in STATUS.md. This is the summary at handoff. Since then,
+on 2026-10-20, O20 and O42 closed, the pilot passed, and O43 to O45 opened for
+version 1.1; STATUS.md holds the current list.
 
 ### Open items (STATUS.md, "Open items")
 

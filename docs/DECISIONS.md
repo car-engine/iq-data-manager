@@ -21,7 +21,7 @@ Rules for this file:
 | D1 | Sample types | 2026-10-02, before Milestone 1 | Active |
 | D2 | Logging a folder that is already on the NAS | 2026-10-02, before Milestone 1 | Active |
 | D3 | Short last file | 2026-10-02, before Milestone 1 | Active |
-| D4 | Schema baseline | 2026-10-02, Milestone 1 | Active |
+| D4 | Schema baseline | 2026-10-02, Milestone 1 | Active; D77 ends the edits in place |
 | D5 | Transfer log columns | 2026-10-02, Milestone 1 | Active; D52 adds the deletion record |
 | D6 | Running migrations | 2026-10-02, Milestone 1 | Active |
 | D7 | Database layer defaults | 2026-10-02, Milestone 1 | Active |
@@ -94,6 +94,7 @@ Rules for this file:
 | D74 | Transfer rows in the order they were written | 2026-10-11, Milestone 8 | Active |
 | D75 | File identity in the transfer checks | 2026-10-11, Milestone 8 | Active |
 | D76 | An edit saves only over the entry it opened | 2026-10-11, Milestone 8 | Active |
+| D77 | Version 1 schema frozen | 2026-10-20, after 1.0.0 | Active |
 
 ## D1. Sample types
 
@@ -1513,3 +1514,26 @@ Found in the release review (finding 2 of
   depend on `updated_at`, which has whole seconds only.
 
 Affects: SPEC section 6, `entry.py`, `db/repository.py`, `gui/log_tab.py`.
+
+## D77. Version 1 schema frozen
+
+Closes O20. The user approved it on 2026-10-20, as the first task after release
+1.0.0. The real catalogue was made with the 1.0.0 build, and the pilot passed.
+
+- `tests/schemas/v1.sql` holds `schema.sql` as released in the tag `v1.0.0`. A test
+  checks its SHA-256, so the frozen copy cannot change without a failing test.
+- A test builds a database from `v1.sql`, runs `migrations.upgrade()`, and compares
+  it with a database built from the current `schema.sql`: tables and their columns
+  (type, not null, default, primary key), indexes and their columns, and triggers.
+  After a migration, this test shows that the migration leads to the current schema.
+- While `LATEST_VERSION` is 1, a second test requires that both files build the same
+  statements in `sqlite_master`. A change to a table, index or trigger in place
+  fails it. Comments outside the statements may change.
+- The comparison after an upgrade does not cover CHECK constraints or the text of
+  triggers. A migration that changes either one needs its own test.
+- D4 no longer allows edits in place. Every change to `schema.sql` comes with a
+  numbered migration, a higher `LATEST_VERSION`, and the "Upgrade database" action
+  (O19).
+
+Affects: SPEC section 3, `schema.sql`, `db/migrations.py`, `db/version.py`,
+`tests/schemas/v1.sql`, `tests/test_schema_freeze.py`.

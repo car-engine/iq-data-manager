@@ -59,10 +59,10 @@ code as `IQDataManager-check.exe COMMAND`, in a console window.
 
 ## Run
 
-Create a development database first. The command refuses a file that exists. Until
-the version 1 schema is frozen (O20), `schema.sql` is edited in place, and the app
-refuses a database made before such an edit as an older version (D73). Make a new
-one under a new name after such an edit.
+Create a development database first. The command refuses a file that exists. The
+version 1 schema is frozen (D77): a change to `schema.sql` needs a numbered migration.
+The app refuses a database made before release 1.0.0 that lacks part of the schema,
+as an older version (D73). Make a new one under a new name.
 
 ```
 python tools/db_check.py create dev/scratch.db

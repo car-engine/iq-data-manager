@@ -1,6 +1,6 @@
 -- IQ Data Manager: SQLite schema, version 1
--- Edited in place until the first real database exists (docs/DECISIONS.md D4).
--- After that, every change is a numbered migration in migrations.py.
+-- Version 1 is frozen: tests/schemas/v1.sql holds it as released in v1.0.0
+-- (docs/DECISIONS.md D77). Every change is a numbered migration in migrations.py.
 -- All timestamps are ISO 8601 UTC text, e.g. '2026-09-30T08:15:00Z'.
 -- Run on every connection:  PRAGMA foreign_keys = ON;
 -- Journal mode: keep default rollback journal (no WAL) since the DB lives on an SMB share.
