@@ -28,12 +28,14 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSplitter,
     QTableView,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -107,6 +109,7 @@ class ViewerTab(QWidget):
 
     edit_requested = Signal(int)  # recording id for the Log tab's edit mode (D16)
     transfer_requested = Signal(int)  # recording id for the Archive / copy tab (D42)
+    queue_requested = Signal(list, bool)  # recording ids for the queue; Check archive (D81)
 
     def __init__(
         self,
@@ -252,6 +255,26 @@ class ViewerTab(QWidget):
             "Open this recording in the Archive / copy tab to archive it to the NAS or copy it."
         )
         self.transfer_button.clicked.connect(self.request_transfer)
+        self.queue_button = QToolButton()
+        self.queue_button.setText("Add to queue")
+        self.queue_button.setToolTip(
+            "Add the selected recordings to the queue in the Archive / copy tab. Select "
+            "several with Ctrl or Shift."
+        )
+        self.queue_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        queue_menu = QMenu(self.queue_button)
+        self.queue_transfer_action = queue_menu.addAction("Archive or copy")
+        self.queue_transfer_action.setToolTip(
+            "Recordings on the laptop are archived to the NAS; archived ones are copied to "
+            "this PC."
+        )
+        self.queue_transfer_action.triggered.connect(lambda: self.request_queue())
+        self.queue_check_action = queue_menu.addAction("Check archive")
+        self.queue_check_action.triggered.connect(
+            lambda: self.request_queue(check_archive=True)
+        )
+        queue_menu.setToolTipsVisible(True)
+        self.queue_button.setMenu(queue_menu)
         self.message_label = QLabel()
         self.message_label.setWordWrap(True)
 
@@ -259,7 +282,7 @@ class ViewerTab(QWidget):
         self.table.setModel(self.model)
         self.table.horizontalHeader().setResizeContentsPrecision(200)  # rows sampled per column
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # D81
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.setWordWrap(False)
@@ -279,6 +302,7 @@ class ViewerTab(QWidget):
         header.addWidget(self.open_button)
         header.addWidget(self.edit_button)
         header.addWidget(self.transfer_button)
+        header.addWidget(self.queue_button)
 
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -622,11 +646,21 @@ class ViewerTab(QWidget):
         self._load_details(recording_id)  # also after a Refresh of the same recording
         return True
 
+    def selected_ids(self) -> list[int]:
+        """The ids of every selected recording, in the order of the list (D81)."""
+        rows = sorted(self.table.selectionModel().selectedRows(), key=lambda r: r.row())
+        ids = [self.model.data(r, ID_ROLE) for r in rows]
+        return [i for i in ids if isinstance(i, int)]
+
     def _recording_selected(self, selected: QItemSelection, _deselected: QItemSelection) -> None:
+        """Show the details of the current row; several rows may be selected (D81)."""
         rows = self.table.selectionModel().selectedRows()
         if not rows:
+            self._update_buttons()
             return
-        recording_id = self.model.data(rows[0], ID_ROLE)
+        current = self.table.selectionModel().currentIndex()
+        row = next((r for r in rows if r.row() == current.row()), rows[0])
+        recording_id = self.model.data(row, ID_ROLE)
         if isinstance(recording_id, int) and recording_id != self._selected_id:
             self._selected_id = recording_id
             self._load_details(recording_id)
@@ -922,9 +956,15 @@ class ViewerTab(QWidget):
 
     def _update_buttons(self) -> None:
         has_db = bool(self.config.db_path)
-        selected = self._details is not None and self._details.recording.id == self._selected_id
+        count = len(self.table.selectionModel().selectedRows())
+        selected = (
+            count == 1
+            and self._details is not None
+            and self._details.recording.id == self._selected_id
+        )
         self.refresh_button.setEnabled(has_db)
         self.apply_button.setEnabled(has_db)
+        self.queue_button.setEnabled(has_db and count > 0)
         self.open_button.setEnabled(selected)
         self.edit_button.setEnabled(selected)
         self.transfer_button.setEnabled(selected)
@@ -949,3 +989,9 @@ class ViewerTab(QWidget):
     def request_transfer(self) -> None:
         if self._details is not None and self._details.recording.id is not None:
             self.transfer_requested.emit(self._details.recording.id)
+
+    def request_queue(self, *, check_archive: bool = False) -> None:
+        """Add the selected recordings to the Archive / copy queue (D81)."""
+        ids = self.selected_ids()
+        if ids:
+            self.queue_requested.emit(ids, check_archive)

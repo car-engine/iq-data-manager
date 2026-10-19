@@ -24,6 +24,7 @@ from iqdm.app import (
     defaults_path_for,
     drop_log_input_question,
     main,
+    queue_close_question,
     resolve_config,
     status_text,
 )
@@ -31,6 +32,7 @@ from iqdm.config import Config, load_config
 from iqdm.db import repository as repo
 from iqdm.db.connection import schema_sql, write_transaction
 from iqdm.models import Channel, Recording
+from iqdm.transferqueue import QueueItem, QueueKind
 
 
 class UnsavedAnswers:
@@ -670,6 +672,38 @@ def test_closing_during_an_operation_asks_first(qtbot, tmp_path, db_path, monkey
     else:
         assert closed
         assert calls == ["stop False", "wait"]
+
+
+def test_viewer_recordings_go_to_the_queue(qtbot, tmp_path, db_path):
+    """D81: Add to queue in the Viewer opens the Archive / copy tab with the items."""
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.viewer_tab.queue_requested.emit([rid], False)
+    wait_window(qtbot, window)
+    assert window.tabs.currentWidget() is window.transfer_tab
+    assert window.transfer_tab.queue == []
+    assert "Choose the NAS folder for archives" in window.transfer_tab.result[1]
+    window.transfer_tab.queue_nas_edit.setText(str(tmp_path / "nas"))
+    window.viewer_tab.queue_requested.emit([rid], False)
+    wait_window(qtbot, window)
+    (item,) = window.transfer_tab.queue
+    assert item.recording_id == rid
+    window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
+
+
+@pytest.mark.parametrize("answer", [QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes])
+def test_closing_with_a_waiting_queue_asks_first(qtbot, tmp_path, db_path, monkeypatch, answer):
+    asked: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda parent, title, text, *a: asked.append(text) or answer
+    )
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    item = window.transfer_tab._queue.add(
+        QueueItem(recording_id=rid, label="r", kind=QueueKind.CHECK_ARCHIVE)
+    )
+    closed = window.close()
+    window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
+    assert closed is (answer == QMessageBox.StandardButton.Yes)
+    assert asked == [queue_close_question(1)]
 
 
 def test_closing_when_idle_asks_nothing(qtbot, tmp_path, db_path, questions):

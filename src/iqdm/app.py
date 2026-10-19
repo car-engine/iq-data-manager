@@ -48,8 +48,18 @@ TRANSFER_BUSY = (
 )
 CLOSE_QUESTION = (
     "An operation is running in the Archive / copy tab.\n\nStop it and close the app? A "
-    "stopped copy or archive can be resumed later."
+    "stopped copy or archive can be resumed later. The queue is not kept."
 )
+
+
+def queue_close_question(waiting: int) -> str:
+    """Closing the app with queue items that have not run (D81)."""
+    items = "1 item" if waiting == 1 else f"{waiting} items"
+    return (
+        f"The queue in the Archive / copy tab holds {items} that have not run.\n\nClose "
+        "the app? The queue is not kept. A paused copy or archive can be resumed later "
+        'from "Unfinished transfers".'
+    )
 TRANSFER_TAB = "Archive / copy"
 SETTINGS_TAB = "Settings"
 SETTINGS_UNSAVED_TAB = "Settings (not saved)"
@@ -131,6 +141,7 @@ class MainWindow(QMainWindow):
             manifests_dir=None if config_path is None else manifests_dir(config_path),
         )
         self.viewer_tab.transfer_requested.connect(self.open_transfer)
+        self.viewer_tab.queue_requested.connect(self.add_to_queue)
         self.log_tab.saved.connect(self.transfer_tab.recording_saved)
         self.transfer_tab.recording_changed.connect(lambda _id: self.viewer_tab.refresh())
         self.transfer_tab.pick_requested.connect(
@@ -234,6 +245,11 @@ class MainWindow(QMainWindow):
             return
         self.transfer_tab.load_recording(recording_id)
 
+    def add_to_queue(self, recording_ids: list[int], check_archive: bool) -> None:
+        """Add recordings chosen in the Viewer to the Archive / copy queue (D81)."""
+        self.tabs.setCurrentWidget(self.transfer_tab)
+        self.transfer_tab.add_recordings(recording_ids, check_archive=check_archive)
+
     def _transfer_status(self, text: str) -> None:
         """Show a running operation in the tab's title and the status bar."""
         index = self.tabs.indexOf(self.transfer_tab)
@@ -264,6 +280,17 @@ class MainWindow(QMainWindow):
                 return
             self.transfer_tab.stop(ask=False)
             self.transfer_tab.wait_until_idle()
+        elif self.transfer_tab.queue_waiting():
+            answer = QMessageBox.question(
+                self,
+                "Close with a queue?",
+                queue_close_question(self.transfer_tab.queue_waiting()),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
         event.accept()
 
     def edit_recording(self, recording_id: int) -> None:

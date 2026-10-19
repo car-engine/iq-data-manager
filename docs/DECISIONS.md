@@ -98,6 +98,7 @@ Rules for this file:
 | D78 | Viewer filters with several choices | 2026-10-20, version 1.1 | Active |
 | D79 | A new folder keeps the previous entry's fields | 2026-10-20, version 1.1 | Active |
 | D80 | Log tab templates in files | 2026-10-20, version 1.1 | Active |
+| D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1645,3 +1646,65 @@ on export.
 
 Affects: SPEC sections 4 and 6, `templates.py`, `gui/log_tab.py`,
 `gui/widgets/template_fields.py`, the user guide.
+
+## D81. A queue in the Archive / copy tab
+
+Closes O45 and O41. The user asked for it on 2026-10-20: each archive had to wait for
+the one before it. The user chose these points: Pause stops the running item safely
+and Start resumes it; recordings come from a Viewer multi-selection. The user asked
+how per-item settings and several NAS locations work; the answer below was part of
+the approved plan. The agent recommended which operations a queue holds.
+
+- The tab has a Queue group. Its table lists each item's recording, state, operation,
+  size, scope and destination. A line under the table shows the selected item's
+  state in full.
+- **Adding from the Viewer.** The recordings table allows several selected rows. A new
+  "Add to queue" button offers "Archive or copy" and "Check archive".
+  - "Archive or copy": a recording on the laptop is archived to the queue's "NAS
+    folder for archives" plus its relative path. An archived recording is copied to
+    the default copy folder plus its relative path (D60). Both take the whole
+    recording, with the check mode chosen in the tab.
+  - "Check archive" adds a Check archive of each archived recording (O41).
+  - A recording that cannot be added is named with the reason, for example when no
+    NAS folder is chosen.
+  - Edit entry, Archive / copy, Scan for gaps and Open folder need exactly one
+    selected recording. The details show the current row.
+- **Adding from the form.** After a passed preview, "Add to queue" sits next to Run. It
+  adds the transfer as set in the form: operation, channels, time range, destination
+  and check mode.
+- **Per-item settings.** Each item holds a whole transfer request. Edit takes an item
+  out of the queue and back into the form, which previews it again. "Add to queue"
+  then puts it back in the same place. Different NAS folders, channel subsets and time
+  ranges are set this way. An archive is always the whole recording (D50).
+- **Repeats.** An item that repeats a waiting, running or paused item is refused: the
+  same recording for the same operation, or the same destination folder.
+- **Previews.** New archives and copies from the Viewer are previewed when they join
+  the queue, if the tab is idle, for their size and any problem. Every archive and
+  copy is previewed again just before it runs: the source is scanned again (D53), and
+  the destination and the free space are checked at that moment. A preview with
+  errors marks the item "Not started" with the reason, and the queue moves on.
+- **Running.** Start runs the waiting and paused items one after another. A failed item
+  is marked and the queue moves on. While the queue runs, the form and the other
+  buttons stay locked as for one operation, the Settings tab waits, and the Viewer's
+  "Archive / copy" waits. Waiting items can be removed, and more can be added from the
+  Viewer.
+- **Check before delete.** With "After each archive, run Check before delete" ticked
+  (the default), a passed archive is followed by Check before delete (D55) in the
+  item's check mode. "Sizes only" skips that check and says why. Delete laptop copy
+  stays a separate action for one recording, which asks first.
+- **Pause.** Pause asks first, with default No. It cancels the running item between
+  chunks, as Stop does: files already copied stay, and the log row is finished as
+  `skipped`, so the item is also listed under "Unfinished transfers". Start continues
+  with that item; its new preview finds the copied files and skips them (D51). With a
+  hash check those files are hashed on both sides again (D63). The engine has no
+  pause of its own, because a copy held open for a long time could meet network
+  timeouts.
+- **Memory only.** The queue is not saved. Closing the window while it runs asks first,
+  as for one operation, and pauses it. Closing with items that have not run asks
+  first too. The decision avoids a new file format and its recovery rules.
+- `transferqueue.py` holds the queue and `run_item()`, without Qt. `run_item()` calls
+  `preview_transfer()`, `run_transfer()`, `check_before_delete()` and
+  `check_archive()`, and adds no code that copies, renames or deletes a file.
+
+Affects: SPEC sections 5 and 8, `transferqueue.py`, `gui/transfer_tab.py`,
+`gui/viewer_tab.py`, `app.py`, the user guide.

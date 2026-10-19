@@ -540,6 +540,37 @@ def test_buttons_need_a_selection(qtbot, tab, catalogue):
     assert tab.scan_button.isEnabled()
 
 
+def select_rows(qtbot, tab: ViewerTab, *recording_ids: int) -> None:
+    """Select several rows, as Ctrl+click does (D81)."""
+    model = tab.table.selectionModel()
+    flags = model.SelectionFlag.Select | model.SelectionFlag.Rows
+    tab.table.clearSelection()
+    for rid in recording_ids:
+        row = tab.model.row_of(rid)
+        model.select(tab.model.index(row, 0), flags)
+    wait_idle(qtbot, tab)
+
+
+def test_several_recordings_go_to_the_queue(qtbot, tab, catalogue):
+    """D81: Add to queue takes every selected recording; one-recording actions wait."""
+    assert not tab.queue_button.isEnabled()
+    select_rows(qtbot, tab, catalogue["gappy"], catalogue["full"])
+    assert tab.queue_button.isEnabled()
+    for button in (tab.edit_button, tab.transfer_button, tab.open_button, tab.scan_button):
+        assert not button.isEnabled()
+    assert sorted(tab.selected_ids()) == sorted([catalogue["gappy"], catalogue["full"]])
+    with qtbot.waitSignal(tab.queue_requested, timeout=1_000) as blocker:
+        tab.queue_transfer_action.trigger()
+    assert sorted(blocker.args[0]) == sorted([catalogue["gappy"], catalogue["full"]])
+    assert blocker.args[1] is False
+    with qtbot.waitSignal(tab.queue_requested, timeout=1_000) as blocker:
+        tab.queue_check_action.trigger()
+    assert blocker.args[1] is True
+    select(qtbot, tab, catalogue["full"])  # back to one row
+    assert tab.edit_button.isEnabled()
+    assert tab.selected_ids() == [catalogue["full"]]
+
+
 def test_selecting_a_recording_shows_channels_and_details(qtbot, tab, catalogue):
     select(qtbot, tab, catalogue["gappy"])
     assert tab.channel_table.rowCount() == 2

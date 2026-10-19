@@ -193,6 +193,9 @@ The Viewer lists the catalogue.
   changes nothing.
 - **Edit entry** opens the recording in the Log recording tab.
 - **Archive / copy** opens the recording in the Archive / copy tab.
+- **Add to queue** adds every selected recording to the queue in the Archive / copy
+  tab (section 5). Select several with Ctrl or Shift. Choose **Archive or copy** or
+  **Check archive**. The other buttons work on one selected recording.
 - **Open folder** opens the recording folder.
 
 ## 5. Archive / copy
@@ -234,6 +237,33 @@ catalogue entry at the NAS copy. The laptop copy stays until you delete it.
 - **Compare with laptop copy...** compares a recording that was logged on the NAS
   with a laptop folder you choose. A passed comparison removes the "not verified"
   mark. It does not allow deleting the laptop copy.
+
+### Queue
+
+The queue runs several archives, copies and Check archive runs one after another.
+
+1. To archive several laptop recordings, choose the **NAS folder for archives** in
+   the Queue group. Each recording goes into a folder of its own name in it.
+2. Add recordings:
+   - In the Viewer, select them and click **Add to queue**, then **Archive or copy**
+     or **Check archive**. Laptop recordings are archived; archived recordings are
+     copied to the default copy folder.
+   - Or set up one transfer in the form, click **Preview**, then **Add to queue** in
+     place of Run. Use this for a copy of some channels or a time range.
+3. To change an item, select it and click **Edit**. It goes back into the form. Change
+   it, click **Preview**, then **Add to queue** puts it back in its place. Use this to
+   archive a recording to another NAS folder.
+4. Click **Start**. The items run one after another. Each is checked again just
+   before it starts; an item that cannot start is marked and the queue goes on.
+5. **Pause** stops the running item. Files already copied stay. **Start** continues
+   with it and does not copy them again.
+
+With **After each archive, run Check before delete** ticked, each archive is checked
+before delete straight away. Delete each laptop copy afterwards with **Delete laptop
+copy...**, one recording at a time.
+
+The queue is not kept when the app closes. A paused copy or archive stays under
+**Unfinished transfers**.
 
 ### Stopping and resuming
 

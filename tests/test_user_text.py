@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import templates
+from iqdm import templates, transferqueue
 from iqdm.app import (
     CLEAR_LOG_TAB_QUESTION,
     CLOSE_QUESTION,
@@ -31,6 +31,7 @@ from iqdm.app import (
     TRANSFER_RUNNING,
     UNSAVED_QUESTION,
     UNSAVED_WRONG_VALUE,
+    queue_close_question,
 )
 from iqdm.config import Config
 from iqdm.db import repository as repo
@@ -50,7 +51,14 @@ from iqdm.gui.log_tab import (
     replace_template_question,
 )
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
-from iqdm.gui.transfer_tab import TransferTab
+from iqdm.gui.transfer_tab import (
+    PAUSE_QUEUE_QUESTION,
+    QUEUE_EDIT_NOTE,
+    QUEUE_HEADERS,
+    QUEUE_HINT,
+    QUEUE_NOTE_HINT,
+    TransferTab,
+)
 from iqdm.gui.viewer_tab import NO_PROJECT_FILTER, NO_PROJECT_TEXT, ViewerTab
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.models import (
@@ -230,6 +238,28 @@ def test_template_text_is_plain(qtbot, db_path, tmp_path):
         except templates.TemplateError as exc:
             texts.append(str(exc))
     assert len(texts) > 12
+    assert offending(texts) == []
+
+
+def test_queue_text_is_plain():
+    """The queue's questions, notes, states and the Viewer's menu (D81)."""
+    item = transferqueue.QueueItem(
+        recording_id=1, label="Recording 1", kind=transferqueue.QueueKind.CHECK_ARCHIVE
+    )
+    texts = [
+        PAUSE_QUEUE_QUESTION,
+        QUEUE_HINT,
+        QUEUE_EDIT_NOTE,
+        QUEUE_NOTE_HINT,
+        *QUEUE_HEADERS,
+        queue_close_question(1),
+        queue_close_question(3),
+        transferqueue.scope_text(item, 8.0),
+        *(str(s) for s in transferqueue.QueueState),
+        *(str(k) for k in transferqueue.QueueKind),
+        "Archive or copy",
+        "Check archive",
+    ]
     assert offending(texts) == []
 
 

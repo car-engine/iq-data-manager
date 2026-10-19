@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 import iqdm.gui.transfer_tab as tab_module
 from conftest import recording_from
-from iqdm import viewer
+from iqdm import transferqueue, viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
@@ -27,8 +27,9 @@ from iqdm.movecopy import LaptopStep
 from iqdm.transfer.copier import CopyItem, copy_files
 from iqdm.transfer.delete import DeleteResult, KeptFile
 from iqdm.transfer.manifest import read_manifest
-from iqdm.transfer.operations import FILE_LIST_UNUSABLE, DeleteOutcome
+from iqdm.transfer.operations import FILE_LIST_UNUSABLE, DeleteOutcome, TransferRequest
 from iqdm.transfer.pathcheck import DiskUsage
+from iqdm.transferqueue import QueueItem, QueueKind, QueueState
 from make_fixtures import ChannelSpec
 
 T0 = 1790733600.0
@@ -591,6 +592,219 @@ def test_compare_with_laptop_copy_clears_the_mark(env, monkeypatch):
 def test_compare_is_offered_only_for_a_recording_not_verified(env):
     tab = env.loaded(env.tab())
     assert tab.compare_button.isHidden()
+
+
+# ---------------------------------------------------------------------------
+# Queue (D81)
+# ---------------------------------------------------------------------------
+
+
+def second_recording(env: Env, make_recording) -> int:
+    info = make_recording(n_slots=4)
+
+    def insert(conn):
+        site = repo.find_site(conn, "SiteA").id
+        return repo.insert_recording(conn, recording_from(info, site_id=site))
+
+    return write_transaction(env.db, insert)
+
+
+def queue_idle(env: Env, tab: TransferTab, timeout: int = 60_000) -> None:
+    env.qtbot.waitUntil(lambda: not tab.queue_running and not tab.runner.busy, timeout=timeout)
+
+
+def states(tab: TransferTab) -> list[QueueState]:
+    return [i.state for i in tab.queue]
+
+
+def queued_from_viewer(env: Env, tab: TransferTab, *rids: int) -> None:
+    tab.queue_nas_edit.setText(str(env.nas / "2026"))
+    tab.add_recordings(list(rids))
+    env.idle(tab)
+
+
+@pytest.fixture
+def slow_queue(monkeypatch):
+    """Slow the queue's copy down to 0.1 s per file report, with one file at a time."""
+    real = transferqueue.run_transfer
+
+    def run_transfer(db, preview, **kw):
+        report = kw["copy_progress"]
+
+        def slowly(p):
+            time.sleep(0.1)
+            report(p)
+
+        kw["copy_progress"] = slowly
+        kw["workers"] = 1
+        return real(db, preview, **kw)
+
+    monkeypatch.setattr(transferqueue, "run_transfer", run_transfer)
+
+
+def test_add_to_queue_from_the_form(env):
+    tab = env.loaded(env.tab())
+    assert tab.archive_radio.isChecked()
+    tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    assert not tab.add_queue_button.isEnabled()  # a preview comes first
+    env.previewed(tab)
+    assert tab.add_queue_button.isEnabled()
+    tab.add_queue_button.click()
+    (item,) = tab.queue
+    assert (item.kind, item.state) == (QueueKind.ARCHIVE, QueueState.WAITING)
+    assert item.recording_id == env.rid
+    assert item.size_bytes == tab.preview.selection.total_bytes
+    assert tab.result[1].startswith("Added to the queue: Recording")
+    assert tab.queue_table.item(0, 1).text() == "Waiting"
+    assert tab.queue_table.item(0, 2).text() == "Archive"
+    assert tab.queue_table.item(0, 4).text() == "Whole recording"
+    tab.add_queue_button.click()  # the same recording again
+    assert len(tab.queue) == 1
+    assert tab.result == (ItemState.ERROR, f"Recording {env.rid} is already in the queue for this.")
+    assert env.transfers() == []  # nothing ran
+
+
+def test_start_runs_the_items_in_turn(env, make_recording):
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid, other)
+    assert states(tab) == [QueueState.WAITING, QueueState.WAITING]
+    assert all(i.size_bytes for i in tab.queue)  # previewed when added
+    statuses: list[str] = []
+    tab.status_changed.connect(statuses.append)
+    busy: list[bool] = []
+    tab.busy_changed.connect(busy.append)
+    tab.start_queue_button.click()
+    assert tab.is_busy and not tab.start_queue_button.isEnabled()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE, QueueState.DONE]
+    assert all("Check before delete passed" in i.note for i in tab.queue)
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    assert any(s.startswith("queue 2 of 2") for s in statuses)
+    assert busy[0] is True and busy[-1] is False and False not in busy[:-1]
+    assert tab.result == (ItemState.OK, "Queue finished. 2 done.")
+    assert not tab.is_busy
+
+
+def test_pause_then_start_finishes_the_item(env, answers, slow_queue, make_recording):
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid)
+    tab.start_queue_button.click()
+    env.qtbot.waitUntil(lambda: tab.progress_label.text().startswith("1 of"), timeout=10_000)
+    assert tab.stop_button.isHidden()  # the queue pauses instead
+    answers.next = QMessageBox.StandardButton.No
+    tab.pause_queue_button.click()
+    assert tab.queue_running and states(tab) == [QueueState.RUNNING]
+    answers.next = QMessageBox.StandardButton.Yes
+    tab.pause_queue_button.click()
+    assert answers.texts[-1] == tab_module.PAUSE_QUEUE_QUESTION
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.PAUSED]
+    assert tab.result[0] is ItemState.INFO and tab.result[1].startswith("Queue paused. 1 left")
+    (stopped,) = tab.unfinished
+    assert stopped.operation is Operation.ARCHIVE
+
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE]
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    assert tab.unfinished == []
+
+
+def test_a_waiting_item_can_be_removed_while_the_queue_runs(env, slow_queue, make_recording):
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid, other)
+    tab.start_queue_button.click()
+    env.qtbot.waitUntil(lambda: tab.progress_label.text().startswith("1 of"), timeout=10_000)
+    tab.select_queue_row(0)
+    assert not tab.remove_queue_button.isEnabled()  # the running item
+    tab.select_queue_row(1)
+    assert tab.remove_queue_button.isEnabled()
+    tab.remove_queue_button.click()
+    queue_idle(env, tab)
+    assert [(i.recording_id, i.state) for i in tab.queue] == [(env.rid, QueueState.DONE)]
+    with open_db(env.db, readonly=True) as conn:
+        assert repo.list_transfers(conn, other) == []
+
+
+def test_a_failed_item_does_not_stop_the_queue(env, make_recording):
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, other)
+    outside = QueueItem(
+        recording_id=env.rid,
+        label="first",
+        kind=QueueKind.ARCHIVE,
+        request=TransferRequest(
+            recording_id=env.rid,
+            operation=Operation.ARCHIVE,
+            destination=str(env.tmp / "not-the-nas" / "rec"),
+            hash_mode=HashMode.ALL,
+        ),
+    )
+    tab._queue.add(outside, position=0)
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.NOT_STARTED, QueueState.DONE]
+    assert tab.queue[0].note
+    tab.select_queue_row(0)
+    assert tab.queue_note.text() == f"first: Not started: {tab.queue[0].note}"
+    assert tab.queue_table.item(0, 1).toolTip() == f"Not started: {tab.queue[0].note}"
+    assert tab.result[0] is ItemState.OK
+    assert tab.result[1] == "Queue finished. 1 done, 1 not started."
+    tab.clear_queue_button.click()
+    assert tab.queue == []
+
+
+def test_edit_puts_the_item_back_in_its_place(env, make_recording):
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid, other)
+    other_destination = tab.queue[1].destination
+    tab.select_queue_row(0)
+    tab.edit_queue_button.click()
+    env.idle(tab)
+    assert [i.recording_id for i in tab.queue] == [other]
+    assert tab.recording.id == env.rid
+    assert tab.archive_radio.isChecked()
+    assert tab.preview is not None  # previewed again for the user
+    new = env.nas / "elsewhere" / env.source.name
+    tab.dest_edit.setText(str(new))
+    env.previewed(tab)
+    tab.add_queue_button.click()
+    assert [(i.recording_id, i.destination) for i in tab.queue] == [
+        (env.rid, str(new)),
+        (other, other_destination),
+    ]
+    assert tab.message_label.text() == ""
+
+
+def test_viewer_items_need_a_nas_folder_and_an_archive_to_check(env):
+    tab = env.tab()
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    assert tab.queue == []
+    assert tab.result[0] is ItemState.ERROR
+    assert "Choose the NAS folder for archives" in tab.result[1]
+    tab.add_recordings([env.rid], check_archive=True)
+    env.idle(tab)
+    assert tab.queue == []
+    assert "is not archived" in tab.result[1]
+
+
+def test_check_archive_items(env):
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    tab.add_recordings([env.rid], check_archive=True)
+    env.idle(tab)
+    (item,) = tab.queue
+    assert item.kind is QueueKind.CHECK_ARCHIVE
+    assert tab.queue_table.item(0, 4).text() == "NAS folder against the catalogue"
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE]
+    assert env.transfers()[-1].operation is Operation.CHECK
 
 
 # ---------------------------------------------------------------------------

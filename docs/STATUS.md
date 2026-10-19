@@ -18,9 +18,11 @@ for version 1.1 started).
   [HANDOFF.md](HANDOFF.md) describes how such work proceeds, the version and release
   steps, and the database format after 1.0. Start each piece of work from an open
   item below.
-- **Version 1.1 is in progress.** The plan, approved by the user on 2026-10-20, is in
-  [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41), one branch each, then
-  the release of 1.1.0. Work after 1.0 is listed under "Work after 1.0" below.
+- **Version 1.1 is built and waits for the user.** The plan, approved by the user on
+  2026-10-20, is in [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41), one
+  branch each. All five are done on stacked branches, none merged; "Work after 1.0"
+  below lists them. Next: the user's review, the merges as fast-forwards in order,
+  and the release of 1.1.0 (HANDOFF.md, section 4).
 - **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
   needs a numbered migration (HANDOFF.md, section 5).
 - **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
@@ -66,7 +68,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O20, version 1 schema frozen (D77) | Done, not merged | `o20-freeze-schema-v1` | `a5e121a` (PLAN.md), `fee1198` | [2026-10-20-o20-freeze-schema](reports/2026-10-20-o20-freeze-schema.md) |
 | O38, Viewer filters with several choices (D78) | Done, not merged | `viewer-multi-filter`, from `o20-freeze-schema-v1` | `1e212f6` | [2026-10-20-viewer-multi-filter](reports/2026-10-20-viewer-multi-filter.md) |
 | O43, a new folder keeps the previous entry's fields (D79) | Done, not merged | `log-keep-fields`, from `viewer-multi-filter` | `336276a`, `2b49761` (SPEC) | [2026-10-20-log-keep-fields](reports/2026-10-20-log-keep-fields.md) |
-| O44, Log tab templates (D80) | Done, not merged | `log-templates`, from `log-keep-fields` | The commit of the work and its report | [2026-10-20-log-templates](reports/2026-10-20-log-templates.md) |
+| O44, Log tab templates (D80) | Done, not merged | `log-templates`, from `log-keep-fields` | `740fd54` | [2026-10-20-log-templates](reports/2026-10-20-log-templates.md) |
+| O45 and O41, the queue (D81) | Done, not merged | `transfer-queue`, from `log-templates` | The commit of the work and its report | [2026-10-20-transfer-queue](reports/2026-10-20-transfer-queue.md) |
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -93,12 +96,10 @@ table in [reports/M0.md](reports/M0.md). The next free number is O46.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O45 | A queue in the Archive / copy tab: add several archives and copies, then Start; Pause pauses the whole queue | 1.1.0 (approved 2026-10-20) | Items come from a Viewer multi-selection or from the tab's form. Each item holds its own operation, destination, channels, range and check mode, and Edit takes it back into the form. Each item is previewed again just before it runs. Pause stops the running item safely, and Start resumes it, skipping the files already copied. Optional Check before delete after each archive. Check archive items close O41. The queue lives in memory. Details: [PLAN.md](../PLAN.md), section 5. | User, 2026-10-20 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
-| O41 | A batch Check archive for many recordings, for example the imported legacy recordings | 1.1.0, with O45 (user, 2026-10-20) | Check archive items in the O45 queue, each logged as now | D72 |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User, before rollout (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
 
 ## Closed items
@@ -145,11 +146,17 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O38 | Viewer filters on site, project and band take several choices | D78 (2026-10-20) |
 | O43 | A new Log tab entry keeps the fields of the previous one | D79 (2026-10-20) |
 | O44 | Import and export a Log tab template file | D80 (2026-10-20) |
+| O45 | A queue in the Archive / copy tab | D81 (2026-10-20) |
+| O41 | A batch Check archive for many recordings | D81 (2026-10-20): Check archive items in the queue |
 
 ## Pending checks for the user
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
+- **Version 1.1 with the 1.1 build:** the queue against the real NAS, with Pause and
+  Start part-way through a large archive (D81); logging several real folders in a
+  row (D79); a template exported and imported on a real set-up, kept in a shared
+  folder (D80); the Viewer's tick-box filters (D78); each by eye in dark mode.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
@@ -225,6 +232,8 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   scratch databases in its `run-*` folders, 2026-10-20).
 - `dev/o44-shots/` (template dialog screenshots, their script and two scratch
   databases, 2026-10-20).
+- `dev/o45-shots/` (queue screenshots, their script and scratch databases,
+  2026-10-20).
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
@@ -296,6 +305,11 @@ These come from the safety configuration and from experience in this repository.
   `sys.modules`. `import make_fixtures` in a test gives `iqdm.diagnostics.fixtures`,
   so monkeypatching either name changes the same module.
 - **A widget never shown reports `isVisible()` False.** GUI tests check `isHidden()`.
+- **A test that leaves a question behind hangs the suite.** pytest-qt closes each
+  window at teardown, after `monkeypatch` is undone. A main window whose Archive /
+  copy queue still holds a waiting item then opens a real modal question, and the
+  run never ends. Tests empty the queue before they end (`test_app_smoke.py`, D81).
+  Run long suites with `timeout` in front, so a hang ends.
 - **Code that deletes or overwrites a file** is listed in the Milestone 6 report
   (earlier: Milestone 5), section "Code paths that delete or overwrite a file", with
   the changes in the Milestone 7 report ("Code that creates or overwrites a file")

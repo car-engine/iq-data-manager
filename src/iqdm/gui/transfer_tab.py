@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import movecopy, viewer
+from iqdm import movecopy, transferqueue, viewer
 from iqdm.config import Config
 from iqdm.entry import ChecklistItem, ItemState, default_logged_by, format_mhz, format_size
 from iqdm.gui.log_tab import NO_DATABASE
@@ -74,8 +74,29 @@ from iqdm.transfer.operations import (
 from iqdm.transfer.pathcheck import files_text
 from iqdm.transfer.selection import SelectionError
 from iqdm.transfer.verify import VerifyProgress
+from iqdm.transferqueue import ItemResult, Phase, QueueError, QueueItem, QueueKind, QueueState
 
 PROGRESS_EVERY_S = 0.1  # copy progress reaches the GUI at most this often
+PAUSE_QUEUE_QUESTION = (
+    "Pause the queue?\n\nThe running item stops after the part of a file it is copying. "
+    "Files already copied stay. Start continues with that item and does not copy them "
+    "again."
+)
+QUEUE_HINT = (
+    "Add recordings with Add to queue in the Viewer, or set one up in the form above "
+    "and click Add to queue under the preview. Start runs them one after another."
+)
+QUEUE_EDIT_NOTE = (
+    "The queue item is in the form. Change it, click Preview, then Add to queue puts it "
+    "back in its place."
+)
+QUEUE_HEADERS = ("Recording", "State", "Operation", "Size", "Scope", "Destination")
+QUEUE_NOTE_HINT = "Select an item to see its full state."
+QUEUE_JOBS = {
+    QueueKind.ARCHIVE: "archive",
+    QueueKind.COPY: "copy",
+    QueueKind.CHECK_ARCHIVE: "check archive",
+}
 NO_MANIFEST_FOLDER = (
     "The app has no settings folder for the file list that each transfer keeps, so it "
     "cannot copy. Start the app from your own Windows account."
@@ -155,6 +176,13 @@ class TransferTab(QWidget):
         self._channel_boxes: dict[int, QCheckBox] = {}
         self._time_errors: dict[str, str] = {}
         self._message_text = ""  # the line above the preview, without its mark
+        self._queue = transferqueue.TransferQueue()  # D81
+        self._queue_running = False
+        self._pause_requested = False
+        self._queue_key: int | None = None  # the running queue item
+        self._queue_status = ""  # "queue 2 of 5" while the queue runs
+        self._pending_edit: QueueItem | None = None  # a queue item on its way to the form
+        self._edit_position: int | None = None  # where Add to queue puts it back
 
         self._build()
         self._clear_recording()
@@ -172,6 +200,7 @@ class TransferTab(QWidget):
         column.addWidget(self._build_scope())
         column.addWidget(self._build_destination())
         column.addWidget(self._build_verification())
+        column.addWidget(self._build_queue())
         column.addWidget(self._build_laptop())
         column.addWidget(self._build_unfinished())
         column.addStretch(1)
@@ -323,6 +352,75 @@ class TransferTab(QWidget):
         layout.addRow("Compare", self.hash_combo)
         return box
 
+    def _build_queue(self) -> QGroupBox:
+        """The queue of transfers that run one after another (D81)."""
+        box = QGroupBox("Queue")
+        hint = QLabel(QUEUE_HINT)
+        hint.setWordWrap(True)
+        self.queue_table = QTableWidget(0, len(QUEUE_HEADERS))
+        self.queue_table.setHorizontalHeaderLabels(QUEUE_HEADERS)
+        self.queue_table.verticalHeader().setVisible(False)
+        self.queue_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        header = self.queue_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(True)
+        self.queue_table.itemSelectionChanged.connect(self._update_buttons)
+        self.queue_table.itemSelectionChanged.connect(self._show_queue_note)
+        self.queue_table.setMinimumHeight(140)
+        self.queue_note = QLabel(QUEUE_NOTE_HINT)  # the selected item's state in full
+        self.queue_note.setWordWrap(True)
+        self.queue_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.queue_nas_edit = QLineEdit()
+        self.queue_nas_edit.setPlaceholderText("A folder in one of the NAS locations")
+        self.queue_nas_edit.setToolTip(
+            "Recordings on the laptop that you add from the Viewer are archived into this "
+            "folder, each in a folder of its own name. Edit an item to change its folder."
+        )
+        self.queue_nas_button = QPushButton("Browse...")
+        self.queue_nas_button.clicked.connect(self.browse_queue_folder)
+        self.check_after_box = QCheckBox("After each archive, run Check before delete")
+        self.check_after_box.setToolTip(
+            "Reads each NAS copy again, past this PC's file cache, so the laptop copy can be "
+            "deleted afterwards. Needs a check with hashes."
+        )
+        self.check_after_box.setChecked(True)
+        self.start_queue_button = QPushButton("Start")
+        self.start_queue_button.clicked.connect(self.start_queue)
+        self.pause_queue_button = QPushButton("Pause")
+        self.pause_queue_button.clicked.connect(lambda: self.pause_queue())
+        self.edit_queue_button = QPushButton("Edit")
+        self.edit_queue_button.setToolTip("Take the item back into the form to change it.")
+        self.edit_queue_button.clicked.connect(self.edit_queue_item)
+        self.remove_queue_button = QPushButton("Remove")
+        self.remove_queue_button.clicked.connect(self.remove_queue_item)
+        self.clear_queue_button = QPushButton("Clear finished")
+        self.clear_queue_button.clicked.connect(self.clear_finished_queue)
+
+        folder_row = QHBoxLayout()
+        folder_row.addWidget(QLabel("NAS folder for archives"))
+        folder_row.addWidget(self.queue_nas_edit, 1)
+        folder_row.addWidget(self.queue_nas_button)
+        buttons = QHBoxLayout()
+        for button in (
+            self.start_queue_button,
+            self.pause_queue_button,
+            self.edit_queue_button,
+            self.remove_queue_button,
+            self.clear_queue_button,
+        ):
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        layout = QVBoxLayout(box)
+        layout.addWidget(hint)
+        layout.addLayout(folder_row)
+        layout.addWidget(self.check_after_box)
+        layout.addWidget(self.queue_table)
+        layout.addWidget(self.queue_note)
+        layout.addLayout(buttons)
+        return box
+
     def _build_laptop(self) -> QGroupBox:
         self.laptop_box = QGroupBox("Checks and the laptop copy")
         self.laptop_label = QLabel()
@@ -422,6 +520,11 @@ class TransferTab(QWidget):
         self.run_button.clicked.connect(self.start_run)
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop)
+        self.add_queue_button = QPushButton("Add to queue")
+        self.add_queue_button.setToolTip(
+            "Adds this previewed transfer to the queue in place of running it now."
+        )
+        self.add_queue_button.clicked.connect(self.add_current_to_queue)
         self.phase_label = _bold("")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
@@ -438,6 +541,7 @@ class TransferTab(QWidget):
         buttons = QHBoxLayout()
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.run_button, 1)
+        buttons.addWidget(self.add_queue_button)
         buttons.addWidget(self.stop_button)
         layout = QVBoxLayout(box)
         layout.addWidget(self.message_label)
@@ -480,8 +584,20 @@ class TransferTab(QWidget):
 
     @property
     def is_busy(self) -> bool:
-        """True while an operation runs, including a preview."""
-        return self._task is not None
+        """True while an operation runs, including a preview, and while the queue runs."""
+        return self._task is not None or self._queue_running
+
+    @property
+    def queue(self) -> list[QueueItem]:
+        return self._queue.items
+
+    @property
+    def queue_running(self) -> bool:
+        return self._queue_running
+
+    def queue_waiting(self) -> int:
+        """Items that have not run, or were paused. Closing the app drops them."""
+        return self._queue.runnable_count()
 
     @property
     def job(self) -> str:
@@ -612,12 +728,22 @@ class TransferTab(QWidget):
         if resume is not None and resume.recording_id == result.recording.id:
             self._fill_form_from(resume)
             self.start_preview()
+        edit = self._pending_edit
+        if edit is not None and edit.request is not None:
+            if edit.recording_id == result.recording.id:
+                self._pending_edit = None
+                self._fill_form_from_request(edit.request)
+                self._set_message(ItemState.INFO, QUEUE_EDIT_NOTE)
+                self.start_preview()
+            else:  # another recording was loaded in between
+                self._put_back_edit()
         self._update_buttons()
 
     def _load_failed(self, load_id: int, exc: Exception) -> None:
         if load_id != self._load_id:
             return
         self._pending_resume = None
+        self._put_back_edit()
         self._clear_recording()
         self._set_message(ItemState.ERROR, viewer.error_text(exc), str(exc))
 
@@ -666,6 +792,22 @@ class TransferTab(QWidget):
             box.setChecked(index in values.channels)
         self.dest_edit.setText(values.destination)
         self.hash_combo.setCurrentIndex(max(0, self.hash_combo.findData(values.hash_mode)))
+        self._invalidate()
+
+    def _fill_form_from_request(self, request: TransferRequest) -> None:
+        """The form of a queue item, for Edit (D81)."""
+        if self._rec is None:
+            return
+        archive = request.operation is Operation.ARCHIVE
+        (self.archive_radio if archive else self.copy_radio).setChecked(True)
+        whole = request.start_unix is None and request.end_unix is None
+        (self.whole_radio if whole else self.range_radio).setChecked(True)
+        if not whole:
+            self._set_times(request.start_unix, request.end_unix)
+        for index, box in self._channel_boxes.items():
+            box.setChecked(request.channels is None or index in request.channels)
+        self.dest_edit.setText(request.destination)
+        self.hash_combo.setCurrentIndex(max(0, self.hash_combo.findData(request.hash_mode)))
         self._invalidate()
 
     def _fill_destination(self) -> None:
@@ -1005,6 +1147,13 @@ class TransferTab(QWidget):
         self._update_buttons()
 
     def _progress(self, value: object) -> None:
+        if isinstance(value, Phase):  # a queue item starts its next step (D81)
+            self.phase_label.setText(value.text)
+            self.progress_bar.setValue(0)
+            self.progress_label.setText("")
+            self.speed_label.setText("")
+            self._meter = movecopy.RateMeter()
+            return
         if isinstance(value, CopyProgress):
             self.phase_label.setText("Copying")
             self.progress_bar.setValue(movecopy.percent(value.bytes_done, value.bytes_total))
@@ -1014,7 +1163,8 @@ class TransferTab(QWidget):
             self.retry_label.setText("")
             self._status(movecopy.percent(value.bytes_done, value.bytes_total))
         elif isinstance(value, VerifyProgress):
-            if self.phase_label.text() != "Checking":
+            phase = self.phase_label.text()
+            if phase != "Checking" and not phase.startswith("Check before delete"):
                 self.phase_label.setText("Checking")
                 self._meter = movecopy.RateMeter()
             done, total = (
@@ -1047,7 +1197,8 @@ class TransferTab(QWidget):
         }
         word = words.get(self._job)
         if word:
-            self.status_changed.emit(f"{word} {pct} %")
+            queue = f"{self._queue_status}, " if self._queue_running else ""
+            self.status_changed.emit(f"{queue}{word} {pct} %")
 
     def _run_done(self, result: object) -> None:
         job = self._job
@@ -1272,6 +1423,385 @@ class TransferTab(QWidget):
         self.laptop_label.setText(text or "Load a recording.")
 
     # =====================================================================
+    # Queue (D81)
+    # =====================================================================
+
+    def browse_queue_folder(self) -> None:
+        start = self.queue_nas_edit.text().strip() or (
+            self.config.nas_roots[0] if self.config.nas_roots else ""
+        )
+        folder = QFileDialog.getExistingDirectory(self, "Choose the NAS folder for archives", start)
+        if folder:
+            self.queue_nas_edit.setText(str(Path(folder)))
+
+    def add_current_to_queue(self) -> None:
+        """Add the previewed transfer of the form to the queue, in place of Run."""
+        preview, rec = self._preview, self._rec
+        if self.is_busy or preview is None or not preview.ok or rec is None or rec.id is None:
+            return
+        if preview.request != self._current_request():
+            self._invalidate()
+            return
+        request = preview.request
+        kind = QueueKind.ARCHIVE if request.operation is Operation.ARCHIVE else QueueKind.COPY
+        item = QueueItem(
+            recording_id=rec.id,
+            label=transferqueue.recording_label(rec, self._site, self._offset),
+            kind=kind,
+            request=request,
+            size_bytes=preview.selection.total_bytes,
+        )
+        try:
+            added = self._queue.add(item, self._edit_position)
+        except QueueError as exc:
+            self._set_result(ItemState.ERROR, str(exc))
+            return
+        self._edit_position = None
+        self._set_message(ItemState.OK, "")
+        self._set_result(ItemState.OK, f"Added to the queue: {added.label}.")
+        self._show_queue()
+        self._update_buttons()
+
+    def add_recordings(self, recording_ids: Sequence[int], *, check_archive: bool = False) -> None:
+        """Add recordings chosen in the Viewer to the queue (D81).
+
+        A recording on the laptop is archived into the queue's NAS folder; an archived
+        one is copied to the default copy folder. With check_archive, each item is a
+        Check archive (O41). New archives and copies are previewed when the tab is idle.
+        """
+        db = self.config.db_path
+        if not db:
+            self._set_message(ItemState.TODO, NO_DATABASE)
+            return
+        ids = list(recording_ids)
+        if not ids:
+            return
+
+        def load(task: Task) -> list[viewer.Details]:
+            return [viewer.load_details(db, rid) for rid in ids]
+
+        self.runner.start(
+            load,
+            on_success=lambda result: self._recordings_for_queue(result, check_archive),
+            on_failure=lambda exc: self._set_result(
+                ItemState.ERROR, viewer.error_text(exc), str(exc)
+            ),
+        )
+
+    def _recordings_for_queue(self, result: object, check_archive: bool) -> None:
+        if not isinstance(result, list):
+            return
+        added: list[QueueItem] = []
+        problems: list[str] = []
+        for details in result:
+            rec = details.recording
+            label = transferqueue.recording_label(rec, details.site_name, self._offset)
+            try:
+                item = transferqueue.item_for_recording(
+                    rec,
+                    check_archive_only=check_archive,
+                    nas_folder=self.queue_nas_edit.text(),
+                    config=self.config,
+                    hash_mode=self.hash_mode(),
+                    label=label,
+                )
+                added.append(self._queue.add(item))
+            except QueueError as exc:
+                problems.append(str(exc))
+        count = len(added)
+        text = f"Added {count} {'item' if count == 1 else 'items'} to the queue."
+        if problems:
+            text += " Not added: " + " ".join(problems)
+        state = ItemState.OK if not problems else ItemState.INFO if added else ItemState.ERROR
+        self._set_result(state, text)
+        self._show_queue()
+        self._update_buttons()
+        keys = [i.key for i in added if i.request is not None]
+        if keys and not self.is_busy:
+            self._check_queue_items(keys)
+
+    def _check_queue_items(self, keys: Sequence[int]) -> None:
+        """Preview new queue items, for their size and any problem. Writes nothing."""
+        db, config, options = self.config.db_path, self.config, self._preview_options
+        if not db:
+            return
+        items = [self._queue.get(k) for k in keys]
+        self._begin("preview", "Checking the new queue items")
+
+        def work(task: Task) -> list[tuple[int, ItemResult]]:
+            results = []
+            for n, item in enumerate(items, start=1):
+                if task.is_cancelled():
+                    break
+                task.report(n)
+                result = transferqueue.preview_item(
+                    db, item, config, cancelled=task.is_cancelled, preview_options=options
+                )
+                results.append((item.key, result))
+            return results
+
+        self._task = self.runner.start(
+            work,
+            on_success=self._queue_items_checked,
+            on_failure=self._queue_check_failed,
+            on_progress=lambda n: self.progress_label.setText(f"Item {n} of {len(items)}"),
+        )
+        self._update_buttons()
+
+    def _queue_items_checked(self, result: object) -> None:
+        self._end()
+        if isinstance(result, list):
+            keys = {i.key for i in self._queue.items if i.state is QueueState.WAITING}
+            for key, item_result in result:
+                if key in keys:
+                    self._queue.set_result(key, item_result)
+        self._show_queue()
+        self._update_buttons()
+
+    def _queue_check_failed(self, exc: Exception) -> None:
+        self._end()
+        self._set_result(ItemState.ERROR, viewer.error_text(exc), str(exc))
+
+    def start_queue(self) -> None:
+        """Run the waiting and paused items one after another."""
+        if self.is_busy or not self.config.db_path:
+            return
+        if self.manifests_dir is None:
+            self._set_result(ItemState.ERROR, NO_MANIFEST_FOLDER)
+            return
+        if not self._queue.runnable_count():
+            self._set_result(ItemState.TODO, "The queue has nothing to run.")
+            return
+        self._queue_running = True
+        self._pause_requested = False
+        self._set_result(ItemState.OK, "")
+        self.busy_changed.emit(True)
+        self._run_next_item()
+
+    def _run_next_item(self) -> None:
+        item = None if self._pause_requested else self._queue.next_runnable()
+        if item is None or not self.config.db_path or self.manifests_dir is None:
+            self._finish_queue()
+            return
+        db, config, manifests = self.config.db_path, self.config, self.manifests_dir
+        options, user = self._preview_options, self._performed_by()
+        check_after = self.check_after_box.isChecked()
+        position = self._queue.position(item.key) + 1
+        self._queue.set_state(item.key, QueueState.RUNNING)
+        self._queue_key = item.key
+        self._queue_status = f"queue {position} of {len(self._queue)}"
+        self._show_queue()
+        self._begin(QUEUE_JOBS[item.kind], f"Queue item {position} of {len(self._queue)}")
+        self.status_changed.emit(self._queue_status)
+        last = [0.0]
+
+        def work(task: Task) -> ItemResult:
+            def copy_report(p: object) -> None:
+                now = time.monotonic()
+                if not isinstance(p, CopyProgress):
+                    task.report(p)
+                elif now - last[0] >= PROGRESS_EVERY_S or p.files_done == p.files_total:
+                    last[0] = now
+                    task.report(p)
+
+            return transferqueue.run_item(
+                db,
+                item,
+                config,
+                performed_by=user,
+                manifests_dir=manifests,
+                check_after_archive=check_after,
+                report=task.report,
+                copy_report=copy_report,
+                cancelled=task.is_cancelled,
+                preview_options=options,
+            )
+
+        self._task = self.runner.start(
+            work,
+            on_success=lambda result: self._queue_item_done(item, result),
+            on_failure=lambda exc: self._queue_item_failed(item, exc),
+            on_progress=self._progress,
+        )
+        self._update_buttons()
+
+    def _queue_item_done(self, item: QueueItem, result: object) -> None:
+        self._end()
+        if isinstance(result, ItemResult):
+            self._finish_item(item, result)
+        self._run_next_item()
+
+    def _queue_item_failed(self, item: QueueItem, exc: Exception) -> None:
+        self._end()
+        if isinstance(exc, ScanCancelled):
+            result = ItemResult(state=QueueState.PAUSED, note="Paused.")
+        elif isinstance(exc, DeleteRefused):
+            result = ItemResult(state=QueueState.FAILED, note=" ".join(exc.reasons) or "Refused.")
+        elif isinstance(exc, (TransferError, ValueError)):
+            result = ItemResult(state=QueueState.FAILED, note=str(exc))
+        else:
+            result = ItemResult(state=QueueState.FAILED, note=viewer.error_text(exc))
+        self._finish_item(item, result)
+        self._run_next_item()
+
+    def _finish_item(self, item: QueueItem, result: ItemResult) -> None:
+        if result.state is QueueState.PAUSED:
+            self._pause_requested = True  # only a pause or a stop cancels an item
+        if item.key in {i.key for i in self._queue.items}:
+            self._queue.set_result(item.key, result)
+        self._queue_key = None
+        self.recording_changed.emit(item.recording_id)
+        self.refresh_unfinished()
+        self._show_queue()
+
+    def _finish_queue(self) -> None:
+        self._queue_running = False
+        self._queue_key = None
+        self._queue_status = ""
+        items = self._queue.items
+        counts = {s: sum(1 for i in items if i.state is s) for s in QueueState}
+        parts = [
+            f"{counts[s]} {str(s).lower()}"
+            for s in (QueueState.DONE, QueueState.FAILED, QueueState.NOT_STARTED)
+            if counts[s]
+        ]
+        waiting = counts[QueueState.WAITING] + counts[QueueState.PAUSED]
+        if self._pause_requested and waiting:
+            text = f"Queue paused. {waiting} left; Start continues."
+            state = ItemState.INFO
+        else:
+            text = "Queue finished."
+            state = ItemState.ERROR if counts[QueueState.FAILED] else ItemState.OK
+        if parts:
+            text += " " + ", ".join(parts).capitalize() + "."
+        self._pause_requested = False
+        self._set_result(state, text)
+        self.status_changed.emit("")
+        self.busy_changed.emit(self.is_busy)
+        self._show_queue()
+        self._reload()
+        self._update_buttons()
+
+    def pause_queue(self, *, ask: bool = True) -> bool:
+        """Pause the queue: the running item stops between chunks, as Stop does (D81).
+
+        Returns True when a pause was requested.
+        """
+        if not self._queue_running or self._pause_requested:
+            return False
+        if ask:
+            answer = QMessageBox.question(
+                self,
+                "Pause the queue?",
+                PAUSE_QUEUE_QUESTION,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return False
+        self._pause_requested = True
+        if self._task is not None:
+            self._task.cancel()
+        self.phase_label.setText("Pausing\N{HORIZONTAL ELLIPSIS}")
+        self._update_buttons()
+        return True
+
+    def _selected_queue_item(self) -> QueueItem | None:
+        rows = self.queue_table.selectionModel().selectedRows()
+        items = self._queue.items
+        if not rows or rows[0].row() >= len(items):
+            return None
+        return items[rows[0].row()]
+
+    def select_queue_row(self, row: int) -> None:
+        self.queue_table.selectRow(row)
+
+    def remove_queue_item(self) -> None:
+        item = self._selected_queue_item()
+        if item is None:
+            return
+        try:
+            self._queue.remove(item.key)
+        except QueueError as exc:
+            self._set_result(ItemState.ERROR, str(exc))
+            return
+        self._show_queue()
+        self._update_buttons()
+
+    def edit_queue_item(self) -> None:
+        """Take an item back into the form. Add to queue puts it back in its place."""
+        item = self._selected_queue_item()
+        if self.is_busy or item is None or item.request is None:
+            return
+        position = self._queue.position(item.key)
+        self._queue.remove(item.key)
+        self._pending_edit = item
+        self._edit_position = position
+        self._show_queue()
+        if not self.load_recording(item.recording_id):
+            self._put_back_edit()
+
+    def _put_back_edit(self) -> None:
+        """Return a queue item whose recording could not be loaded for Edit."""
+        item, self._pending_edit = self._pending_edit, None
+        if item is None:
+            return
+        try:
+            self._queue.add(item, self._edit_position)
+        except QueueError as exc:  # an equal item was added meanwhile
+            self._set_result(ItemState.INFO, f"The edited item was not put back. {exc}")
+        self._edit_position = None
+        self._show_queue()
+
+    def clear_finished_queue(self) -> None:
+        self._queue.clear_finished()
+        self._show_queue()
+        self._update_buttons()
+
+    def _show_queue(self) -> None:
+        table = self.queue_table
+        selected = self._selected_queue_item()
+        table.setRowCount(0)
+        colours = self._colours()
+        states = {
+            QueueState.DONE: ItemState.OK,
+            QueueState.FAILED: ItemState.ERROR,
+            QueueState.NOT_STARTED: ItemState.ERROR,
+            QueueState.PAUSED: ItemState.TODO,
+            QueueState.RUNNING: ItemState.INFO,
+        }
+        for row, item in enumerate(self._queue.items):
+            table.insertRow(row)
+            size = "" if item.size_bytes is None else format_size(item.size_bytes)
+            look = states.get(item.state)
+            if item.state is QueueState.WAITING and item.note:
+                look = ItemState.INFO  # a problem the preview found when it was added
+            word = str(item.state) if look is None else f"{MARKS[look]}  {item.state}"
+            state_cell = _cell(word, transferqueue.state_text(item))
+            if look is not None:
+                state_cell.setForeground(colours[look])
+            values = (
+                _cell(item.label),
+                state_cell,
+                _cell(str(item.kind)),
+                _cell(size),
+                _cell(transferqueue.scope_text(item, self._offset)),
+                _cell(item.destination, item.destination),
+            )
+            for col, cell in enumerate(values):
+                table.setItem(row, col, cell)
+            if selected is not None and item.key == selected.key:
+                table.selectRow(row)
+        self._show_queue_note()
+
+    def _show_queue_note(self) -> None:
+        item = self._selected_queue_item()
+        if item is None:
+            self.queue_note.setText(QUEUE_NOTE_HINT if self._queue.items else "")
+        else:
+            self.queue_note.setText(f"{item.label}: {transferqueue.state_text(item)}")
+
+    # =====================================================================
     # Unfinished transfers
     # =====================================================================
 
@@ -1402,13 +1932,16 @@ class TransferTab(QWidget):
             self.retry_label,
         ):
             widget.setVisible(False)
-        self.status_changed.emit("")
-        self.busy_changed.emit(False)
+        self.status_changed.emit(self._queue_status if self._queue_running else "")
+        self.busy_changed.emit(self.is_busy)  # still busy between queue items
         self._update_buttons()
 
     def stop(self, *, ask: bool = True) -> bool:
         """Stop the running operation. For a copy or an archive, ask first unless ask is
-        False. Returns True when a stop was requested."""
+        False. While the queue runs, this pauses it. Returns True when a stop was
+        requested."""
+        if self._queue_running:
+            return self.pause_queue(ask=ask)
         task = self._task
         if task is None:
             return False
@@ -1489,14 +2022,30 @@ class TransferTab(QWidget):
             box.setEnabled(range_ok)
         self.preview_button.setEnabled(not busy and loaded and has_db)
         preview = self._preview
-        self.run_button.setEnabled(
+        runnable = (
             not busy
             and preview is not None
             and preview.ok
             and preview.request == self._current_request()
         )
+        self.run_button.setEnabled(runnable)
+        self.add_queue_button.setEnabled(runnable)
         self.stop_button.setEnabled(busy and self._task is not None)
-        self.stop_button.setVisible(busy)
+        self.stop_button.setVisible(busy and not self._queue_running)
+        chosen = self._selected_queue_item()
+        self.start_queue_button.setEnabled(
+            not busy and has_db and self._queue.runnable_count() > 0
+        )
+        self.pause_queue_button.setEnabled(self._queue_running and not self._pause_requested)
+        self.edit_queue_button.setEnabled(
+            not busy and chosen is not None and chosen.request is not None
+        )
+        self.remove_queue_button.setEnabled(
+            chosen is not None and chosen.state is not QueueState.RUNNING
+        )
+        self.clear_queue_button.setEnabled(
+            any(i.state in transferqueue.FINISHED for i in self._queue.items)
+        )
         state = self.laptop_state()
         self.check_delete_button.setEnabled(not busy and state is not None and state.can_check)
         self.delete_button.setEnabled(not busy and state is not None and state.can_delete)

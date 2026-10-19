@@ -247,6 +247,8 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
   then a count), and where the folder differs from the database: a channel missing on
   either side, a different file count or a different total size. The scan writes
   nothing.
+- **Several recordings** can be selected (D81). "Add to queue" adds them all to the
+  Archive / copy queue. The other actions need exactly one selected recording.
 - **Actions** on the selected recording: Refresh (keeps the filter, the sort order
   and the selection), Open folder (the recording folder, or the channel folder when a
   channel is selected), Edit entry (D45: opens the Log tab in edit mode, and asks
@@ -462,7 +464,8 @@ cancelled transfer is finished with `verification = 'skipped'` and a note.
 ### Running, stopping and resuming
 
 The tab (`gui/transfer_tab.py`, logic in `movecopy.py`) runs one operation at a time:
-a preview, a copy, an archive, a check or a deletion. All run in a worker thread.
+a preview, a copy, an archive, a check or a deletion. All run in a worker thread. The
+queue (below) runs its items one after another, each as one such operation.
 
 - **Locked form.** While an operation runs, the tab's inputs are locked. The Viewer
   and the Log tab stay usable. The Viewer's "Archive / copy" button opens no other
@@ -492,6 +495,28 @@ a preview, a copy, an archive, a check or a deletion. All run in a worker thread
 - **Delete laptop copy** is enabled only when a check before delete of the current
   archive passed (D55). It asks first, names the folder, the file count and the size,
   and defaults to No.
+
+### Queue
+
+D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
+
+- Items come from the Viewer ("Add to queue": "Archive or copy", or "Check archive")
+  or from the form ("Add to queue" next to Run, after a passed preview). From the
+  Viewer, a laptop recording is archived to the queue's NAS folder plus its relative
+  path, and an archived one is copied to the default copy folder plus its relative
+  path. Each item holds its own request; Edit takes it back into the form, and "Add
+  to queue" puts it back in its place.
+- An item that repeats an active item (same recording and operation, or same
+  destination) is refused.
+- New archives and copies from the Viewer are previewed when added, if the tab is
+  idle. Each is previewed again just before it runs; a preview with errors gives "Not
+  started" and the queue moves on. A failed item does not stop the queue.
+- After a passed archive, Check before delete runs when "After each archive, run Check
+  before delete" is ticked (the default), except with "Sizes only".
+- Pause asks first. It stops the running item between chunks, as Stop does; Start
+  continues it, skipping the files already in place (D51, D63).
+- The queue lives in memory. Closing the window asks first while it runs or holds
+  items that have not run.
 
 ### Scope
 
