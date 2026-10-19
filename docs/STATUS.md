@@ -64,7 +64,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Item | Status | Branch | Commits | Report |
 | --- | --- | --- | --- | --- |
 | O20, version 1 schema frozen (D77) | Done, not merged | `o20-freeze-schema-v1` | `a5e121a` (PLAN.md), `fee1198` | [2026-10-20-o20-freeze-schema](reports/2026-10-20-o20-freeze-schema.md) |
-| O38, Viewer filters with several choices (D78) | Done, not merged | `viewer-multi-filter`, from `o20-freeze-schema-v1` | The commit of the work and its report | [2026-10-20-viewer-multi-filter](reports/2026-10-20-viewer-multi-filter.md) |
+| O38, Viewer filters with several choices (D78) | Done, not merged | `viewer-multi-filter`, from `o20-freeze-schema-v1` | `1e212f6` | [2026-10-20-viewer-multi-filter](reports/2026-10-20-viewer-multi-filter.md) |
+| O43, a new folder keeps the previous entry's fields (D79) | Done, not merged | `log-keep-fields`, from `viewer-multi-filter` | The commit of the work and its report | [2026-10-20-log-keep-fields](reports/2026-10-20-log-keep-fields.md) |
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -91,7 +92,6 @@ table in [reports/M0.md](reports/M0.md). The next free number is O46.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O43 | A new Log tab entry keeps the fields of the previous one. Only the values that come from the scan are reset. | 1.1.0 (approved 2026-10-20) | Keep logged by, site, project, plan reference, remarks, sample type, IQ layout, endianness, header bytes, band and fc per channel number, and the RF chain rows. Reset start and end, file counts, fs (filled in again from the scan, D21) and file duration (set again from the file names, D22). A note in the "Before saving" panel lists the kept format values. After a scan, settings for channels the new folder lacks are removed, and the message line names them. Clear form still resets everything. Replaces D26. | User, 2026-10-20 |
 | O44 | Import and export a Log tab template file, for example for common hardware set-ups | 1.1.0 (approved 2026-10-20) | A TOML file that can hold every field the user types: logged by, site, project, plan reference, remarks, sample type, IQ layout, endianness, header bytes, band and fc per channel number, and the RF chain rows. Values that come from the scan are never in it. Every field is optional. Export asks which fields to save. Import changes only the fields the file holds. A site or project name the catalogue does not hold is not added; the message line names it. | User, 2026-10-20 |
 | O45 | A queue in the Archive / copy tab: add several archives and copies, then Start; Pause pauses the whole queue | 1.1.0 (approved 2026-10-20) | Items come from a Viewer multi-selection or from the tab's form. Each item holds its own operation, destination, channels, range and check mode, and Edit takes it back into the form. Each item is previewed again just before it runs. Pause stops the running item safely, and Start resumes it, skipping the files already copied. Optional Check before delete after each archive. Check archive items close O41. The queue lives in memory. Details: [PLAN.md](../PLAN.md), section 5. | User, 2026-10-20 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
@@ -143,6 +143,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O20 | Frozen copy of the version 1 schema | D77 (2026-10-20) |
 | O42 | Code signing of the two programs | Closed by the user on 2026-10-20: "no issue" |
 | O38 | Viewer filters on site, project and band take several choices | D78 (2026-10-20) |
+| O43 | A new Log tab entry keeps the fields of the previous one | D79 (2026-10-20) |
 
 ## Pending checks for the user
 
@@ -219,6 +220,8 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
 - `dev/scratch.db`, made to check the README's run commands.
 - `dev/o38-shots/` (Viewer filter screenshots, their script and two scratch
   databases, 2026-10-20).
+- `dev/o43-shots/` (Log tab screenshots, their script, and synthetic recordings and
+  scratch databases in its `run-*` folders, 2026-10-20).
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch

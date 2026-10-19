@@ -18,7 +18,7 @@ from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, create_database, open_db, write_transaction
 from iqdm.entry import ItemState
 from iqdm.gui.log_tab import NO_PROJECT, LogTab, channel_headers, scan_summary, time_text
-from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
+from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
 from iqdm.models import ArchiveState, Endianness, IqLayout, Operation, SampleType
@@ -961,10 +961,10 @@ def test_fs_with_an_unknown_unit_is_an_error(qtbot, make_tab, make_recording):
     )
 
 
-def test_new_folder_resets_format_channels_and_rf_chain(qtbot, make_tab, make_recording, site_id):
-    """DECISIONS.md D26."""
+def test_new_folder_keeps_format_channels_and_rf_chain(qtbot, make_tab, make_recording, site_id):
+    """DECISIONS.md D79, which replaces D26: only the values from the scan reset."""
     first = make_recording(n_channels=2, dtype="int8", header_bytes=64)
-    second = make_recording()
+    second = make_recording(n_channels=2, dtype="int8", header_bytes=64)
     tab = make_tab()
     scan_folder(qtbot, tab, first.root)
     tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
@@ -972,26 +972,118 @@ def test_new_folder_resets_format_channels_and_rf_chain(qtbot, make_tab, make_re
     tab.endian_combo.setCurrentIndex(tab.endian_combo.findData(Endianness.BIG))
     tab.header_spin.setValue(64)
     tab.duration_spin.setValue(2.0)
-    fill_channels(tab)
+    fill_channels(tab, fs_text="2k")
+    tab.channel_widgets(1)[1].setText("435")
     tab.param_table.add_row(entry.ParamInput(param="SDR", value="X310"))
+    tab.param_table.add_row(entry.ParamInput(param="Antenna", value="Yagi", channel_index=1))
     choose_site(tab, site_id)
     tab.logged_by_edit.setText("userB")
     tab.plan_edit.setText("plan-9")
+    assert tab.kept_note.isHidden()
 
     scan_folder(qtbot, tab, second.root)
-    assert tab.dtype_combo.currentData() == SampleType.INT16
-    assert tab.layout_combo.currentData() == IqLayout.INTERLEAVED_IQ
-    assert tab.endian_combo.currentData() == Endianness.LITTLE
-    assert tab.header_spin.value() == 0
-    assert tab.duration_spin.value() == 1.0
-    assert tab.param_table.rows() == []
-    band, fc, fs = tab.channel_widgets(0)
-    assert (band.currentText(), fc.text()) == ("", "")
-    assert fs.text() == "1 kHz"  # filled in again for int16
-    # Fields that describe the session stay.
+    assert tab.dtype_combo.currentData() == SampleType.INT8
+    assert tab.layout_combo.currentData() == IqLayout.PLANAR_IQ
+    assert tab.endian_combo.currentData() == Endianness.BIG
+    assert tab.header_spin.value() == 64
+    assert tab.duration_spin.value() == 1.0  # from the new file names
+    assert [(p.param, p.channel_index) for p in tab.param_table.rows()] == [
+        ("SDR", None),
+        ("Antenna", 1),
+    ]
+    for index, fc_mhz in ((0, "145.8"), (1, "435")):
+        band, fc, fs = tab.channel_widgets(index)
+        assert (band.currentText(), fc.text()) == ("VHF", fc_mhz)
+        assert fs.text() == "1 kHz"  # filled in again from the scan, for the kept int8
+        assert "italic" in fs.styleSheet()
     assert tab.site_combo.currentData() == site_id
     assert tab.logged_by_edit.text() == "userB"
     assert tab.plan_edit.text() == "plan-9"
+    assert not tab.kept_note.isHidden()
+    assert tab.kept_note.text().startswith(
+        f"{MARKS[ItemState.INFO]}  "
+        "Kept from the previous entry: int8, planar_iq, big-endian, header 64 bytes; "
+        "band and fc of 2 channels; 2 RF chain rows."
+    )
+    assert tab.message_label.text() == ""
+
+
+def test_typing_a_folder_keeps_the_rf_chain(qtbot, make_tab, make_recording):
+    """D79: the folder field changes on each key; nothing typed elsewhere is lost."""
+    info = make_recording(n_channels=2)
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    fill_channels(tab)
+    tab.param_table.add_row(entry.ParamInput(param="LNA", value="20", channel_index=1))
+    tab.folder_edit.clear()
+    qtbot.keyClicks(tab.folder_edit, "C:")
+    assert [p.param for p in tab.param_table.rows()] == ["LNA"]
+    assert tab.channel_table.rowCount() == 0
+    # Before a scan the channels are unknown, so a channel row is not an error yet.
+    assert not any("is not in this recording" in t for t in checklist_texts(tab))
+    scan_folder(qtbot, tab, info.root)
+    assert tab.channel_widgets(1)[0].currentText() == "VHF"
+
+
+def test_values_of_channels_the_new_folder_lacks_are_removed(qtbot, make_tab, make_recording):
+    """D79: settings for channel 1 go when the next folder has channel 0 only."""
+    two = make_recording(n_channels=2)
+    one = make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, two.root)
+    fill_channels(tab)
+    tab.param_table.add_row(entry.ParamInput(param="SDR", value="X310"))
+    tab.param_table.add_row(entry.ParamInput(param="Antenna", value="Yagi", channel_index=1))
+    tab.param_table.add_row(entry.ParamInput(param="LNA", value="20", channel_index=1))
+    scan_folder(qtbot, tab, one.root)
+    assert [p.param for p in tab.param_table.rows()] == ["SDR"]
+    assert tab.message_label.text() == (
+        "This folder has no channel 1. "
+        "Removed from the form: band and fc, 2 RF chain rows of that channel."
+    )
+    assert tab.channel_widgets(0)[0].currentText() == "VHF"
+    assert not any("is not in this recording" in t for t in checklist_texts(tab))
+    assert "band and fc of 1 channel; 1 RF chain row." in tab.kept_note.text()
+    # Channel 1 does not come back for a later folder that has it.
+    scan_folder(qtbot, tab, two.root)
+    assert tab.channel_widgets(1)[1].text() == ""
+
+
+def test_clear_form_drops_the_kept_values(qtbot, make_tab, make_recording):
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, first.root)
+    fill_channels(tab)
+    tab.header_spin.setValue(8)
+    scan_folder(qtbot, tab, second.root)
+    assert not tab.kept_note.isHidden()
+    tab.clear_form()
+    assert tab.kept_note.isHidden()
+    assert tab.header_spin.value() == 0
+    scan_folder(qtbot, tab, first.root)
+    assert tab.channel_widgets(0)[1].text() == ""
+    assert tab.kept_note.isHidden()
+
+
+def test_no_note_when_nothing_but_defaults_is_kept(qtbot, make_tab, make_recording):
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, first.root)
+    scan_folder(qtbot, tab, second.root)
+    assert tab.kept_note.isHidden()
+
+
+def test_edit_mode_shows_no_kept_note(qtbot, make_tab, make_recording, site_id):
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, first, site_id)
+    save_and_wait(qtbot, tab)
+    scan_folder(qtbot, tab, second.root)
+    assert not tab.kept_note.isHidden()
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.kept_note.isHidden()
+    assert tab.channel_widgets(0)[1].text() == "145.8"  # the stored value
 
 
 # ---------------------------------------------------------------------------
@@ -1136,6 +1228,7 @@ def test_rf_chain_names_take_the_stored_spelling(qtbot, make_tab, make_recording
     assert tab._choices.param_names == ["LNA gain"]
 
     logged_ready(qtbot, tab, second, site_id)
+    tab.param_table.set_rows([])  # the row kept from the first entry (D79)
     tab.param_table.add_row(entry.ParamInput(param="lna GAIN", value="25", unit="dB"))
     assert "lna GAIN will be saved as LNA gain, the spelling already in use." in (
         checklist_texts(tab, ItemState.INFO)

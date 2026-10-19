@@ -43,7 +43,7 @@ Rules for this file:
 | D23 | To-do items in the checklist | 2026-10-02, Milestone 3 | Active |
 | D24 | Display offset for times | 2026-10-02, Milestone 3 | Active |
 | D25 | fs input with units | 2026-10-02, Milestone 3 | Active |
-| D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Active |
+| D26 | Folder fields reset for a new folder | 2026-10-02, Milestone 3 | Replaced by D79 |
 | D27 | Warning for a folder named like a channel folder | 2026-10-02, Milestone 3 | Active |
 | D28 | RF chain repeats, overrides and conflicts | 2026-10-02, Milestone 3 | Active |
 | D29 | Settings tab before the Viewer | 2026-10-02, after Milestone 3 | Active; scope narrowed by D30 |
@@ -96,6 +96,7 @@ Rules for this file:
 | D76 | An edit saves only over the entry it opened | 2026-10-11, Milestone 8 | Active |
 | D77 | Version 1 schema frozen | 2026-10-20, after 1.0.0 | Active |
 | D78 | Viewer filters with several choices | 2026-10-20, version 1.1 | Active |
+| D79 | A new folder keeps the previous entry's fields | 2026-10-20, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1566,3 +1567,38 @@ filter of D73.
 
 Affects: SPEC section 5, `models.py`, `viewer.py`, `db/repository.py`,
 `gui/viewer_tab.py`, `gui/widgets/check_combo.py`, the user guide.
+
+## D79. A new folder keeps the previous entry's fields
+
+Closes O43. Replaces D26. The user asked for it on 2026-10-20: retyping every field
+after each folder made logging several folders slow. The user approved the plan on
+2026-10-20.
+
+- When the folder of a new entry changes, only the values that come from the scan
+  are reset: start and end, the channel rows with their file counts and coverage, fs
+  and the file duration. fs is filled in again from the next scan (D21). The file
+  duration is set again from its file names (D22).
+- Everything else stays: logged by, site, project, plan reference, remarks, sample
+  type, IQ layout, endianness, header bytes, the band and fc of each channel, and the
+  RF chain rows.
+- Band and fc are kept by channel number. They wait in the form until the scan shows
+  the channel rows.
+- After the scan, the kept band, fc and RF chain rows of a channel that the new folder
+  lacks are removed from the form. The message line names the channel and what was
+  removed. They do not come back for a later folder that has the channel. The user
+  left this question open in the plan, and the plan's default applies.
+- Before the first scan of a new entry, the checklist does not check RF chain rows
+  against the channels, because the channels are not known yet.
+- A note in the "Before saving" panel, with the information mark and colour, names the
+  kept format and counts the kept channel settings and RF chain rows. It asks the user
+  to check them, and the site, project, plan reference and remarks, for this folder.
+  It shows only when something other than the defaults was kept, and not in edit
+  mode.
+- Clear form still resets every field.
+- Edit mode is unchanged: its folder cannot change (D16).
+- The risk that D26 fixed comes back in part. A sample type kept from an `int8`
+  folder fills in fs for `int8` in the next folder. The note names the kept sample
+  type, and the checklist names the basis of each filled-in fs (D21), so the user can
+  see it.
+
+Affects: SPEC section 6, `entry.py`, `gui/log_tab.py`, the user guide.

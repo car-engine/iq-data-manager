@@ -1046,6 +1046,53 @@ def test_params_without_channels_keeps_recording_rows_and_other_channels():
 
 
 # ---------------------------------------------------------------------------
+# Fields kept for the next folder (D79)
+# ---------------------------------------------------------------------------
+
+
+def test_defaults_and_blank_rows_are_not_kept_values():
+    assert not entry.has_kept_values(EntryInput(params=[ParamInput()]), 0)
+    assert entry.has_kept_values(EntryInput(), 1)
+    assert entry.has_kept_values(EntryInput(header_bytes=8), 0)
+    assert entry.has_kept_values(EntryInput(endianness=Endianness.BIG), 0)
+    assert entry.has_kept_values(EntryInput(params=[ParamInput(param="SDR")]), 0)
+    # A combo box hands the enums back as plain text.
+    assert not entry.has_kept_values(EntryInput(dtype="int16", iq_layout="interleaved_iq"), 0)
+    assert entry.has_kept_values(EntryInput(dtype="int8"), 0)
+
+
+def test_kept_note_names_the_format_and_counts():
+    form = EntryInput(
+        dtype=SampleType.FLOAT32,
+        header_bytes=1,
+        params=[ParamInput(param="SDR", value="X310"), ParamInput()],
+    )
+    assert entry.kept_note(form, 0) == (
+        "Kept from the previous entry: float32, interleaved_iq, little-endian, header 1 byte; "
+        "1 RF chain row. Check them for this folder, with the site, project, plan reference "
+        "and remarks."
+    )
+    assert "; band and fc of 3 channels; " in entry.kept_note(form, 3)
+
+
+def test_missing_channels_text():
+    assert entry.missing_channels_text([2], True, 0) == (
+        "This folder has no channel 2. Removed from the form: band and fc of that channel."
+    )
+    assert entry.missing_channels_text([1, 3], False, 4) == (
+        "This folder has no channel 1, 3. Removed from the form: 4 RF chain rows of those "
+        "channels."
+    )
+
+
+def test_before_the_first_scan_channel_rows_are_not_checked():
+    """D79: the channels of a new entry are unknown until its folder is scanned."""
+    form = EntryInput(params=[ParamInput(param="Antenna", value="Yagi", channel_index=1)])
+    texts = [i.text for i in checklist(form, scan=None)]
+    assert not any("is not in this recording" in t for t in texts)
+
+
+# ---------------------------------------------------------------------------
 # fs from the file size (D21), duration from the file names and coverage (D22)
 # ---------------------------------------------------------------------------
 

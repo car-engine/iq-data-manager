@@ -34,7 +34,13 @@ from iqdm.app import (
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
-from iqdm.entry import changed_text
+from iqdm.entry import (
+    EntryInput,
+    ParamInput,
+    changed_text,
+    kept_note,
+    missing_channels_text,
+)
 from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
@@ -183,6 +189,17 @@ def test_log_tab_text_is_plain(qtbot, db_path):
     qtbot.addWidget(tab)
     qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
     texts = visible_texts(tab) + [item.text for item in tab.checklist.items]
+    assert offending(texts) == []
+
+
+def test_kept_fields_text_is_plain():
+    """The note and the message about values kept from the previous entry (D79)."""
+    form = EntryInput(header_bytes=64, params=[ParamInput(param="SDR", value="X310")])
+    texts = [
+        kept_note(form, 2),
+        missing_channels_text([1], True, 2),
+        missing_channels_text([1, 2], False, 1),
+    ]
     assert offending(texts) == []
 
 

@@ -423,6 +423,61 @@ def params_without_channels(
     return [p for p in params if p.channel_index not in dropped]
 
 
+# ---------------------------------------------------------------------------
+# Fields kept for the next folder (DECISIONS.md D79)
+# ---------------------------------------------------------------------------
+
+
+def has_kept_values(form: EntryInput, channels_kept: int) -> bool:
+    """True when the form holds format, channel or RF chain values worth a reminder.
+
+    The defaults of the format fields and blank rows do not count. channels_kept is
+    the number of channels whose band or fc is kept. A combo box may hand the enums
+    back as plain text, so they compare with ==.
+    """
+    return (
+        form.dtype != SampleType.INT16
+        or form.iq_layout != IqLayout.INTERLEAVED_IQ
+        or form.endianness != Endianness.LITTLE
+        or form.header_bytes != 0
+        or channels_kept > 0
+        or any(not p.is_blank for p in form.params)
+    )
+
+
+def kept_note(form: EntryInput, channels_kept: int) -> str:
+    """The reminder in the side panel that a new folder kept the previous entry's fields."""
+    parts = [
+        f"{form.dtype}, {form.iq_layout}, {form.endianness}-endian, "
+        f"header {_plural(form.header_bytes, 'byte')}"
+    ]
+    if channels_kept:
+        parts.append(f"band and fc of {_plural(channels_kept, 'channel')}")
+    rows = sum(1 for p in form.params if not p.is_blank)
+    if rows:
+        parts.append(_plural(rows, "RF chain row"))
+    return (
+        "Kept from the previous entry: "
+        + "; ".join(parts)
+        + ". Check them for this folder, with the site, project, plan reference and remarks."
+    )
+
+
+def missing_channels_text(channels: Sequence[int], band_and_fc: bool, rows: int) -> str:
+    """The message after a scan that removed kept values of channels the folder lacks."""
+    names = ", ".join(str(i) for i in channels)
+    removed = []
+    if band_and_fc:
+        removed.append("band and fc")
+    if rows:
+        removed.append(_plural(rows, "RF chain row"))
+    which = "that channel" if len(channels) == 1 else "those channels"
+    return (
+        f"This folder has no channel {names}. "
+        f"Removed from the form: {', '.join(removed)} of {which}."
+    )
+
+
 _CHANNEL_NAME_RE = re.compile(r"^(0|[1-9][0-9]{0,2})$", re.ASCII)
 
 
@@ -660,7 +715,11 @@ def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistI
     return items
 
 
-def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
+def _param_items(form: EntryInput, indices: Sequence[int] | None) -> list[ChecklistItem]:
+    """To-do items for incomplete RF chain rows, and errors for rows on missing channels.
+
+    indices None means the channels are not known yet; channel rows are then not checked.
+    """
     items = []
     for row, p in enumerate(form.params, start=1):
         if p.is_blank:
@@ -671,7 +730,7 @@ def _param_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem
             items.append(ChecklistItem(ItemState.TODO, f"{label}: enter the parameter name"))
         if not p.value.strip():
             items.append(ChecklistItem(ItemState.TODO, f"{label}: enter a value"))
-        if p.channel_index is not None and p.channel_index not in indices:
+        if indices is not None and p.channel_index is not None and p.channel_index not in indices:
             items.append(
                 ChecklistItem(
                     ItemState.ERROR,
@@ -992,7 +1051,10 @@ def checklist(
         )
     indices = _channel_indices(scan, original)
     items += _required_items(form, indices)
-    items += _param_items(form, indices)
+    # Before the first scan of a new entry, the channels are not known yet, so RF chain
+    # rows kept from the previous entry are not checked against them (D79).
+    known = scan is not None or original is not None
+    items += _param_items(form, indices if known else None)
     items += _param_consistency_items(form, known_param_names)
     if location is not None and location.outside_nas_roots and original is None:
         items.append(

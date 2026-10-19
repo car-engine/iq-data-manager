@@ -148,6 +148,14 @@ The Log recording tab adds a recording folder to the catalogue.
 The **Before saving** checklist shows what is still to do and what is wrong. **Save
 entry** is possible when the checklist shows no error and nothing to do.
 
+**Logging several folders.** When you choose the next folder, the form keeps what you
+typed for the last one: the recording fields, the file format, the band and centre
+frequency of each channel, and the RF chain. The scan fills in the start and end, the
+sample rate and the file duration again. A note above the checklist names what was
+kept; check it for the new folder. If the new folder lacks a channel, the values of
+that channel are removed, and the line under the buttons says which. **Clear form**
+starts again from empty fields.
+
 A folder that is already logged shows **Edit existing entry**. In edit mode, a change
 to the sample rate, sample type, header or file duration needs a new scan first. The
 site, the project, the remarks and the RF chain change without a scan.

@@ -39,8 +39,8 @@ from PySide6.QtWidgets import (
 from iqdm import entry
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
-from iqdm.entry import ChannelInput, Choices, EntryInput
-from iqdm.gui.widgets.checklist import ChecklistView
+from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
+from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.param_table import ParamTable
 from iqdm.gui.workers import Task, TaskRunner
 from iqdm.location import DriveResolver, Location, LocationError, mapped_drive_unc, split_location
@@ -136,6 +136,9 @@ class LogTab(QWidget):
         self._channel_rows: list[_ChannelRow] = []
         self._duration_set_by_user = False  # D22: the file names set it until the user does
         self._duration_from_names = False
+        # D79: band and fc by channel number, kept for the next folder's scan.
+        self._carried: dict[int, ChannelInput] = {}
+        self._kept = False  # the form holds values kept from the previous entry (D79)
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -311,6 +314,9 @@ class LogTab(QWidget):
         self.checklist = ChecklistView()
         self.state_note = QLabel()
         self.state_note.setWordWrap(True)
+        self.kept_note = QLabel()  # D79: what a new folder kept from the previous entry
+        self.kept_note.setWordWrap(True)
+        self.kept_note.setVisible(False)
         self.edit_existing_button = QPushButton("Edit existing entry")
         self.edit_existing_button.clicked.connect(self._edit_existing)
         self.use_parent_button = QPushButton("Use parent folder")
@@ -327,6 +333,7 @@ class LogTab(QWidget):
         buttons.addWidget(self.clear_button)
         layout = QVBoxLayout(box)
         layout.addWidget(self.mode_label)
+        layout.addWidget(self.kept_note)
         layout.addWidget(self.checklist, 1)
         layout.addWidget(self.edit_existing_button)
         layout.addWidget(self.use_parent_button)
@@ -357,6 +364,8 @@ class LogTab(QWidget):
             QEvent.Type.StyleChange,
         ):
             _restyle_fields(self)
+            if hasattr(self, "kept_note"):  # the palette can change before _build ends
+                self._show_kept_note()
         super().changeEvent(event)
 
     # =====================================================================
@@ -466,26 +475,69 @@ class LogTab(QWidget):
         self.project_combo.setCurrentIndex(0)  # no project
         self.plan_edit.clear()
         self.remarks_edit.clear()
-        self._reset_folder_fields()
+        self._reset_all_fields()
         self.mode_label.setText("New entry")
         self.show_message("" if self.config.db_path else NO_DATABASE)
         self.refresh_checklist()
 
-    def _reset_folder_fields(self) -> None:
-        """Defaults for everything that belongs to one folder (DECISIONS.md D26).
-
-        File duration, sample type, IQ layout, endianness, header bytes, the channel
-        rows and the RF chain rows. Logged by, site, plan reference and remarks stay.
-        """
-        self._set_duration(DEFAULT_FILE_DURATION_S)
-        self._duration_set_by_user = False
-        self._duration_from_names = False
+    def _reset_all_fields(self) -> None:
+        """Defaults for the format, channel and RF chain fields, for Clear form (D79)."""
+        self._reset_scan_fields()
+        self._carried = {}
+        self._kept = False
         self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(SampleType.INT16))
         self.layout_combo.setCurrentIndex(self.layout_combo.findData(IqLayout.INTERLEAVED_IQ))
         self.endian_combo.setCurrentIndex(self.endian_combo.findData(Endianness.LITTLE))
         self.header_spin.setValue(0)
-        self._set_channel_rows([], {})
         self.param_table.set_rows([])
+
+    def _reset_scan_fields(self) -> None:
+        """Clear what the scan of a folder gives: the file duration and the channel rows.
+
+        A new folder keeps everything else (DECISIONS.md D79). fs comes from the next
+        scan (D21) and the file duration from its file names (D22).
+        """
+        self._set_duration(DEFAULT_FILE_DURATION_S)
+        self._duration_set_by_user = False
+        self._duration_from_names = False
+        self._set_channel_rows([], {})
+
+    def _carry_channel_inputs(self) -> None:
+        """Keep the band and fc of each channel row for the next folder (D79)."""
+        for c in self.current_input().channels:
+            if c.band.strip() or c.fc_mhz.strip():
+                self._carried[c.channel_index] = ChannelInput(
+                    channel_index=c.channel_index, band=c.band, fc_mhz=c.fc_mhz
+                )
+            else:
+                self._carried.pop(c.channel_index, None)
+
+    def _kept_channel_count(self) -> int:
+        typed = {
+            c.channel_index
+            for c in self.current_input().channels
+            if c.band.strip() or c.fc_mhz.strip()
+        }
+        return len(typed | set(self._carried))
+
+    def _drop_settings_of_missing_channels(self, scan: ScanResult) -> None:
+        """Remove kept values of channels the new folder lacks, and say so (D79)."""
+        present = {c.channel_index for c in scan.channels}
+        gone = sorted(i for i in self._carried if i not in present)
+        for i in gone:
+            del self._carried[i]
+        rows = self.param_table.rows()
+        kept = [p for p in rows if p.channel_index is None or p.channel_index in present]
+        removed_rows = [p for p in rows if p not in kept]
+        if removed_rows:
+            self.param_table.set_rows(kept)
+        channels = sorted(set(gone) | {p.channel_index for p in removed_rows})
+        if channels:
+            self.show_message(
+                entry.missing_channels_text(
+                    channels, bool(gone), sum(1 for p in removed_rows if not p.is_blank)
+                )
+            )
 
     def _clear_scan(self) -> None:
         self._raw_scan = None
@@ -510,10 +562,12 @@ class LogTab(QWidget):
     def _folder_changed(self, text: str) -> None:
         if self._original is not None:
             return
+        self._carry_channel_inputs()
+        self._kept = entry.has_kept_values(self.current_input(), self._kept_channel_count())
         self.cancel_scan()
         self._clear_scan()
         self._clear_message()
-        self._reset_folder_fields()
+        self._reset_scan_fields()
         if not text.strip():
             self._set_location(None, None)
         else:
@@ -554,7 +608,9 @@ class LogTab(QWidget):
     # =====================================================================
 
     def _inputs_by_index(self) -> dict[int, ChannelInput]:
-        return {c.channel_index: c for c in self.current_input().channels}
+        """Typed channel values, with band and fc kept from the previous folder (D79)."""
+        typed = {c.channel_index: c for c in self.current_input().channels}
+        return {**self._carried, **typed} if self._original is None else typed
 
     def _set_channel_rows(
         self,
@@ -686,10 +742,23 @@ class LogTab(QWidget):
             same_start=self._same_start,
         )
         self.checklist.set_items(items)
+        self._show_kept_note()
         self.state_note.setText(entry.state_note(self._location, self._original))
         self.edit_existing_button.setVisible(self._original is None and self._logged_id is not None)
         self.use_parent_button.setVisible(self._channel_like_parent() is not None)
         self._update_buttons()
+
+    def _show_kept_note(self) -> None:
+        """The information note on values kept from the previous entry (D79)."""
+        show = self._kept and self._original is None
+        self.kept_note.setVisible(show)
+        if not show:
+            self.kept_note.setText("")
+            return
+        note = entry.kept_note(self.current_input(), self._kept_channel_count())
+        self.kept_note.setText(f"{MARKS[ItemState.INFO]}  {note}")
+        colour = colours_for(self.palette())[ItemState.INFO]
+        self.kept_note.setStyleSheet(f"color: {colour.name()};")
 
     def _update_buttons(self) -> None:
         scanning = self._scan_task is not None
@@ -856,6 +925,8 @@ class LogTab(QWidget):
         self._duplicate_checked = outcome.duplicate_checked
         self._same_start = outcome.same_start
         self._show_scan()
+        if self._original is None:
+            self._drop_settings_of_missing_channels(outcome.scan)
         if outcome.db_error is not None:
             self.show_message(f"Cannot check the database for this folder: {outcome.db_error}")
         if self._original is not None:
