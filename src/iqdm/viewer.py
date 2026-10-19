@@ -53,10 +53,10 @@ class FilterInput:
 
     start_from: str = ""
     start_to: str = ""
-    site_id: int | None = None
-    project_id: int | None = None
+    site_ids: tuple[int, ...] = ()  # several choices match any of them (D78)
+    project_ids: tuple[int, ...] = ()
     without_project: bool = False  # recordings that have no project (D73)
-    band: str = ""
+    bands: tuple[str, ...] = ()
     fc_min: str = ""
     fc_max: str = ""
     archive_state: ArchiveState | None = None
@@ -99,10 +99,10 @@ def parse_filter(form: FilterInput, offset_hours: float) -> FilterResult:
         RecordingFilter(
             start_from_unix=start_from,
             start_before_unix=None if start_to is None else start_to + DAY_S,
-            site_id=form.site_id,
-            project_id=None if form.without_project else form.project_id,
+            site_ids=tuple(sorted(set(form.site_ids))),
+            project_ids=tuple(sorted(set(form.project_ids))),
             without_project=form.without_project,
-            band=form.band.strip() or None,
+            bands=tuple(sorted({b.strip() for b in form.bands if b.strip()})),
             fc_min_hz=fc_min,
             fc_max_hz=fc_max,
             archive_state=form.archive_state,

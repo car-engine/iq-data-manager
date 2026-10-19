@@ -60,7 +60,7 @@ Rules for this file:
 | D40 | Recordings list at the size of the catalogue | 2026-10-03, Milestone 4 | Active |
 | D41 | No deletion of recordings in the GUI | 2026-10-03, Milestone 4 | Active |
 | D42 | No Copy / move button in the Viewer before Milestone 6 | 2026-10-03, Milestone 4 | Active |
-| D43 | Viewer filters | 2026-10-03, Milestone 4 | Active |
+| D43 | Viewer filters | 2026-10-03, Milestone 4 | Active; D78 allows several sites, projects and bands |
 | D44 | The "not verified" mark in the Viewer | 2026-10-03, Milestone 4 | Active |
 | D45 | Edit entry with unsaved input in the Log tab | 2026-10-03, Milestone 4 | Active |
 | D46 | The Viewer refreshes after a Log tab save | 2026-10-03, Milestone 4 | Active |
@@ -90,11 +90,12 @@ Rules for this file:
 | D70 | Unsaved settings | 2026-10-04, Milestone 7 | Active |
 | D71 | Legacy dates and times from the folder | 2026-10-06, Milestone 7 | Active |
 | D72 | Milestone 8: release 1.0 | 2026-10-06, end of Milestone 7 | Active |
-| D73 | A project for each recording | 2026-10-11, Milestone 8 | Active |
+| D73 | A project for each recording | 2026-10-11, Milestone 8 | Active; D78 replaces its Viewer filter |
 | D74 | Transfer rows in the order they were written | 2026-10-11, Milestone 8 | Active |
 | D75 | File identity in the transfer checks | 2026-10-11, Milestone 8 | Active |
 | D76 | An edit saves only over the entry it opened | 2026-10-11, Milestone 8 | Active |
 | D77 | Version 1 schema frozen | 2026-10-20, after 1.0.0 | Active |
+| D78 | Viewer filters with several choices | 2026-10-20, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1537,3 +1538,31 @@ Closes O20. The user approved it on 2026-10-20, as the first task after release
 
 Affects: SPEC section 3, `schema.sql`, `db/migrations.py`, `db/version.py`,
 `tests/schemas/v1.sql`, `tests/test_schema_freeze.py`.
+
+## D78. Viewer filters with several choices
+
+Closes O38. The user asked for it on 2026-10-12 and approved the proposed default
+with the plan for version 1.1 on 2026-10-20. Amends D43 and replaces the Viewer
+filter of D73.
+
+- The site, project and band filters are drop-down lists with a tick box per entry.
+  Nothing ticked means all, and the closed list then shows "All sites", "All
+  projects" or "All bands". Otherwise it shows the ticked names, separated by commas,
+  and its tooltip lists them.
+- A click on an entry ticks or unticks it and leaves the list open. The Space key
+  does the same for the current entry.
+- Several choices in one filter match any of them. Different filters must all match,
+  as before.
+- The project list holds "No project" as one entry, so it combines with projects:
+  "No project" and "Radar Trial" show the recordings of Radar Trial and those without
+  a project.
+- Several bands still match on the same channel as the centre frequency range (D43).
+  Bands compare without letter case, as before.
+- `RecordingFilter` holds `site_ids`, `project_ids` and `bands` as tuples, with
+  `without_project`. The SQL uses `IN (...)`. A project filter with "No project"
+  joins the two conditions with OR.
+- After a Refresh, entries that are still in the database stay ticked.
+- Filters still apply on Apply or Enter, and Clear unticks every entry.
+
+Affects: SPEC section 5, `models.py`, `viewer.py`, `db/repository.py`,
+`gui/viewer_tab.py`, `gui/widgets/check_combo.py`, the user guide.

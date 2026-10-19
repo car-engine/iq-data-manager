@@ -366,10 +366,10 @@ def test_a_new_threshold_changes_the_marks(qtbot, tab, db_path, catalogue):
 
 
 def test_filter_lists_come_from_the_database(tab):
-    sites = [tab.site_combo.itemText(i) for i in range(tab.site_combo.count())]
-    bands = [tab.band_combo.itemText(i) for i in range(tab.band_combo.count())]
-    assert sites == ["All sites", "SiteA", "SiteB"]
-    assert bands == ["All bands", "UHF", "VHF"]
+    assert tab.site_combo.items() == ["SiteA", "SiteB"]
+    assert tab.band_combo.items() == ["UHF", "VHF"]
+    assert tab.site_combo.summary() == "All sites"
+    assert tab.band_combo.summary() == "All bands"
     assert tab.start_from_label.text() == "Start date from (UTC+8)"
 
 
@@ -378,16 +378,41 @@ def apply(qtbot, tab: ViewerTab) -> None:
     wait_idle(qtbot, tab)
 
 
+def tick(combo, *texts: str) -> None:
+    """Tick exactly the entries with these texts in a filter list (D78)."""
+    rows = [combo.items().index(t) for t in texts]
+    combo.set_checked(combo.model().item(r).data(Qt.ItemDataRole.UserRole) for r in rows)
+
+
 def test_band_filter_and_clear(qtbot, tab, catalogue):
-    tab.band_combo.setCurrentIndex(tab.band_combo.findData("UHF"))
+    tick(tab.band_combo, "UHF")
     apply(qtbot, tab)
     assert shown_ids(tab) == [catalogue["full"]]
     assert tab.count_label.text().startswith("1 shown")
     tab.clear_button.click()
     wait_idle(qtbot, tab)
     assert len(shown_ids(tab)) == 3
-    assert tab.band_combo.currentIndex() == 0
+    assert tab.band_combo.checked_data() == []
+    assert tab.band_combo.summary() == "All bands"
     assert tab.active_filter is None
+
+
+def test_several_bands_match_any_of_them(qtbot, tab, catalogue):
+    """D78: two ticked bands show the recordings of either band."""
+    tick(tab.band_combo, "UHF", "VHF")
+    assert tab.band_combo.summary() == "UHF, VHF"
+    apply(qtbot, tab)
+    assert sorted(shown_ids(tab)) == sorted([catalogue["full"], catalogue["gappy"]])
+
+
+def test_several_sites_match_any_of_them(qtbot, tab, catalogue):
+    tick(tab.site_combo, "SiteB")
+    apply(qtbot, tab)
+    assert shown_ids(tab) == [catalogue["full"]]
+    tick(tab.site_combo, "SiteA", "SiteB")
+    apply(qtbot, tab)
+    assert len(shown_ids(tab)) == 3
+    assert tab.site_combo.toolTip() == "SiteA\nSiteB"
 
 
 @pytest.fixture
@@ -407,23 +432,30 @@ def with_project(make_tab, db_path, catalogue) -> tuple[ViewerTab, int]:
 
 
 def test_project_column_filter_and_details(qtbot, with_project, catalogue):
-    """D73: optional; the filter offers all, no project, and each project."""
+    """D73: optional; the filter offers no project and each project (D78)."""
     tab, project = with_project
     assert header(tab, COL_PROJECT) == "Project"
     assert cell(tab, catalogue["full"], COL_PROJECT) == "Radar Trial"
     assert cell(tab, catalogue["gappy"], COL_PROJECT) == ""
-    names = [tab.project_combo.itemText(i) for i in range(tab.project_combo.count())]
-    assert names == ["All projects", NO_PROJECT_FILTER, "Antenna Survey", "Radar Trial"]
+    assert tab.project_combo.items() == [NO_PROJECT_FILTER, "Antenna Survey", "Radar Trial"]
+    assert tab.project_combo.summary() == "All projects"
 
-    tab.project_combo.setCurrentIndex(tab.project_combo.findData(project))
+    tick(tab.project_combo, "Radar Trial")
     apply(qtbot, tab)
     assert shown_ids(tab) == [catalogue["full"]]
-    tab.project_combo.setCurrentIndex(tab.project_combo.findText(NO_PROJECT_FILTER))
+    assert tab.active_filter.project_ids == (project,)
+    tick(tab.project_combo, NO_PROJECT_FILTER)
     apply(qtbot, tab)
     assert shown_ids(tab) == [catalogue["gappy"], catalogue["legacy"]]
+    tick(tab.project_combo, "Antenna Survey")  # a project without recordings
+    apply(qtbot, tab)
+    assert shown_ids(tab) == []
+    tick(tab.project_combo, NO_PROJECT_FILTER, "Radar Trial")  # either matches
+    apply(qtbot, tab)
+    assert len(shown_ids(tab)) == 3
     tab.clear_button.click()
     wait_idle(qtbot, tab)
-    assert tab.project_combo.currentIndex() == 0
+    assert tab.project_combo.checked_data() == []
     assert len(shown_ids(tab)) == 3
 
     select(qtbot, tab, catalogue["full"])
@@ -439,7 +471,7 @@ def test_the_project_column_sorts_by_name(qtbot, with_project, catalogue):
 
 
 def test_site_and_state_filters(qtbot, tab, catalogue):
-    tab.site_combo.setCurrentIndex(tab.site_combo.findText("SiteA"))
+    tick(tab.site_combo, "SiteA")
     tab.state_combo.setCurrentIndex(tab.state_combo.findData(ArchiveState.LOCAL))
     apply(qtbot, tab)
     assert shown_ids(tab) == [catalogue["gappy"], catalogue["legacy"]]
@@ -485,7 +517,7 @@ def test_a_wrong_filter_value_is_marked_and_nothing_is_queried(qtbot, tab):
 
 
 def test_a_late_list_is_dropped(qtbot, tab, catalogue):
-    tab.band_combo.setCurrentIndex(tab.band_combo.findData("UHF"))
+    tick(tab.band_combo, "UHF")
     tab.apply_button.click()
     tab.clear_button.click()  # replaces the filtered load before it returns
     wait_idle(qtbot, tab)
@@ -615,7 +647,7 @@ def test_refresh_keeps_the_selection(qtbot, tab, db_path, catalogue):
 
 def test_a_filter_that_hides_the_selection_clears_the_details(qtbot, tab, catalogue):
     select(qtbot, tab, catalogue["gappy"])
-    tab.band_combo.setCurrentIndex(tab.band_combo.findData("UHF"))
+    tick(tab.band_combo, "UHF")
     apply(qtbot, tab)
     assert tab.details is None
     assert tab.channel_table.rowCount() == 0
@@ -718,7 +750,8 @@ def test_a_new_database_reloads(qtbot, tab, tmp_path, catalogue):
     wait_idle(qtbot, tab)
     assert shown_ids(tab) == []
     assert tab.details is None
-    assert [tab.site_combo.itemText(i) for i in range(tab.site_combo.count())] == ["All sites"]
+    assert tab.site_combo.items() == []
+    assert tab.site_combo.summary() == "All sites"
 
 
 def test_removing_the_database_path(qtbot, tab):

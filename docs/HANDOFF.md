@@ -166,7 +166,7 @@ The first four check the platform and fall back elsewhere. The settings path nee
 | Transfers | `transfer/selection.py`, `pathcheck.py`, `copier.py`, `verify.py`, `uncached.py`, `manifest.py`, `delete.py`, `operations.py` | `delete.py` is the only module that deletes (`tests/test_architecture.py`, ruff TID251) |
 | GUI | `gui/viewer_tab.py`, `log_tab.py`, `transfer_tab.py`, `settings_tab.py`, `workers.py` (`TaskRunner`), `widgets/` | Work over about 100 ms runs in the `TaskRunner` |
 | Diagnostics | `diagnostics/`, wrapped by `tools/` and `IQDataManager-check.exe` | |
-| Viewer filter (for O38) | `models.RecordingFilter`, `viewer.parse_filter()`, `repository._filter_sql()`, the combo boxes in `gui/viewer_tab.py` | One site, one project or "no project", one band today (D43, D73) |
+| Viewer filter | `models.RecordingFilter`, `viewer.parse_filter()`, `repository._filter_sql()`, `gui/widgets/check_combo.py` in `gui/viewer_tab.py` | Several sites, projects (with "No project") and bands since D78 |
 
 ## 8. Traps that cost time before
 

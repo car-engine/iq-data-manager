@@ -160,8 +160,11 @@ not verified" until a comparison with the laptop copy passes (section 5).
 The Viewer lists the catalogue.
 
 - **Filters.** Start date, site, project, band, frequency range, archive state, RF
-  chain text and remarks. Click **Apply**, or press Enter. The project filter can
-  also show the recordings that have no project.
+  chain text and remarks. Click **Apply**, or press Enter.
+- **Several sites, projects or bands.** Open the list and tick each one you want.
+  Nothing ticked shows all. Two ticked sites show the recordings of either site. In
+  the project list, **No project** shows the recordings that have no project, and
+  it can be ticked together with projects. **Clear** unticks everything.
 - **Recordings and channels.** Select a recording to see its channels and details,
   including the RF chain and the transfer history. Select a channel to narrow the
   details to it.

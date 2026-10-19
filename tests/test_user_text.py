@@ -261,6 +261,8 @@ def test_viewer_tab_text_is_plain(qtbot, db_path, make_recording):
 
     idle()
     texts = visible_texts(tab)
+    # The filter lists draw a summary in place of an entry (D78).
+    texts += [c.summary() for c in (tab.site_combo, tab.project_combo, tab.band_combo)]
     tab.select_recording(archived)  # history and the not-verified note
     idle()
     texts += visible_texts(tab)

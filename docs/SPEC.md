@@ -211,10 +211,12 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
 `gui/viewer_tab.py`. Its text follows CLAUDE.md, "User-facing text" (D38).
 
 - **Filters** (D43): start date from and to (`YYYY-MM-DD` at the display offset; the
-  "to" date includes its whole day), site, project (all, no project, or one project;
-  D73), band, centre frequency range in MHz (band
-  and range match on the same channel), archive state, "RF chain contains" (a
-  parameter's name, value or unit) and "Remarks contain". Filters apply on Apply or
+  "to" date includes its whole day), site, project, band, centre frequency range in
+  MHz (band and range match on the same channel), archive state, "RF chain contains"
+  (a parameter's name, value or unit) and "Remarks contain". Site, project and band
+  are lists with a tick box per entry (D78). Nothing ticked means all. Several ticked
+  entries match any of them. The project list holds "No project" as one entry, which
+  combines with projects (D73, D78). Filters apply on Apply or
   Enter, and Clear removes them. A wrong value is marked under the filters and runs
   no query. The filter runs in SQL (D40).
 - **Recordings table**: ID, start at the display offset, site, project (empty when

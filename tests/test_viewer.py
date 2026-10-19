@@ -90,15 +90,22 @@ def test_errors_are_collected():
 
 def test_text_fields_are_stripped_and_blank_means_no_filter():
     form = FilterInput(
-        band="  UHF ",
+        bands=("  UHF ", " ", "VHF"),
         rf_chain_text=" X310 ",
         remarks_text="   ",
-        site_id=3,
+        site_ids=(3,),
         archive_state=ArchiveState.LOCAL,
     )
     flt = parse_filter(form, 8.0).flt
-    assert (flt.band, flt.rf_chain_text, flt.remarks_text) == ("UHF", "X310", None)
-    assert (flt.site_id, flt.archive_state) == (3, ArchiveState.LOCAL)
+    assert (flt.bands, flt.rf_chain_text, flt.remarks_text) == (("UHF", "VHF"), "X310", None)
+    assert (flt.site_ids, flt.archive_state) == ((3,), ArchiveState.LOCAL)
+
+
+def test_several_choices_pass_through_once_each():
+    """D78: sites, projects and bands are tuples; no project combines with projects."""
+    form = FilterInput(site_ids=(4, 2, 4), project_ids=(7, 5), without_project=True)
+    flt = parse_filter(form, 8.0).flt
+    assert (flt.site_ids, flt.project_ids, flt.without_project) == ((2, 4), (5, 7), True)
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +509,7 @@ def test_load_list_and_choices(filled_db):
     result = viewer.load_list(db, None)
     assert [s.id for s in result.summaries] == [rid]
     assert result.newer_database is False
-    assert viewer.load_list(db, RecordingFilter(band="vhf")).summaries == []
+    assert viewer.load_list(db, RecordingFilter(bands=("vhf",))).summaries == []
     choices = viewer.load_choices(db)
     assert [s.name for s in choices.sites] == ["LocationA", "LocationB"]
     assert choices.bands == ["UHF"]

@@ -157,21 +157,22 @@ class RecordingSummary:
 
 @dataclass(frozen=True, kw_only=True)
 class RecordingFilter:
-    """Viewer filters. None leaves a filter out; all given filters must match.
+    """Viewer filters. None or an empty tuple leaves a filter out; all given filters match.
 
     Start bounds apply to the recording's start: from inclusive, before exclusive.
-    Band and the fc range must match on the same channel. Text filters match a part of
-    the text, ignoring letter case for ASCII letters. RF chain text matches a
-    parameter's name, value or unit. without_project keeps the recordings that have no
-    project; it cannot be combined with project_id (D73).
+    Several sites, projects or bands match any of them (D78). without_project adds the
+    recordings that have no project to the project_ids (D73, D78). A band matches
+    without letter case. Band and the fc range must match on the same channel. Text
+    filters match a part of the text, ignoring letter case for ASCII letters. RF chain
+    text matches a parameter's name, value or unit.
     """
 
     start_from_unix: float | None = None
     start_before_unix: float | None = None
-    site_id: int | None = None
-    project_id: int | None = None
+    site_ids: tuple[int, ...] = ()
+    project_ids: tuple[int, ...] = ()
     without_project: bool = False
-    band: str | None = None
+    bands: tuple[str, ...] = ()
     fc_min_hz: float | None = None
     fc_max_hz: float | None = None
     archive_state: ArchiveState | None = None

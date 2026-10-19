@@ -42,6 +42,7 @@ from iqdm import viewer
 from iqdm.config import Config
 from iqdm.entry import ItemState, format_frequency, format_mhz
 from iqdm.gui.log_tab import NO_DATABASE
+from iqdm.gui.widgets.check_combo import CheckComboBox
 from iqdm.gui.widgets.checklist import MARKS, colours_for
 from iqdm.gui.widgets.recording_model import (
     ID_ROLE,
@@ -171,9 +172,9 @@ class ViewerTab(QWidget):
         self.start_to_edit.setPlaceholderText("YYYY-MM-DD")
         self.start_from_label = QLabel()
         self.start_to_label = QLabel()
-        self.site_combo = QComboBox()
-        self.project_combo = QComboBox()  # all, no project, or one project (D73)
-        self.band_combo = QComboBox()
+        self.site_combo = CheckComboBox("All sites")  # several choices match any (D78)
+        self.project_combo = CheckComboBox("All projects")  # "No project" is one entry (D73)
+        self.band_combo = CheckComboBox("All bands")
         self.fc_min_edit = QLineEdit()
         self.fc_min_edit.setPlaceholderText("min")
         self.fc_max_edit = QLineEdit()
@@ -483,25 +484,12 @@ class ViewerTab(QWidget):
             self._fill_choices(choices)
 
     def _fill_choices(self, choices: viewer.ViewerChoices) -> None:
-        site = self.site_combo.currentData()
-        band = self.band_combo.currentData()
-        self.site_combo.clear()
-        self.site_combo.addItem("All sites", None)
-        for s in choices.sites:
-            self.site_combo.addItem(s.name, s.id)
-        self.site_combo.setCurrentIndex(max(0, self.site_combo.findData(site)))
-        project = self.project_combo.currentData()
-        self.project_combo.clear()
-        self.project_combo.addItem("All projects", None)
-        self.project_combo.addItem(NO_PROJECT_FILTER, NO_PROJECT_DATA)
-        for p in choices.projects:
-            self.project_combo.addItem(p.name, p.id)
-        self.project_combo.setCurrentIndex(max(0, self.project_combo.findData(project)))
-        self.band_combo.clear()
-        self.band_combo.addItem("All bands", None)
-        for b in choices.bands:
-            self.band_combo.addItem(b, b)
-        self.band_combo.setCurrentIndex(max(0, self.band_combo.findData(band)))
+        """Fill the lists. Ticked entries that are still in the database stay ticked."""
+        self.site_combo.set_items([(s.name, s.id) for s in choices.sites])
+        self.project_combo.set_items(
+            [(NO_PROJECT_FILTER, NO_PROJECT_DATA)] + [(p.name, p.id) for p in choices.projects]
+        )
+        self.band_combo.set_items([(b, b) for b in choices.bands])
 
     def _load_list(self, db: str) -> None:
         self._list_id += 1
@@ -572,14 +560,14 @@ class ViewerTab(QWidget):
     # =====================================================================
 
     def filter_input(self) -> viewer.FilterInput:
-        project = self.project_combo.currentData()
+        projects = self.project_combo.checked_data()
         return viewer.FilterInput(
             start_from=self.start_from_edit.text(),
             start_to=self.start_to_edit.text(),
-            site_id=self.site_combo.currentData(),
-            project_id=project if isinstance(project, int) else None,
-            without_project=project == NO_PROJECT_DATA,
-            band=self.band_combo.currentData() or "",
+            site_ids=tuple(d for d in self.site_combo.checked_data() if isinstance(d, int)),
+            project_ids=tuple(d for d in projects if isinstance(d, int)),
+            without_project=NO_PROJECT_DATA in projects,
+            bands=tuple(d for d in self.band_combo.checked_data() if isinstance(d, str)),
             fc_min=self.fc_min_edit.text(),
             fc_max=self.fc_max_edit.text(),
             archive_state=self.state_combo.currentData(),
@@ -605,8 +593,9 @@ class ViewerTab(QWidget):
             self.remarks_edit,
         ):
             edit.clear()
-        for combo in (self.site_combo, self.project_combo, self.band_combo, self.state_combo):
-            combo.setCurrentIndex(0)
+        for check_combo in (self.site_combo, self.project_combo, self.band_combo):
+            check_combo.clear_checks()
+        self.state_combo.setCurrentIndex(0)
         self._show_filter_errors(())
         self._filter = None
         self.refresh()

@@ -178,11 +178,13 @@ def test_the_list_names_the_project_and_filters_by_it(conn, site_id):
     def ids(**kw) -> set[int]:
         return {s.id for s in repo.list_recordings(conn, RecordingFilter(**kw))}
 
-    assert ids(project_id=radar) == {a}
+    assert ids(project_ids=(radar,)) == {a}
     assert ids(without_project=True) == {c}
-    assert ids(project_id=survey, site_id=site_id) == {b}
-    with pytest.raises(ValueError, match="no project"):
-        ids(project_id=radar, without_project=True)
+    assert ids(project_ids=(survey,), site_ids=(site_id,)) == {b}
+    # Several projects, and no project, match any of them (D78).
+    assert ids(project_ids=(radar, survey)) == {a, b}
+    assert ids(project_ids=(radar,), without_project=True) == {a, c}
+    assert ids(project_ids=(radar, survey), without_project=True) == {a, b, c}
 
 
 # ---------------------------------------------------------------------------
@@ -358,11 +360,28 @@ def test_filter_by_start_bounds(conn, filter_set):
 
 def test_filter_by_site(conn, filter_set):
     site = repo.find_site(conn, "SiteB")
-    assert ids(conn, RecordingFilter(site_id=site.id), filter_set) == ["later", "uhf"]
+    assert ids(conn, RecordingFilter(site_ids=(site.id,)), filter_set) == ["later", "uhf"]
+
+
+def test_several_sites_match_any_of_them(conn, filter_set):
+    a, b = repo.find_site(conn, "SiteA").id, repo.find_site(conn, "SiteB").id
+    flt = RecordingFilter(site_ids=(a, b))
+    assert ids(conn, flt, filter_set) == ["later", "none", "uhf", "vhf"]
 
 
 def test_filter_by_band_ignores_case(conn, filter_set):
-    assert ids(conn, RecordingFilter(band="UHF"), filter_set) == ["later", "uhf"]
+    assert ids(conn, RecordingFilter(bands=("UHF",)), filter_set) == ["later", "uhf"]
+
+
+def test_several_bands_match_any_of_them(conn, filter_set):
+    flt = RecordingFilter(bands=("vhf", "UHF"))
+    assert ids(conn, flt, filter_set) == ["later", "uhf", "vhf"]
+
+
+def test_several_bands_and_the_fc_range_match_on_one_channel(conn, filter_set):
+    # "uhf" has a VHF channel at 145 MHz; "vhf" one at 145.8 MHz; "later" is UHF.
+    flt = RecordingFilter(bands=("VHF", "UHF"), fc_min_hz=140e6, fc_max_hz=145.5e6)
+    assert ids(conn, flt, filter_set) == ["uhf"]
 
 
 def test_filter_by_fc_range_matches_any_channel(conn, filter_set):
@@ -377,7 +396,7 @@ def test_fc_range_bounds_are_inclusive(conn, filter_set):
 
 def test_band_and_fc_range_must_match_on_one_channel(conn, filter_set):
     # "uhf" has a VHF channel at 145 MHz and a UHF channel at 435 MHz.
-    flt = RecordingFilter(band="UHF", fc_min_hz=140e6, fc_max_hz=150e6)
+    flt = RecordingFilter(bands=("UHF",), fc_min_hz=140e6, fc_max_hz=150e6)
     assert ids(conn, flt, filter_set) == []
 
 
@@ -421,13 +440,13 @@ def test_like_pattern_escapes_the_escape_character():
 
 
 def test_filters_combine(conn, filter_set):
-    flt = RecordingFilter(band="uhf", remarks_text="baseline", rf_chain_text="antenna")
+    flt = RecordingFilter(bands=("uhf",), remarks_text="baseline", rf_chain_text="antenna")
     assert ids(conn, flt, filter_set) == ["later"]
 
 
 def test_filtered_list_has_the_channels_of_its_recordings_only(conn, filter_set):
     summaries = repo.list_recordings(
-        conn, RecordingFilter(site_id=repo.find_site(conn, "SiteB").id)
+        conn, RecordingFilter(site_ids=(repo.find_site(conn, "SiteB").id,))
     )
     assert [s.fc_hz for s in summaries] == [(433.92e6,), (145.0e6, 435e6)]
     assert [s.channel_count for s in summaries] == [1, 2]

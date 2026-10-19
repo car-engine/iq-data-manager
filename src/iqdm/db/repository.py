@@ -557,6 +557,11 @@ def like_pattern(text: str) -> str:
     return f"%{escaped}%"
 
 
+def _marks(values: tuple[object, ...]) -> str:
+    """One parameter mark per value, for IN (...)."""
+    return ", ".join("?" * len(values))
+
+
 def _filter_sql(flt: RecordingFilter | None) -> tuple[str, list[Any]]:
     """WHERE clause on recordings `r` for a Viewer filter, and its parameters."""
     if flt is None:
@@ -569,23 +574,24 @@ def _filter_sql(flt: RecordingFilter | None) -> tuple[str, list[Any]]:
     if flt.start_before_unix is not None:
         clauses.append("r.start_unix < ?")
         params.append(flt.start_before_unix)
-    if flt.site_id is not None:
-        clauses.append("r.site_id = ?")
-        params.append(flt.site_id)
-    if flt.without_project and flt.project_id is not None:
-        raise ValueError("a filter cannot ask for a project and for no project")
-    if flt.project_id is not None:
-        clauses.append("r.project_id = ?")
-        params.append(flt.project_id)
+    if flt.site_ids:
+        clauses.append(f"r.site_id IN ({_marks(flt.site_ids)})")
+        params.extend(flt.site_ids)
+    project_terms: list[str] = []  # several projects, or no project, match any (D78)
+    if flt.project_ids:
+        project_terms.append(f"r.project_id IN ({_marks(flt.project_ids)})")
+        params.extend(flt.project_ids)
     if flt.without_project:
-        clauses.append("r.project_id IS NULL")
+        project_terms.append("r.project_id IS NULL")
+    if project_terms:
+        clauses.append("(" + " OR ".join(project_terms) + ")")
     if flt.archive_state is not None:
         clauses.append("r.archive_state = ?")
         params.append(str(flt.archive_state))
     channel_terms: list[str] = []  # band and fc range must match on one channel
-    if flt.band:
-        channel_terms.append("c.band = ? COLLATE NOCASE")
-        params.append(flt.band)
+    if flt.bands:
+        channel_terms.append(f"c.band COLLATE NOCASE IN ({_marks(flt.bands)})")
+        params.extend(flt.bands)
     if flt.fc_min_hz is not None:
         channel_terms.append("c.fc_hz >= ?")
         params.append(flt.fc_min_hz)
