@@ -268,8 +268,8 @@ def apply_template(
 
 
 def applied_text(tpl: LogTemplate, notes: Sequence[str]) -> str:
-    """The message line after an import."""
-    names = ", ".join(FIELD_LABELS[f].lower() for f in tpl.fields())
+    """The message line after an import. The labels keep their case, as in "RF chain"."""
+    names = ", ".join(FIELD_LABELS[f] for f in tpl.fields())
     text = f"Template loaded: {names}."
     return " ".join([text, *notes])
 

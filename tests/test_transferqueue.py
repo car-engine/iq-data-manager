@@ -75,6 +75,23 @@ def test_an_active_repeat_is_refused():
     with pytest.raises(QueueError, match="already goes to"):
         queue.add(item(2, "d:\\NAS\\a\\"))  # the same folder, written otherwise
     queue.add(item(1, kind=QueueKind.CHECK_ARCHIVE))  # another operation is fine
+    with pytest.raises(QueueError, match="already in the queue"):
+        queue.add(item(1, kind=QueueKind.CHECK_ARCHIVE))
+
+
+def test_two_copies_of_one_recording_to_two_folders_are_allowed():
+    """Channel 0 to one folder and channel 1 to another, for example."""
+    queue = TransferQueue()
+    first = replace(
+        item(7, kind=QueueKind.COPY),
+        request=request(7, "C:\\pc\\ch0", Operation.COPY, channels=(0,)),
+    )
+    second = replace(first, request=request(7, "C:\\pc\\ch1", Operation.COPY, channels=(1,)))
+    queue.add(first)
+    queue.add(second)
+    assert len(queue) == 2
+    with pytest.raises(QueueError, match="already goes to"):
+        queue.add(replace(first, request=request(7, "c:\\PC\\ch0", Operation.COPY)))
 
 
 def test_a_finished_item_may_be_added_again():

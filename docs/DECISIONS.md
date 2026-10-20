@@ -1676,8 +1676,11 @@ the approved plan. The agent recommended which operations a queue holds.
   out of the queue and back into the form, which previews it again. "Add to queue"
   then puts it back in the same place. Different NAS folders, channel subsets and time
   ranges are set this way. An archive is always the whole recording (D50).
-- **Repeats.** An item that repeats a waiting, running or paused item is refused: the
-  same recording for the same operation, or the same destination folder.
+- **Repeats.** An item that repeats a waiting, running or paused item is refused: an
+  archive or a Check archive of the same recording, or any item to the same
+  destination folder. Two copies of one recording to different folders are allowed,
+  for example channel 0 to one folder and channel 1 to another. (Changed on
+  2026-10-21: the first build refused every second copy of a recording.)
 - **Previews.** New archives and copies from the Viewer are previewed when they join
   the queue, if the tab is idle, for their size and any problem. Every archive and
   copy is previewed again just before it runs: the source is scanned again (D53), and

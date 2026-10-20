@@ -127,11 +127,17 @@ class TransferQueue:
         return added
 
     def duplicate_problem(self, item: QueueItem) -> str:
-        """Why `item` repeats an item that is waiting, running or paused, or ''."""
+        """Why `item` repeats an item that is waiting, running or paused, or ''.
+
+        An archive or a Check archive of the same recording repeats. Two copies of one
+        recording to different folders do not, for example two channels to two places.
+        Any item to the same destination folder repeats.
+        """
         for other in self._items:
             if other.state not in ACTIVE:
                 continue
-            if other.recording_id == item.recording_id and other.kind is item.kind:
+            same_recording = other.recording_id == item.recording_id and other.kind is item.kind
+            if same_recording and item.kind is not QueueKind.COPY:
                 return f"Recording {item.recording_id} is already in the queue for this."
             same_folder = ntpath.normcase(ntpath.normpath(other.destination)) == (
                 ntpath.normcase(ntpath.normpath(item.destination))

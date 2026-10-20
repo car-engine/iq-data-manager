@@ -42,6 +42,19 @@ the tab counts as busy for the whole run, so the Settings tab and the Viewer's
 
 D81, "A queue in the Archive / copy tab". It closes O45 and O41.
 
+## Changes after the work was committed
+
+On 2026-10-21, while writing the manual checklist (`dev/v1.1-test/CHECKLIST.html`),
+the agent found two faults in its own unmerged work and fixed them in a later commit
+on this branch:
+
+- The queue refused a second copy of a recording to another folder, because it
+  treated "same recording, same operation" as a repeat for copies too. Copies now
+  repeat only by destination; archives and Check archive still repeat by recording.
+  Test: `test_two_copies_of_one_recording_to_two_folders_are_allowed`.
+- The import message of a template (D80) wrote the field names in lower case, so "RF
+  chain" read "rf chain". It now keeps their case: "Template loaded: Site, Project."
+
 ## Changes from the plan
 
 - **The State column moved to second place.** In the first render it sat off the edge

@@ -506,8 +506,9 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   path, and an archived one is copied to the default copy folder plus its relative
   path. Each item holds its own request; Edit takes it back into the form, and "Add
   to queue" puts it back in its place.
-- An item that repeats an active item (same recording and operation, or same
-  destination) is refused.
+- An item that repeats an active item is refused: an archive or Check archive of the
+  same recording, or any item to the same destination. Two copies of one recording to
+  different folders are allowed.
 - New archives and copies from the Viewer are previewed when added, if the tab is
   idle. Each is previewed again just before it runs; a preview with errors gives "Not
   started" and the queue moves on. A failed item does not stop the queue.

@@ -1151,7 +1151,7 @@ def test_export_then_import_gives_the_same_form(
     scan_folder(qtbot, tab, make_recording(n_channels=2).root)
     tab.import_template(path)
     assert typed_fields(tab) == before
-    assert tab.message_label.text().startswith("Template loaded: logged by, site, project")
+    assert tab.message_label.text().startswith("Template loaded: Logged by, Site, Project")
     fs = tab.channel_widgets(0)[2]
     assert fs.text() == "1 kHz"  # from the scan, not from the template
 

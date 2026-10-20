@@ -187,16 +187,15 @@ def test_a_name_the_catalogue_lacks_is_named_and_changes_nothing():
         "Project 'Survey' is not in the catalogue. Choose it or add it.",
     )
     assert applied_text(tpl, applied.notes) == (
-        "Template loaded: site, project. " + " ".join(applied.notes)
+        "Template loaded: Site, Project. " + " ".join(applied.notes)
     )
 
 
 def test_applied_text_names_the_fields_in_form_order():
     assert applied_text(full_template(), ()) == (
-        "Template loaded: "
-        + ", ".join(FIELD_LABELS[f].lower() for f in TemplateField)
-        + "."
+        "Template loaded: " + ", ".join(FIELD_LABELS[f] for f in TemplateField) + "."
     )
+    assert applied_text(LogTemplate(rf_chain=()), ()) == "Template loaded: RF chain."
 
 
 @pytest.mark.parametrize(
