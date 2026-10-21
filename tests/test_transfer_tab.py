@@ -21,7 +21,7 @@ from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
 from iqdm.entry import ItemState
 from iqdm.gui.transfer_tab import TransferTab
-from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS
+from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
 from iqdm.models import IN_PLACE_NOTE, ArchiveState, HashMode, Operation, TransferEntry
 from iqdm.movecopy import LaptopStep
 from iqdm.transfer.copier import CopyItem, copy_files
@@ -751,8 +751,7 @@ def test_a_failed_item_does_not_stop_the_queue(env, make_recording):
     tab.select_queue_row(0)
     assert tab.queue_note.text() == f"first: Not started: {tab.queue[0].note}"
     assert tab.queue_table.item(0, 1).toolTip() == f"Not started: {tab.queue[0].note}"
-    assert tab.result[0] is ItemState.OK
-    assert tab.result[1] == "Queue finished. 1 done, 1 not started."
+    assert tab.result == (ItemState.INFO, "Queue finished. 1 done; 1 not started.")
     tab.clear_queue_button.click()
     assert tab.queue == []
 
@@ -805,6 +804,30 @@ def test_check_archive_items(env):
     queue_idle(env, tab)
     assert states(tab) == [QueueState.DONE]
     assert env.transfers()[-1].operation is Operation.CHECK
+
+
+def test_an_archive_whose_check_is_needed_is_not_failed(env):
+    """D85: amber, counted apart, kept by Clear finished, removed by Remove."""
+    tab = env.tab()
+    tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(HashMode.NONE))  # sizes only
+    assert tab.check_after_box.isChecked()
+    queued_from_viewer(env, tab, env.rid)
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.CHECK_NEEDED]
+    cell = tab.queue_table.item(0, 1)
+    assert cell.text() == f"{MARKS[ItemState.INFO]}  Archived, check needed"
+    assert cell.foreground().color() == LIGHT_COLOURS[ItemState.INFO]
+    assert tab.result == (ItemState.INFO, "Queue finished. 1 archived, check needed.")
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    tab.select_queue_row(0)
+    assert not tab.edit_queue_button.isEnabled()
+    assert not tab.start_queue_button.isEnabled()  # nothing to run
+    assert not tab.clear_queue_button.isEnabled()  # nothing finished to clear
+    tab.clear_queue_button.click()
+    assert states(tab) == [QueueState.CHECK_NEEDED]
+    tab.remove_queue_button.click()
+    assert tab.queue == []
 
 
 # ---------------------------------------------------------------------------

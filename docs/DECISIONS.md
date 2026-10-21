@@ -98,10 +98,11 @@ Rules for this file:
 | D78 | Viewer filters with several choices | 2026-10-20, version 1.1 | Active |
 | D79 | A new folder keeps the previous entry's fields | 2026-10-20, version 1.1 | Active |
 | D80 | Log tab templates in files | 2026-10-20, version 1.1 | Active |
-| D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active |
+| D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active; D85 adds a state |
 | D82 | Values from the recorder's log | 2026-10-21, version 1.1 | Active |
 | D83 | The recorder's log files travel with the recording | 2026-10-21, version 1.1 | Active |
 | D84 | The Log tab's message line shows its state | 2026-10-22, version 1.1 | Active |
+| D85 | An archive whose check is still needed | 2026-10-22, version 1.1 | Active; amends D81 |
 
 ## D1. Sample types
 
@@ -1809,3 +1810,37 @@ saved". The other tabs already colour their message lines.
 - The colour follows a switch between the light and the dark theme.
 
 Affects: SPEC section 6, `gui/log_tab.py`.
+
+## D85. An archive whose check is still needed
+
+Closes O49. Amends D81. Found in the user's manual test of 2026-10-22, step 4.12: three
+queued archives passed, their Check before delete then failed, and the queue showed
+each as ✗ Failed. The user took the archives for failed until the Viewer showed them
+archived. The user chose these points on 2026-10-22.
+
+- A queue item whose archive passed but whose Check before delete did not pass gets
+  the state ⓘ "Archived, check needed", in amber. That covers a check that failed, a
+  check that was stopped, a check that could not run (for example a read error, or
+  the archive's file list refused), and a check skipped because the check mode was
+  "Sizes only".
+- Its note says that the recording now points at the NAS copy, that the laptop copy
+  stays, why the check did not pass, and to run Check before delete in the form.
+- The end-of-queue summary counts these items apart and is amber, not red. Parts of
+  the summary are separated by ";" because the state's name holds a comma.
+- Clear finished keeps these items, as a reminder that their laptop copies cannot be
+  deleted yet; Remove takes one out; Start skips them; Edit is disabled for them.
+  The queue is not saved (D81), so the lasting record is the recording's history and
+  the Archive / copy tab.
+- ✗ Failed stays for a copy or the check after the copy that failed.
+- No "Check again" action for now (the user's choice).
+- **Found at the same time:** Check before delete through a Windows share of the same
+  PC does not fail for every file, as Milestone 8 recorded. In the test, files of
+  64,000 bytes (a multiple of 512) were read; files of 4,000 bytes were refused with
+  WinError 87. The share most likely refuses reads past the cache of files whose
+  size is not a multiple of 512 bytes. The real NAS read 1,000,000-byte files and a
+  500,000-byte last file in the field test of 2026-10-05, so it does not share this
+  limit. The recorder's log files (D83) have any size, so the pilot checks a delete
+  of an archive with log files on the real NAS.
+
+Affects: SPEC section 8, `transferqueue.py`, `gui/transfer_tab.py`, the user guide,
+`docs/STATUS.md` (notes for agents, pending checks).

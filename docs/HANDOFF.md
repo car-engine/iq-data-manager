@@ -131,7 +131,7 @@ version 1.1; STATUS.md holds the current list.
 | D75 on the NAS: a normal archive, its Check before delete and delete still pass; the same folder under two NAS names is refused | Tested with junctions, hard links and a share of the development PC only. The NAS reports file IDs over SMB. | User, in the pilot (STATUS, "Pending checks") |
 | D76 across two PCs | Tested on one PC and one database file | User, in normal use |
 | The cost on the NAS of the D73 check per connection and of the D75 identity check per file | Not measured. Locally neither is measurable. | When O37 is measured |
-| Check before delete through a Windows share of the same PC | Fails with WinError 87 (M8.md part 2). The real NAS passed. | Known limit; test the delete on the real NAS |
+| Check before delete through a Windows share of the same PC | Fails with WinError 87 for files whose size is not a multiple of 512 bytes, most likely (D85, 2026-10-22; M8.md part 2 thought every file failed). The real NAS passed. | Known limit; test the delete on the real NAS |
 | The GUI by eye in dark mode on Windows | Offscreen renders and the user's checks only | User, with each build |
 
 ### The user's rollout steps (no code)

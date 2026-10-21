@@ -20,11 +20,11 @@ for version 1.1 started).
   item below.
 - **Version 1.1 is built and waits for the user.** The plan, approved by the user on
   2026-10-20, is in [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41), one
-  branch each. On 2026-10-21 the user added O46 and O47 (the recorder's logs). All
-  seven are done on stacked branches, none merged; "Work after 1.0" below lists them,
-  and `transfer-log-files` holds them all. Next: the user's manual test
-  (`dev/v1.1-test/CHECKLIST.html`), the merge as a fast-forward, and the release of
-  1.1.0 (HANDOFF.md, section 4).
+  branch each. On 2026-10-21 the user added O46 and O47 (the recorder's logs). The
+  user's manual test of 2026-10-22 gave O48 and O49. All nine are done on stacked
+  branches, none merged; "Work after 1.0" below lists them, and `queue-check-state`
+  holds them all. Next: the user's review, the merge as a fast-forward, and the
+  release of 1.1.0 (HANDOFF.md, section 4).
 - **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
   needs a numbered migration (HANDOFF.md, section 5).
 - **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
@@ -74,7 +74,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O45 and O41, the queue (D81) | Done, not merged | `transfer-queue`, from `log-templates` | `e1f1147`, `c0252f9` (two fixes found while writing the manual checklist) | [2026-10-20-transfer-queue](reports/2026-10-20-transfer-queue.md) |
 | O46, values from the recorder's log (D82) | Done, not merged | `recorder-log-fill`, from `transfer-queue` | `5f6831b` | [2026-10-21-recorder-log-fill](reports/2026-10-21-recorder-log-fill.md) |
 | O47, log files travel with the recording (D83) | Done, not merged | `transfer-log-files`, from `recorder-log-fill` | `2574beb` | [2026-10-21-transfer-log-files](reports/2026-10-21-transfer-log-files.md) |
-| O48, Log tab messages show their state (D84) | Done, not merged | `log-message-states`, from `transfer-log-files` | The commit of the work and its report | [2026-10-22-log-message-states](reports/2026-10-22-log-message-states.md) |
+| O48, Log tab messages show their state (D84) | Done, not merged | `log-message-states`, from `transfer-log-files` | `9f37809` | [2026-10-22-log-message-states](reports/2026-10-22-log-message-states.md) |
+| O49, an archive whose check is needed (D85) | Done, not merged | `queue-check-state`, from `log-message-states` | The commit of the work and its report | [2026-10-22-queue-check-state](reports/2026-10-22-queue-check-state.md) |
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -101,7 +102,6 @@ table in [reports/M0.md](reports/M0.md). The next free number is O50.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O49 | A queue item whose archive passed but whose Check before delete did not is shown as ✗ Failed | 1.1.0 (approved 2026-10-22) | A state ⓘ "Archived, check needed" in amber, for a check that failed, was stopped, or was skipped for "Sizes only". The note says the recording points at the NAS copy, the laptop copy stays, and to run Check before delete from the form. The summary counts it separately. Clear finished keeps such items; Remove removes them; Start skips them. ✗ Failed stays for a copy or verification that failed. No "Check again" for now. | User's manual test, 2026-10-22 (step 4.12) |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
@@ -157,6 +157,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O46 | Fill Log tab fields from the recorder's log files | D82 (2026-10-21) |
 | O47 | Copy and archive the recorder's log files with the recording | D83 (2026-10-21) |
 | O48 | The Log tab's message line shows no state (user's manual test, 2026-10-22) | D84 (2026-10-22) |
+| O49 | A queue archive whose check did not pass showed as Failed (user's manual test, 2026-10-22) | D85 (2026-10-22) |
 
 ## Pending checks for the user
 
@@ -166,11 +167,18 @@ Things that cannot be tested on the development PC, or were tested only partly.
   Start part-way through a large archive (D81); logging several real folders in a
   row (D79); a template exported and imported on a real set-up, kept in a shared
   folder (D80); the Viewer's tick-box filters (D78); each by eye in dark mode.
+- **Recorder logs on the real NAS (D82, D83):** log a real recording made by the
+  recorder, archive it with its log files, run Check before delete and delete the
+  laptop copy. The log files have any size; the NAS read files of sizes that are not
+  multiples of 512 bytes in the field test, so this should pass.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
-- **Check before delete through a Windows share of the same PC** fails with WinError
-  87 (M8.md, part 2). That is a known limit of such a share; the real NAS passed.
+- **Check before delete through a Windows share of the same PC** refuses files whose
+  size is not a multiple of 512 bytes, most likely, with WinError 87 (D85,
+  2026-10-22). M8.md, part 2 recorded that every file failed; the manual test of
+  2026-10-22 read 64,000-byte files and failed 4,000-byte files. A limit of such a
+  share; the real NAS read 1,000,000-byte files.
 
 On 2026-10-20 the user reported that the pilot passed. These two checks are closed
 on that report:
@@ -342,9 +350,11 @@ These come from the safety configuration and from experience in this repository.
   `ruff format` style, and the project checks only `ruff check`. Running the formatter
   on a whole folder rewrapped unrelated code three times in Milestone 3.
 - **A Windows share of a local folder** can stand in for the NAS in a manual test,
-  because NAS locations must be UNC paths. Check before delete fails through such a
-  share with WinError 87 (2026-10-12): Windows refuses reads past the cache when a PC
-  serves a share to itself. Test the delete on the real NAS.
+  because NAS locations must be UNC paths. Check before delete through such a share
+  fails with WinError 87 for files whose size is not a multiple of 512 bytes, most
+  likely; 64,000-byte files read (2026-10-22, D85; M8.md part 2 thought every file
+  failed). Synthetic files of 4,000 bytes therefore fail there. Test the delete on the
+  real NAS.
 - **Screenshots of the GUI** render offscreen with the light palette. Set
   `QT_QPA_FONTDIR=C:/Windows/Fonts` for readable text. The user runs Windows in dark
   mode, so render with a dark palette too: set the `Base`, `Text`, `Window`,

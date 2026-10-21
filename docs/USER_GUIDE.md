@@ -280,6 +280,12 @@ With **After each archive, run Check before delete** ticked, each archive is che
 before delete straight away. Delete each laptop copy afterwards with **Delete laptop
 copy...**, one recording at a time.
 
+An item marked **ⓘ Archived, check needed** was archived: the recording points at
+the NAS copy. Only its Check before delete did not pass, so its laptop copy cannot be
+deleted yet. Select the item to read why, then open the recording in the form and
+click **Check before delete**. **Clear finished** leaves these items in the queue;
+**Remove** takes one out.
+
 The queue is not kept when the app closes. A paused copy or archive stays under
 **Unfinished transfers**.
 

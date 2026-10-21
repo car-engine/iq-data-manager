@@ -12,11 +12,13 @@ from pathlib import Path
 import pytest
 
 from conftest import recording_from
+from iqdm import transferqueue
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import open_db, write_transaction
 from iqdm.models import ArchiveState, HashMode, Operation, Verification
 from iqdm.transfer.copier import CopyProgress
+from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import CHECK_NEEDS_HASHES, TransferRequest
 from iqdm.transfer.pathcheck import DiskUsage
 from iqdm.transferqueue import (
@@ -327,10 +329,80 @@ def test_an_archive_without_the_check(env):
 
 
 def test_sizes_only_skips_the_check_and_says_why(env):
+    """D85: the archive passed, so it is not Failed; its laptop copy cannot go yet."""
     result, _ = env.run(env.item(hash_mode=HashMode.NONE))
-    assert result.state is QueueState.DONE
+    assert result.state is QueueState.CHECK_NEEDED
+    assert result.note.startswith("Archived: transfer ")
     assert CHECK_NEEDS_HASHES in result.note
+    assert result.note.endswith(
+        "Run Check before delete in the form; the laptop copy can be deleted only after "
+        "it passes."
+    )
     assert [t.operation for t in env.transfers()] == [Operation.ARCHIVE]
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+
+
+def test_a_failed_check_before_delete_is_check_needed(env, monkeypatch):
+    """The check found a NAS file that differs: the archive still stands (D85)."""
+    real = transferqueue.check_before_delete
+
+    def spoil_then_check(db, archive_id, **kw):
+        dest = env.nas / Path(env.infos[0].root).name
+        first = sorted(dest.rglob("*.dat"))[0]
+        first.write_bytes(b"\xff" * first.stat().st_size)  # same size, other content
+        return real(db, archive_id, **kw)
+
+    monkeypatch.setattr(transferqueue, "check_before_delete", spoil_then_check)
+    item = env.item(hash_mode=HashMode.ALL)
+    result, _ = env.run(item)
+    assert result.state is QueueState.CHECK_NEEDED
+    assert "Check before delete failed:" in result.note
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    archive, check = env.transfers()
+    assert (archive.verification, check.verification) == (Verification.PASS, Verification.FAIL)
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (OSError(87, "The parameter is incorrect"), "The parameter is incorrect"),
+        (DeleteRefused(["The archive copy has no file list."]), "has no file list"),
+    ],
+)
+def test_a_check_that_cannot_run_is_check_needed(env, monkeypatch, error, reason):
+    def fail(*_a, **_kw):
+        raise error
+
+    monkeypatch.setattr(transferqueue, "check_before_delete", fail)
+    result, _ = env.run(env.item())
+    assert result.state is QueueState.CHECK_NEEDED
+    assert "Check before delete could not run:" in result.note
+    assert reason in result.note
+
+
+def test_a_stopped_check_before_delete_is_check_needed(env, monkeypatch):
+    real = transferqueue.check_before_delete
+    monkeypatch.setattr(
+        transferqueue,
+        "check_before_delete",
+        lambda db, aid, **kw: real(db, aid, **(kw | {"cancelled": lambda: True})),
+    )
+    result, _ = env.run(env.item())
+    assert result.state is QueueState.CHECK_NEEDED
+    assert "Check before delete was stopped." in result.note
+
+
+def test_clear_finished_keeps_archives_whose_check_is_needed():
+    queue = TransferQueue()
+    done, needed, failed = queue.add(item(1)), queue.add(item(2)), queue.add(item(3))
+    queue.set_state(done.key, QueueState.DONE)
+    queue.set_state(needed.key, QueueState.CHECK_NEEDED)
+    queue.set_state(failed.key, QueueState.FAILED)
+    assert queue.next_runnable() is None  # Start skips it
+    assert queue.clear_finished() == 2
+    assert [i.key for i in queue.items] == [needed.key]
+    queue.remove(needed.key)  # Remove takes it out
+    assert len(queue) == 0
 
 
 def test_a_copy_and_a_check_archive(env):

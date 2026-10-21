@@ -22,8 +22,10 @@ from iqdm.models import ArchiveState, HashMode, Operation, Recording, Verificati
 from iqdm.movecopy import default_copy_destination
 from iqdm.scan.scanner import ScanCancelled, ScanError
 from iqdm.timeutil import display_time
+from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import (
     CHECK_NEEDS_HASHES,
+    TransferError,
     TransferRequest,
     check_archive,
     check_before_delete,
@@ -48,11 +50,14 @@ class QueueState(StrEnum):
     RUNNING = "Running"
     PAUSED = "Paused"
     DONE = "Done"
+    CHECK_NEEDED = "Archived, check needed"  # the archive passed; its check did not (D85)
     FAILED = "Failed"
     NOT_STARTED = "Not started"
 
 
 ACTIVE = frozenset({QueueState.WAITING, QueueState.RUNNING, QueueState.PAUSED})
+# Clear finished removes these. An archive whose check is still needed stays, as a
+# reminder that its laptop copy cannot be deleted yet (D85).
 FINISHED = frozenset({QueueState.DONE, QueueState.FAILED, QueueState.NOT_STARTED})
 
 
@@ -380,29 +385,41 @@ def run_item(
     done = f"Transfer {tid} passed its check."
     if not (archive and check_after_archive):
         return ItemResult(state=QueueState.DONE, note=done, transfer_id=tid, size_bytes=size)
+
+    def check_needed(why: str) -> ItemResult:
+        """The archive passed and the recording points at the NAS; the check did not (D85)."""
+        note = (
+            f"Archived: transfer {tid} passed its check, and the recording now points at "
+            f"the NAS copy. The laptop copy stays. {why} Run Check before delete in the "
+            "form; the laptop copy can be deleted only after it passes."
+        )
+        return ItemResult(
+            state=QueueState.CHECK_NEEDED, note=note, transfer_id=tid, size_bytes=size
+        )
+
     if request.hash_mode is HashMode.NONE:
-        note = f"{done} Check before delete not run: {CHECK_NEEDS_HASHES}"
-        return ItemResult(state=QueueState.DONE, note=note, transfer_id=tid, size_bytes=size)
+        return check_needed(f"Check before delete was not run: {CHECK_NEEDS_HASHES}")
     report(Phase("Check before delete: reading the NAS copy"))
-    check = check_before_delete(
-        db_path,
-        tid,
-        hash_mode=request.hash_mode,
-        sample_fraction=config.hash_sample_fraction,
-        performed_by=performed_by,
-        progress=report,
-        cancelled=cancelled,
-    )
+    try:
+        check = check_before_delete(
+            db_path,
+            tid,
+            hash_mode=request.hash_mode,
+            sample_fraction=config.hash_sample_fraction,
+            performed_by=performed_by,
+            progress=report,
+            cancelled=cancelled,
+        )
+    except DeleteRefused as exc:
+        return check_needed(f"Check before delete could not run: {' '.join(exc.reasons)}")
+    except (TransferError, OSError) as exc:
+        return check_needed(f"Check before delete could not run: {exc}")
     if check.verification is Verification.PASS:
         note = f"{done} Check before delete passed; the laptop copy can be deleted."
         return ItemResult(state=QueueState.DONE, note=note, transfer_id=tid, size_bytes=size)
     if check.verification is Verification.SKIPPED:
-        note = f"{done} Check before delete stopped; run it from the form. {check.notes}"
-        return ItemResult(
-            state=QueueState.DONE, note=note.strip(), transfer_id=tid, size_bytes=size
-        )
-    note = f"{done} Check before delete failed: {check.notes}"
-    return ItemResult(state=QueueState.FAILED, note=note, transfer_id=tid, size_bytes=size)
+        return check_needed(f"Check before delete was stopped. {check.notes}".strip())
+    return check_needed(f"Check before delete failed: {check.notes}")
 
 
 def _run_check_archive(

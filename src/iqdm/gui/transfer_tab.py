@@ -1660,20 +1660,28 @@ class TransferTab(QWidget):
         self._queue_status = ""
         items = self._queue.items
         counts = {s: sum(1 for i in items if i.state is s) for s in QueueState}
-        parts = [
-            f"{counts[s]} {str(s).lower()}"
-            for s in (QueueState.DONE, QueueState.FAILED, QueueState.NOT_STARTED)
-            if counts[s]
-        ]
+        shown_states = (
+            QueueState.DONE,
+            QueueState.CHECK_NEEDED,
+            QueueState.FAILED,
+            QueueState.NOT_STARTED,
+        )
+        # "; " between parts: "archived, check needed" holds a comma (D85).
+        parts = [f"{counts[s]} {str(s).lower()}" for s in shown_states if counts[s]]
         waiting = counts[QueueState.WAITING] + counts[QueueState.PAUSED]
         if self._pause_requested and waiting:
             text = f"Queue paused. {waiting} left; Start continues."
             state = ItemState.INFO
         else:
             text = "Queue finished."
-            state = ItemState.ERROR if counts[QueueState.FAILED] else ItemState.OK
+            if counts[QueueState.FAILED]:
+                state = ItemState.ERROR
+            elif counts[QueueState.CHECK_NEEDED] or counts[QueueState.NOT_STARTED]:
+                state = ItemState.INFO
+            else:
+                state = ItemState.OK
         if parts:
-            text += " " + ", ".join(parts).capitalize() + "."
+            text += " " + "; ".join(parts) + "."
         self._pause_requested = False
         self._set_result(state, text)
         self.status_changed.emit("")
@@ -1765,6 +1773,7 @@ class TransferTab(QWidget):
         colours = self._colours()
         states = {
             QueueState.DONE: ItemState.OK,
+            QueueState.CHECK_NEEDED: ItemState.INFO,  # the laptop copy cannot go yet (D85)
             QueueState.FAILED: ItemState.ERROR,
             QueueState.NOT_STARTED: ItemState.ERROR,
             QueueState.PAUSED: ItemState.TODO,
@@ -2037,8 +2046,11 @@ class TransferTab(QWidget):
             not busy and has_db and self._queue.runnable_count() > 0
         )
         self.pause_queue_button.setEnabled(self._queue_running and not self._pause_requested)
-        self.edit_queue_button.setEnabled(
-            not busy and chosen is not None and chosen.request is not None
+        self.edit_queue_button.setEnabled(  # an archive already done cannot run again
+            not busy
+            and chosen is not None
+            and chosen.request is not None
+            and chosen.state is not QueueState.CHECK_NEEDED
         )
         self.remove_queue_button.setEnabled(
             chosen is not None and chosen.state is not QueueState.RUNNING

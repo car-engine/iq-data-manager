@@ -528,7 +528,12 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   idle. Each is previewed again just before it runs; a preview with errors gives "Not
   started" and the queue moves on. A failed item does not stop the queue.
 - After a passed archive, Check before delete runs when "After each archive, run Check
-  before delete" is ticked (the default), except with "Sizes only".
+  before delete" is ticked (the default), except with "Sizes only". An archive that
+  passed but whose check did not (failed, stopped, could not run, or skipped for
+  "Sizes only") gets the state ⓘ "Archived, check needed" in amber, with a note that
+  the recording points at the NAS copy and the laptop copy stays (D85). Clear
+  finished keeps such items, Remove removes them, Start skips them, and the summary
+  counts them apart.
 - Pause asks first. It stops the running item between chunks, as Stop does; Start
   continues it, skipping the files already in place (D51, D63).
 - The queue lives in memory. Closing the window asks first while it runs or holds
