@@ -18,14 +18,17 @@ for version 1.1 started).
   [HANDOFF.md](HANDOFF.md) describes how such work proceeds, the version and release
   steps, and the database format after 1.0. Start each piece of work from an open
   item below.
-- **Version 1.1.0 is being released.** The plan, approved by the user on 2026-10-20, is
-  in [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41). On 2026-10-21 the
-  user added O46 and O47 (the recorder's logs); the manual test of 2026-10-22 gave O48
-  and O49. All nine were merged into `main` as a fast-forward at `7e7bce2` on
-  2026-10-22, with the user's approval. Branch `release-1.1.0` sets the version and
-  the release notes. Next, each with the user's approval: merge it, build
-  `dist/release-1.1.0` from `main`, tag `v1.1.0`, push (HANDOFF.md, section 4). The
-  user tests 1.1 in the field (pending checks below).
+- **Version 1.1.0 is released** (2026-10-22). The tag `v1.1.0` is on `ed1afe8`; `main`
+  and the tag are pushed. The plan, approved by the user on 2026-10-20, is in
+  [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41). On 2026-10-21 the user
+  added O46 and O47 (the recorder's logs); the manual test of 2026-10-22 gave O48 and
+  O49. All nine were merged into `main` as a fast-forward at `7e7bce2`, then
+  `release-1.1.0` set the version and the release notes (`ed1afe8`). The build is
+  `dist/release-1.1.0` (104 MB), made from `ed1afe8`: `--smoke-test` passed, both
+  programs print 1.1.0, `IQDataManager-check.exe --help` lists its commands, both
+  declare long-path support, and the shipped user guide, release notes and
+  `defaults.example.toml` match their sources. At the release: 1,761 tests pass and 4
+  skip; `ruff check` is clean. The user tests 1.1 in the field (pending checks below).
 - **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
   needs a numbered migration (HANDOFF.md, section 5).
 - **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
@@ -77,12 +80,13 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O47, log files travel with the recording (D83) | Done, not merged | `transfer-log-files`, from `recorder-log-fill` | `2574beb` | [2026-10-21-transfer-log-files](reports/2026-10-21-transfer-log-files.md) |
 | O48, Log tab messages show their state (D84) | Done, not merged | `log-message-states`, from `transfer-log-files` | `9f37809` | [2026-10-22-log-message-states](reports/2026-10-22-log-message-states.md) |
 | O49, an archive whose check is needed (D85) | Done, merged | `queue-check-state`, from `log-message-states` | `6ceb7ca`, `7e7bce2` (STATUS) | [2026-10-22-queue-check-state](reports/2026-10-22-queue-check-state.md) |
-| Release 1.1.0 | Prepared, not merged | `release-1.1.0`, from `main` at `7e7bce2` | The commit of the version and the release notes | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+| Release 1.1.0 | Released: tag `v1.1.0`, pushed | `release-1.1.0`, from `main` at `7e7bce2` | `ed1afe8`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 
 The branches above, from `o20-freeze-schema-v1` to `queue-check-state`, were merged
 into `main` as one fast-forward on 2026-10-22; "Done, not merged" in the rows above
-`queue-check-state` describes them before that merge. They can be deleted with `git
-branch -d` once the user approves.
+`queue-check-state` describes them before that merge. With the user's approval they
+and `release-1.1.0` were deleted with `git branch -d` on 2026-10-22, at the commits in
+the table. None had been pushed, so none existed on GitHub.
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -260,6 +264,8 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   2026-10-20).
 - `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
   folders, 2026-10-21).
+- `build/work-release-1.1.0/` (PyInstaller's work folder of the 1.1.0 build).
+  `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
 - `recorder/` at the repository root: the user's two example recordings of
   2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder
   is not tracked; keep or remove it as you wish.

@@ -2,18 +2,20 @@
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds after the release, and what is still open. It points to the
-other documents for the detail. Last updated: 2026-10-12, at the close of Milestone 8.
+other documents for the detail. Last updated: 2026-10-22, at the release of 1.1.0. The
+sections below still describe the handoff after 1.0.0 where they say so; STATUS.md is
+current.
 
-## 1. State at handoff
+## 1. State
 
 | | |
 | --- | --- |
-| Version | 1.0.0, tag `v1.0.0` on `674434c` (annotated, pushed) |
-| `main` | `3e9b1d0` at handoff, pushed to `origin`; later commits record the close of Milestone 8 |
-| Tests | 1,607 passed, 4 skipped (`pytest`); `ruff check` clean |
-| Release build | `dist/release-1.0.0/IQDataManager/` on the development PC, built from the tag. `dist/` is gitignored, so a new PC builds its own with README "Build". |
-| Milestones | 0 to 8 done. The milestone plan in `docs/SPEC.md` section 12 ends with 8. |
-| In use | Not yet. The user creates the real catalogue and runs a pilot (section 6). |
+| Version | 1.1.0, tag `v1.1.0` on `ed1afe8` (annotated, pushed, 2026-10-22). Earlier: 1.0.0, tag `v1.0.0` on `674434c`. |
+| `main` | `ed1afe8` at the release, pushed to `origin`; later commits record the release |
+| Tests | 1,761 passed, 4 skipped (`pytest`); `ruff check` clean |
+| Release build | `dist/release-1.1.0/IQDataManager/` on the development PC, built from `ed1afe8`. `dist/release-1.0.0/` stays. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Milestones | 0 to 8 done, then work after 1.0 from open items (STATUS.md, "Work after 1.0"). |
+| In use | Yes: the real catalogue exists and the pilot passed (2026-10-20). The user tests 1.1 in the field. |
 
 The app is a Windows desktop tool (Python 3.12, PySide6) that logs RF IQ recordings
 into a shared SQLite catalogue on the NAS, and copies, archives and deletes recordings
@@ -43,7 +45,7 @@ apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md
 "After release 1.0". Each piece of work follows the same cycle as a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
-   with the next free number (STATUS.md names it; O45 is the latest on 2026-10-20), a proposed default and
+   with the next free number (STATUS.md names it; O49 is the latest on 2026-10-22), a proposed default and
    its origin.
 2. **Plan.** Propose a plan with its test list in chat, and wait for approval
    (CLAUDE.md, "Workflow"). The safety hook blocks plan files outside the
@@ -51,7 +53,7 @@ apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D78 is next on 2026-10-20), the current
+5. **Record the decision.** A new entry in DECISIONS.md (D86 is next on 2026-10-22), the current
    requirement in SPEC.md, and the item moved to "Closed items" in STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
    [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md). Update STATUS.md in the same commit.
