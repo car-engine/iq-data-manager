@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import templates, transferqueue
+from iqdm import recorderlog, templates, transferqueue
 from iqdm.app import (
     CLEAR_LOG_TAB_QUESTION,
     CLOSE_QUESTION,
@@ -70,6 +70,7 @@ from iqdm.models import (
     Recording,
     TransferEntry,
 )
+from iqdm.scan.scanner import scan_recording
 from iqdm.transfer.operations import FILE_LIST_UNUSABLE
 from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
@@ -260,6 +261,27 @@ def test_queue_text_is_plain():
         "Archive or copy",
         "Check archive",
     ]
+    assert offending(texts) == []
+
+
+def test_recorder_log_text_is_plain(make_recording):
+    """The checklist lines and the tooltip of values from the recorder's log (D82)."""
+    log = recorderlog.RecorderLog(
+        files=["x"],
+        verdict="FAIL",
+        pc_clock=True,
+        gps_locked=False,
+        restarts=2,
+        stop_reason="error",
+        files_written=99,
+        problems=["cannot read recorder_x.log: Access is denied"],
+    )
+    scan = scan_recording(Path(make_recording().root), 1.0)
+    items = recorderlog.checklist_items(log, scan, ("sample type int16", "USRP Gain"))
+    passed = recorderlog.RecorderLog(files=["x"], verdict="PASS")
+    pass_line = recorderlog.checklist_items(passed, None)
+    texts = [i.text for i in items + pass_line] + [recorderlog.FROM_LOG_TOOLTIP]
+    assert len(texts) == 10  # 8 lines, the pass line and the tooltip
     assert offending(texts) == []
 
 

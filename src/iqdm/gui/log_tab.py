@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import entry, templates
+from iqdm import entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
 from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
@@ -97,6 +97,7 @@ class ScanOutcome:
     duplicate_checked: bool = False
     db_error: str | None = None
     same_start: tuple[SameStart, ...] = ()  # recordings that start with the scan (D61)
+    recorder: recorderlog.RecorderLog | None = None  # the recording task's logs (D82)
 
 
 @dataclass(eq=False)
@@ -106,6 +107,8 @@ class _ChannelRow:
     fc: QLineEdit
     fs: QLineEdit
     fs_auto: bool = False  # fs holds the value worked out from the file size (D21)
+    fc_log: bool = False  # fc came from the recorder's log (D82)
+    fs_log: bool = False  # fs came from the recorder's log (D82)
 
 
 class LogTab(QWidget):
@@ -147,6 +150,9 @@ class LogTab(QWidget):
         self._carried: dict[int, ChannelInput] = {}
         self._kept = False  # the form holds values kept from the previous entry (D79)
         self._template_folder = ""  # the folder of the last template file, this session
+        self._recorder: recorderlog.RecorderLog | None = None  # the scanned folder's logs
+        self._log_filled: tuple[str, ...] = ()  # what the log filled in, for the checklist
+        self._log_applied_for: str | None = None  # the folder the log filled in for
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -466,6 +472,8 @@ class LogTab(QWidget):
                     fc_mhz=r.fc.text(),
                     fs_text=r.fs.text(),
                     fs_inferred=r.fs_auto,
+                    fc_from_log=r.fc_log,
+                    fs_from_log=r.fs_log,
                 )
                 for r in self._channel_rows
             ],
@@ -560,6 +568,9 @@ class LogTab(QWidget):
     def _clear_scan(self) -> None:
         self._raw_scan = None
         self._scan = None
+        self._recorder = None  # D82
+        self._log_filled: tuple[str, ...] = ()
+        self._log_applied_for: str | None = None
         self._logged_id = None
         self._duplicate_checked = False
         self._same_start = ()
@@ -648,12 +659,22 @@ class LogTab(QWidget):
             fc = QLineEdit(inp.fc_mhz)
             fs = QLineEdit(inp.fs_text)
             fs.setPlaceholderText("e.g. 10M")
-            row = _ChannelRow(index=index, band=band, fc=fc, fs=fs, fs_auto=inp.fs_inferred)
+            row = _ChannelRow(
+                index=index,
+                band=band,
+                fc=fc,
+                fs=fs,
+                fs_auto=inp.fs_inferred,
+                fc_log=inp.fc_from_log,
+                fs_log=inp.fs_from_log,
+            )
             _mark_fs(row)
+            _mark_fc(row)
             band.currentTextChanged.connect(self._schedule_refresh)
             fc.textChanged.connect(self._schedule_refresh)
             fs.textChanged.connect(self._schedule_refresh)
             fs.textEdited.connect(lambda _text, r=row: self._fs_typed(r))
+            fc.textEdited.connect(lambda _text, r=row: self._fc_typed(r))
             self.channel_table.insertRow(position)
             coverage = ""
             if n_files is not None and start is not None and end is not None and end > start:
@@ -681,7 +702,48 @@ class LogTab(QWidget):
     def _fs_typed(self, row: _ChannelRow) -> None:
         """The user typed in an fs field. It keeps that value from now on (D21)."""
         row.fs_auto = False
+        row.fs_log = False
         _mark_fs(row)
+
+    def _fc_typed(self, row: _ChannelRow) -> None:
+        """The user typed in an fc field: it no longer shows as from the log (D82)."""
+        row.fc_log = False
+        _mark_fc(row)
+
+    def _apply_recorder_log(self) -> None:
+        """Fill values from the recorder's log, once per folder of a new entry (D82).
+
+        Log values replace values kept from the previous folder or set by a template.
+        A rescan of the same folder does not fill again, so edits after the first scan
+        stay. Edit mode never fills.
+        """
+        log = self._recorder
+        folder = self.folder_edit.text().strip()
+        if log is None or not log.found or self._original is not None:
+            return
+        if self._log_applied_for == folder:
+            return
+        self._log_applied_for = folder
+        values = recorderlog.form_values(
+            log, [r.index for r in self._channel_rows], self.param_table.rows()
+        )
+        if values.dtype is not None:
+            self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(values.dtype))
+        for row in self._channel_rows:
+            if row.index in values.fc_mhz:
+                row.fc.setText(values.fc_mhz[row.index])
+                row.fc_log = True
+                _mark_fc(row)
+            if row.index in values.fs_text:
+                row.fs.setText(values.fs_text[row.index])
+                row.fs_auto = False
+                row.fs_log = True
+                _mark_fs(row)
+        if values.params:
+            self.param_table.set_rows(
+                recorderlog.merge_params(self.param_table.rows(), values.params)
+            )
+        self._log_filled = values.filled
 
     def _fill_inferred_fs(self) -> None:
         """Fill fs from the file size where the field is empty or was filled in (D21)."""
@@ -758,6 +820,7 @@ class LogTab(QWidget):
             scan_problems=self._scan_problems,
             known_param_names=self._choices.param_names,
             same_start=self._same_start,
+            extra_items=recorderlog.checklist_items(self._recorder, self._scan, self._log_filled),
         )
         self.checklist.set_items(items)
         self._show_kept_note()
@@ -908,15 +971,20 @@ class LogTab(QWidget):
             scan = scan_recording(
                 Path(folder), duration, progress=task.report, cancelled=task.is_cancelled
             )
+            log = recorderlog.read_folder(Path(folder), [f.name for f in scan.side_files])
             if location is None or not db:
-                return ScanOutcome(scan=scan)
+                return ScanOutcome(scan=scan, recorder=log)
             try:
                 logged = entry.find_logged(db, location)
                 same = tuple(entry.find_same_start(db, scan))
             except (DatabaseError, OSError) as exc:
-                return ScanOutcome(scan=scan, db_error=str(exc))
+                return ScanOutcome(scan=scan, db_error=str(exc), recorder=log)
             return ScanOutcome(
-                scan=scan, logged_id=logged, duplicate_checked=True, same_start=same
+                scan=scan,
+                logged_id=logged,
+                duplicate_checked=True,
+                same_start=same,
+                recorder=log,
             )
 
         self._clear_message()
@@ -942,7 +1010,9 @@ class LogTab(QWidget):
         self._logged_id = outcome.logged_id
         self._duplicate_checked = outcome.duplicate_checked
         self._same_start = outcome.same_start
+        self._recorder = outcome.recorder
         self._show_scan()
+        self._apply_recorder_log()
         if self._original is None:
             self._drop_settings_of_missing_channels(outcome.scan)
         if outcome.db_error is not None:
@@ -1429,9 +1499,19 @@ def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness])
 
 
 def _mark_fs(row: _ChannelRow) -> None:
-    """Italic text and a tooltip on an fs value filled in from the file size (D21)."""
-    row.fs.setStyleSheet("font-style: italic;" if row.fs_auto else "")
-    row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else FS_TOOLTIP)
+    """Italic text and a tooltip on an fs value filled in from the file size (D21) or
+    from the recorder's log (D82)."""
+    row.fs.setStyleSheet("font-style: italic;" if row.fs_auto or row.fs_log else "")
+    if row.fs_log:
+        row.fs.setToolTip(recorderlog.FROM_LOG_TOOLTIP)
+    else:
+        row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else FS_TOOLTIP)
+
+
+def _mark_fc(row: _ChannelRow) -> None:
+    """Italic text and a tooltip on an fc value from the recorder's log (D82)."""
+    row.fc.setStyleSheet("font-style: italic;" if row.fc_log else "")
+    row.fc.setToolTip(recorderlog.FROM_LOG_TOOLTIP if row.fc_log else "")
 
 
 def _cell(text: str) -> QTableWidgetItem:

@@ -156,6 +156,15 @@ kept; check it for the new folder. If the new folder lacks a channel, the values
 that channel are removed, and the line under the buttons says which. **Clear form**
 starts again from empty fields.
 
+**Recorder logs.** A folder made by the recording task holds the recorder's log
+files. The scan reads them and fills in the centre frequency and sample rate of each
+channel, the sample type, and the RF chain rows USRP Gain and Clock reference. It
+fills in USRP only when the form has no USRP row, because the log cannot tell a
+USRP-2954 from an X310 with UBX boards. These values show in italics; type over any
+of them to change it. Lines in the checklist name what was filled in, and warn when
+the times came from the PC clock, GPS was not locked, or the folder holds fewer files
+than the recorder wrote. These lines do not stop you saving.
+
 **Templates.** A template file holds fields you use often, such as the USRP, the
 antennas and the band and frequency of each channel.
 

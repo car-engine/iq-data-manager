@@ -1,0 +1,14 @@
+check_recording: folder example\one_channel
+Settings: rate 50000000 Sa/s, type sc16 (4 bytes per sample), expected file size 200000000 bytes, quick
+Log: recorder_one_channel.log
+Recorded stretch: seconds 1791801198 to 1791801316
+Log event: recorder_one_channel.log: device_args added=recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000
+Log event: recorder_one_channel.log: time_sync source=pc_now pc=1791801197.402646
+Log event: recorder_one_channel.log: discard_partial second=1791801317 samples=20500000
+Log event: recorder_one_channel.log: write_summary files=119 skipped=0 median_ms=96 p95_ms=162 p99_ms=164 max_ms=192 over500=0 over1000=0 max_interval_s=1.10 peak_queue=1 pool=60
+Log event: recorder_one_channel.log: exit code=0 reason=normal restarts=0
+Channels: 1. Seconds 1791801198 to 1791801316 (119 seconds span).
+Channel 0: 119 files, 119 with the expected size, 0 skipped by threshold (logged), 0 seconds not recorded (restart or between runs)
+Content checks: skipped (--quick). No sample data read, no duplicate-block search.
+Elapsed: 0.0 s. Sample data read: none (--quick).
+RESULT: PASS

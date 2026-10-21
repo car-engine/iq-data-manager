@@ -332,7 +332,7 @@ def _write_junk(root: Path, spec: RecordingSpec) -> list[str]:
     """Add files a scanner must ignore. Returns their '/'-separated relative paths."""
     first_ch = "" if spec.flat else "0"
     rel_paths = [
-        "notes.txt",
+        "notes.md",  # not .txt: a .txt at the top is a side file (D82)
         "README",
         f"{first_ch}/{format_stem(spec.start_unix)}.tmp".lstrip("/"),
         f"{first_ch}/abc{spec.ext}".lstrip("/"),

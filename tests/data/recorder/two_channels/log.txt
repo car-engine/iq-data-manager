@@ -1,0 +1,1 @@
+--ref gpsdo --gps-timeout 600 --channels 0,1 --ants RX2,RX2 --freq 300e6,433e6 --rate 50e6 --gain 30 --pool-size 60 --folder example\two_channels --log example\two_channels\recorder_two_channels.log --continue --duration 299

@@ -87,3 +87,49 @@ def junction(link: Path, target: Path) -> Path:
 def entry_for() -> Callable[..., Recording]:
     """recording_from() as a fixture: entry_for(info, **Recording overrides)."""
     return recording_from
+
+
+RECORDER_EXAMPLES = Path(__file__).parent / "data" / "recorder"
+
+
+def recorder_log_text(
+    channels: dict[int, tuple[float, float]],
+    *,
+    rate_msps: float = 0.001,
+    ref: str = "gpsdo",
+    files_written: int | None = None,
+    sample_format: str = "sc16",
+    subdev: str = "UBX RX",
+    gps_locked: bool = True,
+) -> str:
+    """A recorder log in the format of the examples in tests/data/recorder (D82).
+
+    channels maps a channel number to (frequency in MHz, gain in dB). The default rate,
+    0.001 Msps, is the 1 kHz of make_fixtures' recordings.
+    """
+    t = "2026-10-12T03:25:14.243Z "
+    lines = [
+        f"{t}Command line: rx_samples_to_file_buffered.exe --ref {ref} --channels "
+        + ",".join(str(i) for i in channels),
+        f"{t}Using Device: Single USRP:",
+        "  Device: X-Series Device",
+        "  Mboard 0: X310",
+    ]
+    for i in range(4):
+        lines += [f"  RX Channel: {i}", "    RX DSP: 0", f"    RX Subdev: {subdev}"]
+    for i, (freq, gain) in channels.items():
+        lines += [
+            f"{t}Using channel {i} with antenna RX2",
+            f"{t}Actual RX Rate: {rate_msps:.6f} Msps...",
+            f"{t}Actual RX Freq: {freq:.6f} MHz...",
+            f"{t}Actual RX Gain: {gain:.6f} dB...",
+        ]
+    lines.append(f"{t}EVENT lock sensor=gps_locked locked={1 if gps_locked else 0}")
+    lines.append(f"{t}cpu_format: {sample_format} wire_format: {sample_format}")
+    lines.append(f"{t}Time source {ref}, clock source {ref}")
+    if ref == "internal":
+        lines.append(f"{t}EVENT time_sync source=pc_now pc=1791801197.402646")
+    if files_written is not None:
+        lines.append(f"{t}Files written: {files_written}. Peak queue depth: 1 of 60.")
+    lines.append(f"{t}Done! Stop reason: normal. Restarts: 0. Exit code: 0.")
+    return "\n".join(lines) + "\n"

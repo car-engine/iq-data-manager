@@ -73,6 +73,8 @@ class ChannelInput:
 
     fc is MHz text (D19). fs is text with an optional unit, Hz by default (D25).
     fs_inferred is True while fs holds the value worked out from the file size (D21).
+    fc_from_log and fs_from_log are True while the value came from the recorder's log
+    (D82); typing clears them.
     """
 
     channel_index: int
@@ -80,6 +82,8 @@ class ChannelInput:
     fc_mhz: str = ""
     fs_text: str = ""
     fs_inferred: bool = False
+    fc_from_log: bool = False
+    fs_from_log: bool = False
 
 
 @dataclass(kw_only=True)
@@ -998,12 +1002,14 @@ def checklist(
     scan_problems: Sequence[str] = (),
     known_param_names: Sequence[str] = (),
     same_start: Sequence[SameStart] = (),
+    extra_items: Sequence[ChecklistItem] = (),
 ) -> list[ChecklistItem]:
     """The "Before saving" checklist (SPEC section 6). Saving needs no ERROR or TODO item.
 
     scan_problems holds the problems of a scan that stopped (ScanError.problems).
     known_param_names are the RF chain names already in the database (D28).
     same_start holds the logged recordings that start with the scan (D61).
+    extra_items go at the end; the Log tab passes the recorder log's lines (D82).
 
     New entry: original is None, and scan, location and the duplicate check come from
     the scan worker. Edit mode (D16): original is the stored recording, scan is None
@@ -1077,6 +1083,7 @@ def checklist(
     if scan is not None:
         items += _gap_items(scan)
         items += _unrecognised_items(scan)
+    items += extra_items  # the recorder's log (D82): information only
     return items
 
 

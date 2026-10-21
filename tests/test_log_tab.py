@@ -12,7 +12,8 @@ import pytest
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
-from iqdm import entry, templates
+from conftest import recorder_log_text
+from iqdm import entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, create_database, open_db, write_transaction
@@ -1093,6 +1094,140 @@ def test_edit_mode_shows_no_kept_note(qtbot, make_tab, make_recording, site_id):
     wait_idle(qtbot, tab)
     assert tab.kept_note.isHidden()
     assert tab.channel_widgets(0)[1].text() == "145.8"  # the stored value
+
+
+# ---------------------------------------------------------------------------
+# Values from the recorder's log (D82)
+# ---------------------------------------------------------------------------
+
+
+def with_recorder_log(info, channels, **kw) -> str:
+    """Write a recorder log next to a generated recording. Returns the folder."""
+    root = Path(info.root)
+    (root / f"recorder_{root.name}.log").write_text(
+        recorder_log_text(channels, **kw), encoding="utf-8"
+    )
+    return info.root
+
+
+def rows_of(tab: LogTab) -> list[tuple[int | None, str, str, str]]:
+    return [(p.channel_index, p.param, p.value, p.unit) for p in tab.param_table.rows()]
+
+
+def test_a_scan_fills_values_from_the_recorder_log(qtbot, make_tab, make_recording, site_id):
+    info = make_recording(n_channels=2, n_slots=6)
+    folder = with_recorder_log(info, {0: (300.0, 30.0), 1: (433.0, 30.0)}, files_written=12)
+    tab = make_tab()
+    scan_folder(qtbot, tab, folder)
+    for index, fc_mhz in ((0, "300"), (1, "433")):
+        _band, fc, fs = tab.channel_widgets(index)
+        assert fc.text() == fc_mhz
+        assert fs.text() == "1 kHz"
+        assert "italic" in fc.styleSheet() and "italic" in fs.styleSheet()
+        assert fc.toolTip() == recorderlog.FROM_LOG_TOOLTIP
+    assert tab.dtype_combo.currentData() == SampleType.INT16
+    assert rows_of(tab) == [
+        (None, "USRP Gain", "30", "dB"),
+        (None, "Clock reference", "GPSDO", ""),
+        (None, "USRP", "X310 + UBX", ""),
+    ]
+    info_lines = checklist_texts(tab, ItemState.INFO)
+    filled = "Filled in from the recorder's log: sample type int16"
+    assert any(t.startswith(filled) for t in info_lines)
+    assert not any("not recognised" in t for t in checklist_texts(tab))
+    assert not checklist_texts(tab, ItemState.ERROR)  # the size check agrees with the log's fs
+    choose_site(tab, site_id)
+    tab.logged_by_edit.setText("userA")
+    save_and_wait(qtbot, tab)
+    assert tab.message_label.text() == "Saved as recording 1."
+
+
+def test_the_log_replaces_kept_values_but_not_a_usrp_row(qtbot, make_tab, make_recording):
+    """D82 over D79: the log describes this folder; a template's USRP-2954 stays."""
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    scan_folder(qtbot, tab, first.root)
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
+    fill_channels(tab, fc_mhz="145.8")
+    tab.param_table.add_row(entry.ParamInput(param="USRP", value="USRP-2954"))
+    tab.param_table.add_row(entry.ParamInput(param="USRP Gain", value="10", unit="dB"))
+    tab.param_table.add_row(entry.ParamInput(param="Antenna", value="Yagi"))
+    folder = with_recorder_log(second, {0: (300.0, 30.0)}, ref="internal")
+    scan_folder(qtbot, tab, folder)
+    assert tab.dtype_combo.currentData() == SampleType.INT16  # was int8, kept
+    assert tab.channel_widgets(0)[1].text() == "300"  # was 145.8, kept
+    assert rows_of(tab) == [
+        (None, "USRP", "USRP-2954", ""),
+        (None, "Antenna", "Yagi", ""),
+        (None, "USRP Gain", "30", "dB"),
+        (None, "Clock reference", "Internal", ""),
+    ]
+    assert any("from the PC clock" in t for t in checklist_texts(tab, ItemState.INFO))
+
+
+def test_typing_ends_the_mark_and_a_rescan_does_not_fill_again(qtbot, make_tab, make_recording):
+    info = make_recording()
+    folder = with_recorder_log(info, {0: (300.0, 30.0)})
+    tab = make_tab()
+    scan_folder(qtbot, tab, folder)
+    fc = tab.channel_widgets(0)[1]
+    fc.clear()
+    qtbot.keyClicks(fc, "301")
+    assert fc.styleSheet() == ""
+    tab.param_table.set_rows([entry.ParamInput(param="USRP Gain", value="12", unit="dB")])
+    tab.start_scan()  # the same folder again
+    wait_idle(qtbot, tab)
+    assert tab.channel_widgets(0)[1].text() == "301"
+    assert rows_of(tab) == [(None, "USRP Gain", "12", "dB")]
+    assert "italic" in tab.channel_widgets(0)[2].styleSheet()  # fs is still from the log
+
+
+def test_a_file_count_that_differs_does_not_block_saving(
+    qtbot, make_tab, make_recording, site_id
+):
+    info = make_recording(n_slots=5)
+    folder = with_recorder_log(info, {0: (300.0, 30.0)}, files_written=7)
+    tab = make_tab()
+    scan_folder(qtbot, tab, folder)
+    assert (
+        "The recorder wrote 7 files; the folder holds 5. 2 files went missing after recording."
+        in checklist_texts(tab, ItemState.INFO)
+    )
+    choose_site(tab, site_id)
+    tab.logged_by_edit.setText("userA")
+    tab.refresh_checklist()
+    assert tab.save_button.isEnabled()
+
+
+def test_edit_mode_reads_the_log_but_fills_nothing(qtbot, make_tab, make_recording, site_id):
+    info = make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)  # fc 145.8, typed before the log exists
+    save_and_wait(qtbot, tab)
+    with_recorder_log(info, {0: (300.0, 30.0)}, gps_locked=False)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    tab.start_scan()
+    wait_idle(qtbot, tab)
+    assert tab.channel_widgets(0)[1].text() == "145.8"
+    assert rows_of(tab) == []
+    assert "The recorder's log says GPS was not locked." in checklist_texts(tab, ItemState.INFO)
+
+
+def test_the_command_line_file_alone_fills_fc_and_fs(qtbot, make_tab, make_recording):
+    info = make_recording(n_channels=2)
+    (Path(info.root) / "log.txt").write_text(
+        "--ref external --channels 0,1 --freq 145.8e6,435e6 --rate 1e3 --gain 25\n",
+        encoding="utf-8",
+    )
+    tab = make_tab()
+    scan_folder(qtbot, tab, info.root)
+    assert [tab.channel_widgets(i)[1].text() for i in (0, 1)] == ["145.8", "435"]
+    assert tab.channel_widgets(0)[2].text() == "1 kHz"
+    assert rows_of(tab) == [
+        (None, "USRP Gain", "25", "dB"),
+        (None, "Clock reference", "External", ""),
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -168,10 +168,26 @@ def test_empty_folder_has_no_channels(tmp_path):
 
 
 def test_folder_with_only_other_files_has_no_channels(tmp_path):
-    write_files(tmp_path, ["notes.txt", "Thumbs.db"])
+    write_files(tmp_path, ["notes.md", "Thumbs.db"])
     result = scan_recording(tmp_path, 1.0)
     assert result.channels == ()
-    assert result.unrecognised == ("Thumbs.db", "notes.txt")
+    assert result.unrecognised == ("Thumbs.db", "notes.md")
+
+
+def test_txt_and_log_files_at_the_top_are_side_files(make_recording):
+    """D82: the recorder's logs belong to the recording; deeper ones stay unrecognised."""
+    info = make_recording(n_channels=2, n_slots=3)
+    root = Path(info.root)
+    write_files(root, ["log.txt", "recorder_x.LOG", "check_quick.txt"], size=7)
+    write_files(root / "0", ["notes.txt"])
+    result = scan_recording(root, 1.0)
+    assert [(f.name, f.size) for f in result.side_files] == [
+        ("check_quick.txt", 7),
+        ("log.txt", 7),
+        ("recorder_x.LOG", 7),
+    ]
+    assert result.unrecognised == ("0/notes.txt",)
+    assert [c.n_files for c in result.channels] == [3, 3]
 
 
 def test_missing_folder_is_an_error(tmp_path):

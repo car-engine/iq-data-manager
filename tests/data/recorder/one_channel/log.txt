@@ -1,0 +1,1 @@
+--ref internal --channels 0 --ants RX2 --freq 300e6 --rate 50e6 --gain 30 --pool-size 60 --folder example\one_channel --log example\one_channel\recorder_one_channel.log --continue --duration 120

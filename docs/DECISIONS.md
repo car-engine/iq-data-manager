@@ -99,6 +99,7 @@ Rules for this file:
 | D79 | A new folder keeps the previous entry's fields | 2026-10-20, version 1.1 | Active |
 | D80 | Log tab templates in files | 2026-10-20, version 1.1 | Active |
 | D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active |
+| D82 | Values from the recorder's log | 2026-10-21, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1711,3 +1712,49 @@ the approved plan. The agent recommended which operations a queue holds.
 
 Affects: SPEC sections 5 and 8, `transferqueue.py`, `gui/transfer_tab.py`,
 `gui/viewer_tab.py`, `app.py`, the user guide.
+
+## D82. Values from the recorder's log
+
+Closes O46. The user asked for it on 2026-10-21 and chose these points: the RF chain
+names "USRP", "USRP Gain" and "Clock reference"; no row for the antenna port; a file
+count that differs from the recorder's is information only.
+
+- The team's recorder writes three files at the top of a recording folder:
+  `recorder_<folder>.log` (the command line, the device, and per channel the actual
+  rate, frequency and gain), `log.txt` (the command line) and `check_quick.txt` (the
+  recorder's own check). The user's two examples of 2026-10-12, with paths and the
+  account name replaced, are in `tests/data/recorder/`.
+- `*.txt` and `*.log` files at the top of a recording folder are side files. The scan
+  lists them with their sizes and no longer reports them as "not recognised". Deeper
+  ones stay unrecognised.
+- After the scan of a new entry, the Log tab fills from the log, once per folder:
+  - fc and fs per channel, from "Actual RX Freq" and "Actual RX Rate". The block that
+    starts "Using channel N" belongs to channel folder N.
+  - the sample type: `sc16` is `int16`, `sc8` is `int8`, `fc32` is `float32`.
+  - "USRP Gain" in dB: one Recording row when every channel has the same gain, else a
+    row per channel. It replaces every "USRP Gain" row of the form.
+  - "Clock reference": GPSDO, Internal or External, from the clock source.
+  - "USRP", as the log names the device, for example "X310 + UBX", only when the form
+    has no "USRP" row. The log cannot tell a USRP-2954 from an X310 with UBX boards,
+    so a row set by a template or kept from the previous entry stays.
+- Where the main log lacks a value, the command line in `log.txt` gives the requested
+  one.
+- Log values replace values kept from the previous folder (D79) or set by a
+  template (D80), because they describe this folder. fc and fs from the log show in
+  italics with a tooltip, like a filled-in fs (D21), until the user types in the
+  field. A rescan of the same folder does not fill again, so edits stay.
+- Edit mode never fills from the log. It shows the information lines.
+- Not stored: the antenna port, the LO offset, buffer settings, the UHD version and
+  the recorder build. They stay in the log files, which D83 copies with the data.
+- Information lines in the checklist, none of which blocks saving: what was filled;
+  the recorder's verdict; times taken from the PC clock; GPS not locked; restarts; a
+  stop reason other than normal; a total file count that differs from the
+  recorder's "Files written". The count can differ for a reason, such as files
+  removed on purpose, and the files cannot be recovered by refusing the entry.
+- A log that cannot be read or chosen (several `recorder_*.log` and none named after
+  the folder) fills nothing and gives one information line.
+- `recorderlog.py` holds the reading, without Qt.
+
+Affects: SPEC sections 6 and 7, `recorderlog.py`, `scan/scanner.py`, `entry.py`,
+`gui/log_tab.py`, `diagnostics/fixtures.py` (its junk file is now `notes.md`), the
+user guide.

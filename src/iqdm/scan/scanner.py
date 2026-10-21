@@ -20,6 +20,9 @@ from pathlib import Path
 from iqdm.models import BYTES_PER_SAMPLE, SampleType
 
 DEFAULT_EXTENSIONS: tuple[str, ...] = (".dat", ".bin")
+# Files at the top of a recording folder with these endings are side files, such as
+# the recorder's logs. They belong to the recording (D82, D83).
+SIDE_FILE_SUFFIXES: tuple[str, ...] = (".txt", ".log")
 GAP_FACTOR = 1.5  # a gap exists where consecutive timestamps differ by more (D12)
 CLOSE_FACTOR = 0.5  # files closer than this many durations are an error (D12)
 PROGRESS_EVERY = 1000  # data files between progress calls and entries between cancel checks
@@ -57,6 +60,18 @@ class DataFile:
     name: str
     timestamp: float
     size: int
+
+
+@dataclass(frozen=True, slots=True)
+class SideFile:
+    """A `*.txt` or `*.log` file at the top of the recording folder (D82, D83)."""
+
+    name: str
+    size: int
+
+
+def is_side_file_name(name: str) -> bool:
+    return name.lower().endswith(SIDE_FILE_SUFFIXES)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,16 +138,18 @@ class ChannelScan:
 
 @dataclass(frozen=True, kw_only=True)
 class ScanResult:
-    """Channels sorted by index, and the entries the scanner did not recognise.
+    """Channels sorted by index, side files, and the entries the scanner did not recognise.
 
     Unrecognised entries are paths relative to the recording folder, '/'-separated.
-    Folders end with '/'.
+    Folders end with '/'. Side files are the `*.txt` and `*.log` files at the top of
+    the recording folder, sorted by name (D82, D83); they are not unrecognised.
     """
 
     root: Path
     file_duration_s: float
     channels: tuple[ChannelScan, ...]
     unrecognised: tuple[str, ...]
+    side_files: tuple[SideFile, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -188,6 +205,7 @@ class _Listing:
     files: list[DataFile]
     dirs: list[str]
     unrecognised: list[str]  # names only; folders end with '/'
+    side_files: list[SideFile]  # filled at the top of the recording folder only
 
 
 def _parse_data_name(name: str, extensions: frozenset[str]) -> float | None:
@@ -198,9 +216,14 @@ def _parse_data_name(name: str, extensions: frozenset[str]) -> float | None:
     return float(stem)
 
 
-def _list_folder(folder: Path, extensions: frozenset[str], tracker: _Tracker) -> _Listing:
-    """List one folder with a single os.scandir call. Sizes come from the entries."""
-    listing = _Listing(files=[], dirs=[], unrecognised=[])
+def _list_folder(
+    folder: Path, extensions: frozenset[str], tracker: _Tracker, *, top: bool = False
+) -> _Listing:
+    """List one folder with a single os.scandir call. Sizes come from the entries.
+
+    With top, `*.txt` and `*.log` files are side files rather than unrecognised.
+    """
+    listing = _Listing(files=[], dirs=[], unrecognised=[], side_files=[])
     tracker.check_cancelled()
     with os.scandir(folder) as entries:
         for entry in entries:
@@ -211,7 +234,10 @@ def _list_folder(folder: Path, extensions: frozenset[str], tracker: _Tracker) ->
                 listing.dirs.append(entry.name)
             elif entry.is_file(follow_symlinks=False):
                 t = _parse_data_name(entry.name, extensions)
-                if t is None:
+                if t is None and top and is_side_file_name(entry.name):
+                    size = entry.stat(follow_symlinks=False).st_size
+                    listing.side_files.append(SideFile(name=entry.name, size=size))
+                elif t is None:
                     listing.unrecognised.append(entry.name)
                 else:
                     size = entry.stat(follow_symlinks=False).st_size
@@ -293,7 +319,7 @@ def scan_recording(
 
     tracker = _Tracker(progress, cancelled)
     try:
-        top = _list_folder(root, exts, tracker)
+        top = _list_folder(root, exts, tracker, top=True)
     except OSError as exc:
         raise ScanError([f"cannot list {root}: {exc}"]) from exc
 
@@ -341,6 +367,7 @@ def scan_recording(
         file_duration_s=file_duration_s,
         channels=tuple(channels),
         unrecognised=tuple(sorted(unrecognised)),
+        side_files=tuple(sorted(top.side_files, key=lambda f: f.name)),
     )
 
 

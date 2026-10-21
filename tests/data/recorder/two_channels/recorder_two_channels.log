@@ -1,0 +1,80 @@
+2026-10-12T03:25:01.739Z Recorder log: example\two_channels\recorder_two_channels.log
+2026-10-12T03:25:01.739Z Build: e0b04a9 (compiled Oct 11 2026 15:11:47)
+2026-10-12T03:25:01.739Z UHD version: 3.15.0.0-0-unknown
+2026-10-12T03:25:01.739Z Command line: rx_samples_to_file_buffered.exe --ref gpsdo --gps-timeout 600 --channels 0,1 --ants RX2,RX2 --freq 300e6,433e6 --rate 50e6 --gain 30 --pool-size 60 --folder example\two_channels --log example\two_channels\recorder_two_channels.log --continue --duration 299
+2026-10-12T03:25:03.928Z X300-family device: added receive-buffer args recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000. A key given in --args overrides its default.
+2026-10-12T03:25:03.937Z EVENT device_args added=recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000
+2026-10-12T03:25:03.937Z Creating the usrp device with: recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000...
+2026-10-12T03:25:14.238Z Using Device: Single USRP:
+  Device: X-Series Device
+  Mboard 0: X310
+  RX Channel: 0
+    RX DSP: 0
+    RX Dboard: A
+    RX Subdev: UBX RX
+  RX Channel: 1
+    RX DSP: 0
+    RX Dboard: B
+    RX Subdev: UBX RX
+  TX Channel: 0
+    TX DSP: 0
+    TX Dboard: A
+    TX Subdev: UBX TX
+  TX Channel: 1
+    TX DSP: 0
+    TX Dboard: B
+    TX Subdev: UBX TX
+2026-10-12T03:25:14.243Z Using channel 0 with antenna RX2
+2026-10-12T03:25:14.243Z Setting RX Rate: 50.000000 Msps...
+2026-10-12T03:25:14.244Z Actual RX Rate: 50.000000 Msps...
+2026-10-12T03:25:14.244Z Setting RX Freq: 300.000000 MHz...
+2026-10-12T03:25:14.244Z Setting RX LO Offset: 0.000000 MHz...
+2026-10-12T03:25:14.245Z Actual RX Freq: 300.000000 MHz...
+2026-10-12T03:25:14.245Z Setting RX Gain: 30.000000 dB...
+2026-10-12T03:25:14.246Z Actual RX Gain: 30.000000 dB...
+2026-10-12T03:25:16.283Z Sensor "lo_locked" locked
+2026-10-12T03:25:16.300Z Using channel 1 with antenna RX2
+2026-10-12T03:25:16.300Z Setting RX Rate: 50.000000 Msps...
+2026-10-12T03:25:16.302Z Actual RX Rate: 50.000000 Msps...
+2026-10-12T03:25:16.302Z Setting RX Freq: 433.000000 MHz...
+2026-10-12T03:25:16.303Z Setting RX LO Offset: 0.000000 MHz...
+2026-10-12T03:25:16.304Z Actual RX Freq: 433.000000 MHz...
+2026-10-12T03:25:16.304Z Setting RX Gain: 30.000000 dB...
+2026-10-12T03:25:16.305Z Actual RX Gain: 30.000000 dB...
+2026-10-12T03:25:18.344Z Sensor "lo_locked" locked
+2026-10-12T03:25:18.344Z Waiting for "ref_locked"...
+2026-10-12T03:25:18.344Z EVENT lock_wait sensor=ref_locked timeout=600
+2026-10-12T03:25:18.346Z "ref_locked" locked after 0 s
+2026-10-12T03:25:18.348Z EVENT lock sensor=ref_locked locked=1
+2026-10-12T03:25:18.348Z Waiting for "gps_locked"...
+2026-10-12T03:25:18.349Z EVENT lock_wait sensor=gps_locked timeout=600
+2026-10-12T03:25:18.420Z "gps_locked" locked after 0 s
+2026-10-12T03:25:18.421Z EVENT lock sensor=gps_locked locked=1
+2026-10-12T03:25:18.421Z Samples per second: 50000000. Samples per recv call (--spb): 500000
+2026-10-12T03:25:18.435Z Write alignment for example\two_channels\0: logical sector 512, physical sector 4096
+2026-10-12T03:25:18.447Z Write alignment for example\two_channels\1: logical sector 512, physical sector 4096
+2026-10-12T03:25:18.447Z File writes: unbuffered, alignment 4096 bytes
+2026-10-12T03:25:18.448Z Buffer pool: 60 sets x 2 channel(s) x 200000000 bytes = 24000.4 MB (17.5% of 137.0 GB physical RAM)
+2026-10-12T03:25:23.488Z Receive thread priority raised
+2026-10-12T03:25:23.488Z Press Ctrl + C to stop streaming...
+2026-10-12T03:25:23.489Z cpu_format: sc16 wire_format: sc16
+2026-10-12T03:25:23.514Z Time source gpsdo, clock source gpsdo
+2026-10-12T03:25:23.588Z GPS lock before time sync: locked
+2026-10-12T03:25:29.140Z Time sync attempt 1: GPSDO time 1791775528, USRP time at last PPS 1791775528.000000000
+2026-10-12T03:25:29.141Z SUCCESS: USRP time synchronized to GPS time
+2026-10-12T03:25:29.141Z EVENT time_sync source=gpsdo second=1791775528 attempt=1
+2026-10-12T03:25:29.142Z Streaming will start at 1791775529
+2026-10-12T03:25:29.143Z EVENT stream_start second=1791775529
+2026-10-12T03:25:31.120Z Wrote example\two_channels\0\1791775529.bin (107 ms, queue 0/60)
+2026-10-12T03:25:31.121Z Wrote example\two_channels\1\1791775529.bin (108 ms, queue 0/60)
+2026-10-12T03:26:23.570Z GPS monitor: gps_locked=1 (query 81 ms)
+2026-10-12T03:30:00.281Z Discarded partial second 1791775799 (10000000 of 50000000 samples)
+2026-10-12T03:30:00.281Z EVENT discard_partial second=1791775799 samples=10000000
+2026-10-12T03:30:00.282Z Packet metadata time checked at 271 second starts: 0 mismatches
+2026-10-12T03:30:00.282Z EVENT stream_stop next_second=1791775799 reason=normal
+2026-10-12T03:30:00.500Z Stopped. Waiting for the writer to finish (0 second(s) queued)...
+2026-10-12T03:30:00.501Z Files written: 540. Peak queue depth: 1 of 60. Longest file write: 212 ms.
+2026-10-12T03:30:00.501Z Write times: 540 files, median 107 ms, p95 155 ms, p99 183 ms, max 212 ms; 0 over 500 ms, 0 over 1000 ms. Longest interval between completed seconds: 1.13 s. Skipped by --threshold: 0.
+2026-10-12T03:30:00.502Z EVENT write_summary files=540 skipped=0 median_ms=107 p95_ms=155 p99_ms=183 max_ms=212 over500=0 over1000=0 max_interval_s=1.13 peak_queue=1 pool=60
+2026-10-12T03:30:00.502Z Done! Stop reason: normal. Restarts: 0. Exit code: 0.
+2026-10-12T03:30:00.502Z EVENT exit code=0 reason=normal restarts=0

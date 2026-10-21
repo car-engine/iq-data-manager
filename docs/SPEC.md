@@ -333,6 +333,17 @@ Values filled in after a scan:
   types in it.
 - **File duration**, from the median step between file timestamps (D22), until the
   user changes the field. Edit mode keeps the stored duration.
+- **From the recorder's log** (D82), when the folder holds one, once per folder of a
+  new entry: fc and fs per channel ("Using channel N" is channel folder N), the
+  sample type (`sc16` int16, `sc8` int8, `fc32` float32), the RF chain rows "USRP
+  Gain" (one Recording row when all channels match) and "Clock reference", and
+  "USRP" only when the form has none. The main log is `recorder_*.log`; `log.txt`
+  gives requested values it lacks. Log values replace kept and template values. fc
+  and fs from the log are shown in italics until the user types in them; an fs from
+  the log does not follow the format fields. Edit mode never fills. Information lines,
+  which do not block saving, name what was filled, the recorder's verdict, a time
+  taken from the PC clock, GPS not locked, restarts, and a file count that differs
+  from the recorder's.
 
 Choosing another folder for a new entry resets only the values that come from the
 scan: start and end, the channel rows, fs and the file duration (D79). Every other
@@ -387,9 +398,10 @@ list of unrecognised entries.
   is a channel with no files.
 - Data files: names whose stem parses as a Unix timestamp (integer, optionally with a
   fractional part: `^\d+(\.\d+)?$`), extensions `.dat` and `.bin` in any letter case
-  (fixed in code; DECISIONS.md D30). Other files, other subfolders, folders inside a
-  channel folder and symbolic links are ignored and listed as "unrecognised" in the
-  result.
+  (fixed in code; DECISIONS.md D30). `*.txt` and `*.log` files at the top of the
+  recording folder are side files, such as the recorder's logs; the result lists them
+  with their sizes (D82). Other files, other subfolders, folders inside a channel
+  folder and symbolic links are ignored and listed as "unrecognised" in the result.
 - Scan errors (D11): data files in the recording folder next to channel folders; a
   numeric folder name with a leading zero, such as `01`; two files in one channel with
   the same timestamp value. The scan stops and lists every such problem.

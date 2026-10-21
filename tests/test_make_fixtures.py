@@ -188,14 +188,14 @@ def test_bin_extension(make_recording):
 def test_junk_files_are_listed(make_recording):
     info = make_recording(junk=True, n_slots=2)
     root = Path(info.root)
-    assert info.unrecognised == ["notes.txt", "README", f"0/{START}.tmp", "0/abc.dat"]
+    assert info.unrecognised == ["notes.md", "README", f"0/{START}.tmp", "0/abc.dat"]
     for rel in info.unrecognised:
         assert (root / rel).is_file()
 
 
 def test_junk_files_in_flat_layout(make_recording):
     info = make_recording(junk=True, flat=True, n_slots=2)
-    assert info.unrecognised == ["notes.txt", "README", f"{START}.tmp", "abc.dat"]
+    assert info.unrecognised == ["notes.md", "README", f"{START}.tmp", "abc.dat"]
 
 
 def test_tone_decodes_as_interleaved_int16_little_endian(make_recording):

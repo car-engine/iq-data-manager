@@ -162,7 +162,7 @@ The first four check the platform and fall back elsewhere. The settings path nee
 | --- | --- | --- |
 | Entry points | `app.py` (window, `--config`, `--db`, `--smoke-test`), `check_main.py` (console program) | |
 | Database | `db/schema.sql`, `db/connection.py`, `db/version.py`, `db/repository.py`, `db/migrations.py`, `db/legacy.py` | All SQL lives in `db/`; only `db/` imports `sqlite3` |
-| Logic without Qt | `entry.py` (Log tab), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
+| Logic without Qt | `entry.py` (Log tab), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81), `recorderlog.py` (values from the recorder's log, D82), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
 | Transfers | `transfer/selection.py`, `pathcheck.py`, `copier.py`, `verify.py`, `uncached.py`, `manifest.py`, `delete.py`, `operations.py` | `delete.py` is the only module that deletes (`tests/test_architecture.py`, ruff TID251) |
 | GUI | `gui/viewer_tab.py`, `log_tab.py`, `transfer_tab.py`, `settings_tab.py`, `workers.py` (`TaskRunner`), `widgets/` | Work over about 100 ms runs in the `TaskRunner` |
 | Diagnostics | `diagnostics/`, wrapped by `tools/` and `IQDataManager-check.exe` | |

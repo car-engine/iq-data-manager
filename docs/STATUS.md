@@ -69,7 +69,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O38, Viewer filters with several choices (D78) | Done, not merged | `viewer-multi-filter`, from `o20-freeze-schema-v1` | `1e212f6` | [2026-10-20-viewer-multi-filter](reports/2026-10-20-viewer-multi-filter.md) |
 | O43, a new folder keeps the previous entry's fields (D79) | Done, not merged | `log-keep-fields`, from `viewer-multi-filter` | `336276a`, `2b49761` (SPEC) | [2026-10-20-log-keep-fields](reports/2026-10-20-log-keep-fields.md) |
 | O44, Log tab templates (D80) | Done, not merged | `log-templates`, from `log-keep-fields` | `740fd54` | [2026-10-20-log-templates](reports/2026-10-20-log-templates.md) |
-| O45 and O41, the queue (D81) | Done, not merged | `transfer-queue`, from `log-templates` | The commit of the work and its report | [2026-10-20-transfer-queue](reports/2026-10-20-transfer-queue.md) |
+| O45 and O41, the queue (D81) | Done, not merged | `transfer-queue`, from `log-templates` | `e1f1147`, `c0252f9` (two fixes found while writing the manual checklist) | [2026-10-20-transfer-queue](reports/2026-10-20-transfer-queue.md) |
+| O46, values from the recorder's log (D82) | Done, not merged | `recorder-log-fill`, from `transfer-queue` | The commit of the work and its report | [2026-10-21-recorder-log-fill](reports/2026-10-21-recorder-log-fill.md) |
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -92,10 +93,11 @@ Requests, faults, questions and known gaps that are not yet decided or done. The
 default is what an agent proposes unless the user decides otherwise. Raise each item
 in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
-table in [reports/M0.md](reports/M0.md). The next free number is O46.
+table in [reports/M0.md](reports/M0.md). The next free number is O48.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
+| O47 | Copy and archive the recorder's log files with the recording | 1.1.0 (approved 2026-10-21) | Every `*.txt` and `*.log` file at the top of the recording folder goes with every copy and archive, partial copies too; listed in the manifest and verified like data files; Delete laptop copy deletes them with the data. Check archive and Compare with laptop copy compare channels only. Transfer counts and sizes include them. | User, 2026-10-21 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
@@ -148,6 +150,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O44 | Import and export a Log tab template file | D80 (2026-10-20) |
 | O45 | A queue in the Archive / copy tab | D81 (2026-10-20) |
 | O41 | A batch Check archive for many recordings | D81 (2026-10-20): Check archive items in the queue |
+| O46 | Fill Log tab fields from the recorder's log files | D82 (2026-10-21) |
 
 ## Pending checks for the user
 
@@ -234,6 +237,13 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   databases, 2026-10-20).
 - `dev/o45-shots/` (queue screenshots, their script and scratch databases,
   2026-10-20).
+- `dev/v1.1-test/` (the manual checklist for 1.1, its test data of 40 MB and the
+  generator), after the manual test; also stop sharing its `data\nas` folder.
+- `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
+  folders, 2026-10-21).
+- `recorder/` at the repository root: the user's two example recordings of
+  2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder
+  is not tracked; keep or remove it as you wish.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch

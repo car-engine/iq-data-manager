@@ -63,7 +63,7 @@ def test_an_existing_recording_is_the_source(tmp_path, capsys, make_recording):
     assert (copied / "0" / "1790733600.dat").read_bytes() == (
         tmp_path / "rec0" / "0" / "1790733600.dat"
     ).read_bytes()
-    assert (copied / "notes.txt").exists()  # every file under the source is copied
+    assert (copied / "notes.md").exists()  # every file under the source is copied
 
 
 def test_a_repeated_worker_count_runs_once(tmp_path, capsys, make_recording):

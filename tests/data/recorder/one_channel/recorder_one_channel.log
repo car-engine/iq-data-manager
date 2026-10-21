@@ -1,0 +1,61 @@
+2026-10-12T10:33:00.721Z Recorder log: example\one_channel\recorder_one_channel.log
+2026-10-12T10:33:00.722Z Build: e0b04a9 (compiled Oct 11 2026 15:11:47)
+2026-10-12T10:33:00.722Z UHD version: 3.15.0.0-0-unknown
+2026-10-12T10:33:00.722Z Command line: rx_samples_to_file_buffered.exe --ref internal --channels 0 --ants RX2 --freq 300e6 --rate 50e6 --gain 30 --pool-size 60 --folder example\one_channel --log example\one_channel\recorder_one_channel.log --continue --duration 120
+2026-10-12T10:33:02.938Z X300-family device: added receive-buffer args recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000. A key given in --args overrides its default.
+2026-10-12T10:33:02.974Z EVENT device_args added=recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000
+2026-10-12T10:33:02.975Z Creating the usrp device with: recv_frame_size=8000,num_recv_frames=1024,recv_buff_size=50000000...
+2026-10-12T10:33:12.932Z Using Device: Single USRP:
+  Device: X-Series Device
+  Mboard 0: X310
+  RX Channel: 0
+    RX DSP: 0
+    RX Dboard: A
+    RX Subdev: UBX RX
+  RX Channel: 1
+    RX DSP: 0
+    RX Dboard: B
+    RX Subdev: UBX RX
+  TX Channel: 0
+    TX DSP: 0
+    TX Dboard: A
+    TX Subdev: UBX TX
+  TX Channel: 1
+    TX DSP: 0
+    TX Dboard: B
+    TX Subdev: UBX TX
+2026-10-12T10:33:12.937Z Using channel 0 with antenna RX2
+2026-10-12T10:33:12.937Z Setting RX Rate: 50.000000 Msps...
+2026-10-12T10:33:12.938Z Actual RX Rate: 50.000000 Msps...
+2026-10-12T10:33:12.938Z Setting RX Freq: 300.000000 MHz...
+2026-10-12T10:33:12.938Z Setting RX LO Offset: 0.000000 MHz...
+2026-10-12T10:33:12.939Z Actual RX Freq: 300.000000 MHz...
+2026-10-12T10:33:12.939Z Setting RX Gain: 30.000000 dB...
+2026-10-12T10:33:12.939Z Actual RX Gain: 30.000000 dB...
+2026-10-12T10:33:14.968Z Sensor "lo_locked" locked
+2026-10-12T10:33:14.968Z Samples per second: 50000000. Samples per recv call (--spb): 500000
+2026-10-12T10:33:14.977Z Write alignment for example\one_channel\0: logical sector 512, physical sector 4096
+2026-10-12T10:33:14.977Z File writes: unbuffered, alignment 4096 bytes
+2026-10-12T10:33:14.978Z Buffer pool: 60 sets x 1 channel(s) x 200000000 bytes = 12000.2 MB (8.8% of 137.0 GB physical RAM)
+2026-10-12T10:33:17.379Z Receive thread priority raised
+2026-10-12T10:33:17.379Z Press Ctrl + C to stop streaming...
+2026-10-12T10:33:17.379Z cpu_format: sc16 wire_format: sc16
+2026-10-12T10:33:17.402Z Time source internal, clock source internal
+2026-10-12T10:33:17.402Z WARNING: Timestamps come from the PC clock (time source internal). File names are only as accurate as this PC's clock.
+2026-10-12T10:33:17.402Z Device time set from the PC clock: PC 1791801197.402646, device 1791801197.402666
+2026-10-12T10:33:17.403Z EVENT time_sync source=pc_now pc=1791801197.402646
+2026-10-12T10:33:17.403Z Streaming will start at 1791801198
+2026-10-12T10:33:17.403Z EVENT stream_start second=1791801198
+2026-10-12T10:33:19.154Z Wrote example\one_channel\0\1791801198.bin (154 ms, queue 0/60)
+2026-10-12T10:33:20.192Z Wrote example\one_channel\0\1791801199.bin (192 ms, queue 0/60)
+2026-10-12T10:35:17.084Z Wrote example\one_channel\0\1791801316.bin (84 ms, queue 0/60)
+2026-10-12T10:35:17.410Z Discarded partial second 1791801317 (20500000 of 50000000 samples)
+2026-10-12T10:35:17.410Z EVENT discard_partial second=1791801317 samples=20500000
+2026-10-12T10:35:17.410Z Packet metadata time checked at 120 second starts: 0 mismatches
+2026-10-12T10:35:17.410Z EVENT stream_stop next_second=1791801317 reason=normal
+2026-10-12T10:35:17.556Z Stopped. Waiting for the writer to finish (0 second(s) queued)...
+2026-10-12T10:35:17.557Z Files written: 119. Peak queue depth: 1 of 60. Longest file write: 192 ms.
+2026-10-12T10:35:17.557Z Write times: 119 files, median 96 ms, p95 162 ms, p99 164 ms, max 192 ms; 0 over 500 ms, 0 over 1000 ms. Longest interval between completed seconds: 1.10 s. Skipped by --threshold: 0.
+2026-10-12T10:35:17.557Z EVENT write_summary files=119 skipped=0 median_ms=96 p95_ms=162 p99_ms=164 max_ms=192 over500=0 over1000=0 max_interval_s=1.10 peak_queue=1 pool=60
+2026-10-12T10:35:17.557Z Done! Stop reason: normal. Restarts: 0. Exit code: 0.
+2026-10-12T10:35:17.557Z EVENT exit code=0 reason=normal restarts=0
