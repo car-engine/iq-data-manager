@@ -1,5 +1,58 @@
 # IQ Data Manager: release notes
 
+## Version 1.1.0 (2026-10-22)
+
+Faster logging of many folders, and archives of many recordings in one go. It uses the
+same catalogue as version 1.0.0; nothing needs to be upgraded. Install it over 1.0.0
+in a new program folder, and copy `defaults.toml` across.
+
+### What is new
+
+- **Logging several folders.** When you choose the next folder, the Log recording tab
+  keeps what you typed for the last one: the recording fields, the file format, the
+  band and centre frequency of each channel, and the RF chain. The scan fills in the
+  times, the sample rate and the file duration again. A note above the checklist
+  names what was kept, so you can check it for the new folder. **Clear form** starts
+  again from empty fields.
+- **Values from the recorder's log.** For a folder made by the recording task, the scan
+  reads the recorder's log files. It fills in the centre frequency and sample rate of
+  each channel, the sample type, and the RF chain rows USRP Gain and Clock reference.
+  It fills in USRP only when the form has none. These values show in italics. The
+  checklist warns when the times came from the PC clock, GPS was not locked, or the
+  folder holds fewer files than the recorder wrote.
+- **Templates.** **Export template...** saves the fields you choose to a file, for
+  example a USRP and its antennas. **Import template...** fills them in again. Keep
+  shared templates in a common folder.
+- **Viewer filters with several choices.** Site, project and band are lists with a tick
+  box per entry. Tick two sites to see the recordings of either.
+- **A queue in the Archive / copy tab.** Select several recordings in the Viewer and
+  click **Add to queue**, or set one up in the form and add it in place of running it.
+  **Start** runs them one after another; **Pause** stops the running one, and Start
+  continues it without copying its files again. After each archive the queue can run
+  Check before delete. **Check archive** can be queued for many recordings at once,
+  for example the imported legacy ones.
+- **The recorder's log files travel with the recording.** Every copy and archive also
+  takes the `.txt` and `.log` files in the recording folder, and Delete laptop copy
+  deletes them with the data.
+- **Clearer messages.** The line under the Log tab's buttons shows ✓ for done, ⓘ for
+  done with something to check, and ✗ for not done. In the queue, an archive whose
+  Check before delete did not pass shows "ⓘ Archived, check needed", not "Failed":
+  the recording is on the NAS, and only the check is still to do.
+
+### Known limits
+
+- **The queue is not kept** when the app closes. A paused copy or archive stays under
+  "Unfinished transfers".
+- **The recorder's log cannot tell a USRP-2954 from an X310 with UBX boards.** Keep a
+  template that sets USRP to the right unit.
+- **Recordings archived with version 1.0.0** keep their log files on the laptop after
+  Delete laptop copy.
+- **Check before delete through a Windows share that the same PC serves to itself**
+  fails for files whose size is not a multiple of 512 bytes. The real NAS does not
+  have this limit.
+- The limits of version 1.0.0 below still apply, except where this section says
+  otherwise.
+
 ## Version 1.0.0 (2026-10-12)
 
 The first release for the team. It replaces the logging scripts and hand-made copies
