@@ -146,7 +146,9 @@ The Log recording tab adds a recording folder to the catalogue.
    channel.
 
 The **Before saving** checklist shows what is still to do and what is wrong. **Save
-entry** is possible when the checklist shows no error and nothing to do.
+entry** is possible when the checklist shows no error and nothing to do. The line under
+the buttons shows the result of what you did last, with the same marks: ✓ done, ⓘ
+done with something to check, ✗ not done.
 
 **Logging several folders.** When you choose the next folder, the form keeps what you
 typed for the last one: the recording fields, the file format, the band and centre

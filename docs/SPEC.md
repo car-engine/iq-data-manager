@@ -367,6 +367,9 @@ information line and a "Use parent folder" button. It does not block saving (D27
 Save writes the recording, channels and params in one transaction and confirms it in a
 pop-up. Edit mode loads an existing recording into the same form and updates it.
 
+The message line under the buttons shows each message with the checklist's mark and
+colour (D84): ✓ success, ⓘ information, ✗ failure, ○ still to do. "Saving..." is plain.
+
 Edit mode (DECISIONS.md D16):
 
 - It opens from the "Edit existing entry" button, shown when a scanned folder is

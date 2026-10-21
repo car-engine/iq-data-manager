@@ -101,6 +101,7 @@ Rules for this file:
 | D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active |
 | D82 | Values from the recorder's log | 2026-10-21, version 1.1 | Active |
 | D83 | The recorder's log files travel with the recording | 2026-10-21, version 1.1 | Active |
+| D84 | The Log tab's message line shows its state | 2026-10-22, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1786,3 +1787,25 @@ is copied and archived with the data.
 
 Affects: SPEC section 8, `transfer/selection.py`, `transfer/operations.py`
 (`compare_with_laptop`), `movecopy.py`, the user guide.
+
+## D84. The Log tab's message line shows its state
+
+Closes O48. Found in the user's manual test of 2026-10-22: every message under the
+Log tab's buttons was plain text, so "Template not loaded" looked like "Template
+saved". The other tabs already colour their message lines.
+
+- Each message carries a state, shown with the checklist's mark and colour, which
+  suit the light and the dark theme (D38):
+  - ✓ green for success: saved, changes saved, site or project added, template saved,
+    template loaded with every name found;
+  - ⓘ amber for information: a template that names a site or project the catalogue
+    lacks, values of a missing channel removed, no changes to save, nothing saved
+    after No, "Template not saved." after No;
+  - ✗ red for failure: not saved, cannot open or read, folder cannot be logged,
+    template not loaded or not saved;
+  - ○ grey for something still to do: no database, choose a folder first, complete
+    the checklist first.
+- "Saving..." stays plain.
+- The colour follows a switch between the light and the dark theme.
+
+Affects: SPEC section 6, `gui/log_tab.py`.

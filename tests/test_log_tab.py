@@ -122,7 +122,7 @@ def test_without_database_save_is_disabled(qtbot):
     tab = LogTab(Config())
     qtbot.addWidget(tab)
     assert not tab.runner.busy
-    assert "No database configured" in tab.message_label.text()
+    assert "No database configured" in tab.message_text
     assert not tab.save_button.isEnabled()
     assert tab.mode_label.text() == "New entry"
     assert "Scan the folder" in checklist_texts(tab, ItemState.TODO)
@@ -157,7 +157,7 @@ def test_logged_by_defaults_to_the_login_name(make_tab, monkeypatch):
 
 def test_database_that_cannot_be_read_is_reported(make_tab, tmp_path):
     tab = make_tab(Config(db_path=str(tmp_path / "missing.db")))
-    assert "Cannot read the database" in tab.message_label.text()
+    assert "Cannot read the database" in tab.message_text
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,7 @@ def test_drive_root_cannot_be_logged(make_tab, tmp_path):
     assert any(t.startswith("Folder cannot be logged: a drive or share root") for t in errors)
     tab.start_scan()
     assert not tab.runner.busy
-    assert tab.message_label.text().startswith("Folder cannot be logged")
+    assert tab.message_text.startswith("Folder cannot be logged")
 
 
 def test_scan_fills_channel_table_and_times(qtbot, make_tab, make_recording):
@@ -339,7 +339,7 @@ def test_save_writes_the_recording(qtbot, make_tab, make_recording, db_path, sit
     assert tab.save_button.isEnabled()
 
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved as recording 1."
+    assert tab.message_text == "Saved as recording 1."
     rec = entry.load_recording(db_path, 1)
     assert rec.logged_by == "userA"
     assert rec.site_id == site_id
@@ -382,7 +382,7 @@ def test_save_needs_a_clean_checklist(qtbot, make_tab, make_recording, site_id, 
     tab.channel_widgets(0)[2].setText("")
     tab.save()
     assert not tab.runner.busy
-    assert tab.message_label.text() == "Complete or fix the items in the checklist first."
+    assert tab.message_text == "Complete or fix the items in the checklist first."
     assert entry.find_logged(db_path, tab._location) is None
 
 
@@ -396,7 +396,7 @@ def test_save_failure_is_reported(qtbot, make_tab, make_recording, site_id, monk
 
     monkeypatch.setattr("iqdm.entry.save_new", busy)
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Not saved: The database is in use by someone else."
+    assert tab.message_text == "Not saved: The database is in use by someone else."
     assert tab.save_button.isEnabled()
 
 
@@ -408,7 +408,7 @@ def test_add_site(qtbot, make_tab, monkeypatch, db_path):
     qtbot.waitUntil(lambda: tab.site_combo.count() == 1)
     wait_idle(qtbot, tab)
     assert tab.site_combo.currentText() == "New site"
-    assert tab.message_label.text() == "Added site New site."
+    assert tab.message_text == "Added site New site."
 
 
 def test_add_duplicate_site_is_reported(qtbot, make_tab, monkeypatch, site_id):
@@ -416,7 +416,7 @@ def test_add_duplicate_site_is_reported(qtbot, make_tab, monkeypatch, site_id):
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("sitea", True))
     tab.add_site()
     wait_idle(qtbot, tab)
-    assert tab.message_label.text().startswith("Site not added:")
+    assert tab.message_text.startswith("Site not added:")
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +445,7 @@ def test_add_project_selects_it(qtbot, make_tab, monkeypatch):
     qtbot.waitUntil(lambda: tab.project_combo.count() == 2)
     wait_idle(qtbot, tab)
     assert tab.project_combo.currentText() == "Radar Trial"
-    assert tab.message_label.text() == "Added project Radar Trial."
+    assert tab.message_text == "Added project Radar Trial."
 
 
 def test_add_duplicate_project_is_reported(qtbot, make_tab, monkeypatch, db_path):
@@ -454,7 +454,7 @@ def test_add_duplicate_project_is_reported(qtbot, make_tab, monkeypatch, db_path
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("radar trial", True))
     tab.add_project()
     wait_idle(qtbot, tab)
-    assert tab.message_label.text().startswith("Project not added:")
+    assert tab.message_text.startswith("Project not added:")
 
 
 def test_save_with_and_without_a_project(qtbot, make_tab, make_recording, site_id, db_path):
@@ -462,7 +462,7 @@ def test_save_with_and_without_a_project(qtbot, make_tab, make_recording, site_i
     tab = make_tab()
     logged_ready(qtbot, tab, make_recording(), site_id)
     save_and_wait(qtbot, tab)  # no project: optional
-    assert tab.message_label.text() == "Saved as recording 1.", checklist_texts(tab)
+    assert tab.message_text == "Saved as recording 1.", checklist_texts(tab)
     assert entry.load_recording(db_path, 1).project_id is None
     tab.clear_form()
     logged_ready(qtbot, tab, make_recording(), site_id)
@@ -482,7 +482,7 @@ def test_edit_changes_the_project_without_a_rescan(
     assert tab.project_combo.currentData() is None
     tab.project_combo.setCurrentIndex(tab.project_combo.findData(project))
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved changes to recording 1."
+    assert tab.message_text == "Saved changes to recording 1."
     assert entry.load_recording(db_path, 1).project_id == project
     tab.load_recording(1)
     wait_idle(qtbot, tab)
@@ -528,7 +528,7 @@ def saved_tab(qtbot, make_tab, info, site_id) -> LogTab:
     logged_ready(qtbot, tab, info, site_id)
     tab.param_table.add_row(entry.ParamInput(param="Gain", value="30", channel_index=1))
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved as recording 1.", checklist_texts(tab)
+    assert tab.message_text == "Saved as recording 1.", checklist_texts(tab)
     return tab
 
 
@@ -560,7 +560,7 @@ def test_edit_metadata_and_save(qtbot, make_tab, make_recording, site_id, db_pat
     tab.remarks_edit.setPlainText("edited")
     tab.channel_widgets(1)[1].setText("433.92")
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved changes to recording 1."
+    assert tab.message_text == "Saved changes to recording 1."
     rec = entry.load_recording(db_path, 1)
     assert rec.remarks == "edited"
     assert rec.channels[1].fc_hz == 433_920_000.0
@@ -586,7 +586,7 @@ def test_an_edit_of_an_entry_archived_meanwhile_is_refused(
     tab.saved.connect(saves.append)
     tab.remarks_edit.setPlainText("typo fixed")
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == (
+    assert tab.message_text == (
         "Not saved: Recording 1 changed after you opened it, for example by an archive or "
         "a check. Open it again with Edit entry and make the change there."
     )
@@ -607,7 +607,7 @@ def test_an_edit_without_changes_writes_nothing(qtbot, make_tab, make_recording,
     wait_idle(qtbot, tab)
     tab.save_button.click()
     wait_idle(qtbot, tab)
-    assert tab.message_label.text() == "No changes to save."
+    assert tab.message_text == "No changes to save."
     assert saves == []
     assert not tab.is_saving
     assert entry.load_recording(db_path, 1).updated_at == before
@@ -647,7 +647,7 @@ def test_rescan_that_removes_a_channel_asks_first(
     assert "The rescan removes channel 1 and 1 parameter. Saving asks for confirmation." in infos
     # D20: the Gain row on channel 1 left the form with the rescan.
     assert tab.param_table.rows() == []
-    assert tab.message_label.text() == (
+    assert tab.message_text == (
         "The rescan no longer finds channel 1. 1 RF chain row of that channel was removed "
         "from the form. Saving asks for confirmation."
     )
@@ -667,14 +667,14 @@ def test_rescan_that_removes_a_channel_asks_first(
     assert "with 1 RF chain parameter." in questions[0]
     rec = entry.load_recording(db_path, 1)
     if answer == QMessageBox.StandardButton.No:
-        assert tab.message_label.text() == (
+        assert tab.message_text == (
             "Nothing saved. The channels and their RF chain rows stay in the database. "
             "Open the entry again to see the stored rows."
         )
         assert [c.channel_index for c in rec.channels] == [0, 1]
         assert len(rec.params) == 1
     else:
-        assert tab.message_label.text() == "Saved changes to recording 1."
+        assert tab.message_text == "Saved changes to recording 1."
         assert [c.channel_index for c in rec.channels] == [0]
         assert rec.params == []
 
@@ -738,7 +738,7 @@ def test_rescan_without_a_removed_channel_keeps_every_row(qtbot, make_tab, make_
     tab.start_scan()
     wait_idle(qtbot, tab)
     assert [p.param for p in tab.param_table.rows()] == ["Gain"]
-    assert tab.message_label.text() == ""
+    assert tab.message_text == ""
 
 
 # ---------------------------------------------------------------------------
@@ -896,12 +896,12 @@ def test_messages_clear_for_a_new_folder(qtbot, make_tab, make_recording, site_i
     tab = make_tab()
     logged_ready(qtbot, tab, first, site_id)
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved as recording 1."
+    assert tab.message_text == "Saved as recording 1."
     tab.folder_edit.setText(second.root)
-    assert tab.message_label.text() == ""
+    assert tab.message_text == ""
     tab.show_message("old")
     tab.start_scan()
-    assert tab.message_label.text() == ""
+    assert tab.message_text == ""
     wait_idle(qtbot, tab)
     assert tab.state_note.text().startswith("Archive state on save: local.")
 
@@ -1015,7 +1015,7 @@ def test_new_folder_keeps_format_channels_and_rf_chain(qtbot, make_tab, make_rec
         "Kept from the previous entry: int8, planar_iq, big-endian, header 64 bytes; "
         "band and fc of 2 channels; 2 RF chain rows."
     )
-    assert tab.message_label.text() == ""
+    assert tab.message_text == ""
 
 
 def test_typing_a_folder_keeps_the_rf_chain(qtbot, make_tab, make_recording):
@@ -1047,7 +1047,7 @@ def test_values_of_channels_the_new_folder_lacks_are_removed(qtbot, make_tab, ma
     tab.param_table.add_row(entry.ParamInput(param="LNA", value="20", channel_index=1))
     scan_folder(qtbot, tab, one.root)
     assert [p.param for p in tab.param_table.rows()] == ["SDR"]
-    assert tab.message_label.text() == (
+    assert tab.message_text == (
         "This folder has no channel 1. "
         "Removed from the form: band and fc, 2 RF chain rows of that channel."
     )
@@ -1139,7 +1139,7 @@ def test_a_scan_fills_values_from_the_recorder_log(qtbot, make_tab, make_recordi
     choose_site(tab, site_id)
     tab.logged_by_edit.setText("userA")
     save_and_wait(qtbot, tab)
-    assert tab.message_label.text() == "Saved as recording 1."
+    assert tab.message_text == "Saved as recording 1."
 
 
 def test_the_log_replaces_kept_values_but_not_a_usrp_row(qtbot, make_tab, make_recording):
@@ -1281,12 +1281,12 @@ def test_export_then_import_gives_the_same_form(
     path = tmp_path / "templates" / "usrp.toml"
     path.parent.mkdir()
     tab.export_template(path, set(templates.TemplateField))
-    assert tab.message_label.text() == f"Template saved: {path}"
+    assert tab.message_text == f"Template saved: {path}"
     tab.clear_form()
     scan_folder(qtbot, tab, make_recording(n_channels=2).root)
     tab.import_template(path)
     assert typed_fields(tab) == before
-    assert tab.message_label.text().startswith("Template loaded: Logged by, Site, Project")
+    assert tab.message_text.startswith("Template loaded: Logged by, Site, Project")
     fs = tab.channel_widgets(0)[2]
     assert fs.text() == "1 kHz"  # from the scan, not from the template
 
@@ -1333,7 +1333,7 @@ def test_import_names_a_site_the_catalogue_lacks(qtbot, make_tab, site_id, tmp_p
     tab.import_template(path)
     assert tab.site_combo.currentData() == site_id
     assert tab.logged_by_edit.text() == "userB"
-    assert "Site 'Hilltop' is not in the catalogue." in tab.message_label.text()
+    assert "Site 'Hilltop' is not in the catalogue." in tab.message_text
 
 
 def test_a_wrong_template_changes_nothing(qtbot, make_tab, tmp_path):
@@ -1341,7 +1341,7 @@ def test_a_wrong_template_changes_nothing(qtbot, make_tab, tmp_path):
     path.write_text('format_version = 1\nsample_type = "int12"\n', encoding="utf-8")
     tab = make_tab()
     tab.import_template(path)
-    assert tab.message_label.text().startswith("Template not loaded: 'sample_type'")
+    assert tab.message_text.startswith("Template not loaded: 'sample_type'")
     assert tab.dtype_combo.currentData() == SampleType.INT16
 
 
@@ -1384,7 +1384,7 @@ def test_export_asks_before_it_replaces_a_template(qtbot, make_tab, tmp_path, mo
     tab.export_template(fields={templates.TemplateField.FORMAT})
     assert asked == [(REPLACE_TEMPLATE_TITLE, replace_template_question(path))]
     assert templates.read_template(path) == templates.LogTemplate(site="Lab")
-    assert tab.message_label.text() == "Template not saved."
+    assert tab.message_text == "Template not saved."
 
 
 # ---------------------------------------------------------------------------
@@ -1614,7 +1614,7 @@ def test_removing_the_database_path_disables_save(qtbot, make_tab, make_recordin
     tab.apply_config(Config())
     wait_idle(qtbot, tab)
     assert tab.site_combo.count() == 0
-    assert "No database configured" in tab.message_label.text()
+    assert "No database configured" in tab.message_text
     assert not tab.save_button.isEnabled()
 
 
@@ -1666,3 +1666,61 @@ def test_edit_mode_counts_as_unsaved_input(qtbot, make_tab, make_recording, site
     wait_idle(qtbot, tab)
     assert tab.has_unsaved_input()
     assert not tab.is_saving
+
+
+# ---------------------------------------------------------------------------
+# The message line shows its state (D84)
+# ---------------------------------------------------------------------------
+
+
+def shown(tab: LogTab) -> tuple[str, str]:
+    """The message line's text as shown, and its colour."""
+    return tab.message_label.text(), tab.message_label.styleSheet()
+
+
+@pytest.mark.parametrize("theme", [DARK, LIGHT], ids=["dark", "light"])
+def test_messages_show_their_mark_and_colour(
+    qtbot, make_tab, make_recording, site_id, tmp_path, app_palette, theme
+):
+    app_palette(theme)
+    colours = DARK_COLOURS if theme is DARK else LIGHT_COLOURS
+    tab = make_tab()
+    logged_ready(qtbot, tab, make_recording(), site_id)
+    save_and_wait(qtbot, tab)
+    ok = f"color: {colours[ItemState.OK].name()};"
+    assert shown(tab) == ("\N{CHECK MARK}  Saved as recording 1.", ok)
+    assert tab.message_state is ItemState.OK
+
+    unknown = tmp_path / "unknown.toml"
+    templates.write_template(unknown, templates.LogTemplate(site="Hilltop"))
+    tab.import_template(unknown)
+    text, style = shown(tab)
+    assert text.startswith(f"{MARKS[ItemState.INFO]}  Template loaded: Site.")
+    assert style == f"color: {colours[ItemState.INFO].name()};"
+
+    broken = tmp_path / "broken.toml"
+    broken.write_text('format_version = 1\nsampletype = "int8"\n', encoding="utf-8")
+    tab.import_template(broken)
+    text, style = shown(tab)
+    assert text == (
+        f"{MARKS[ItemState.ERROR]}  Template not loaded: "
+        "Unknown entry in the template: sampletype."
+    )
+    assert style == f"color: {colours[ItemState.ERROR].name()};"
+
+
+def test_the_message_colour_follows_a_theme_switch(qtbot, make_tab, app_palette):
+    app_palette(LIGHT)
+    tab = make_tab()
+    tab.show_message("Choose a folder first.", ItemState.TODO)
+    assert shown(tab)[1] == f"color: {LIGHT_COLOURS[ItemState.TODO].name()};"
+    app_palette(DARK)  # the change reaches the tab as an event
+    dark = f"color: {DARK_COLOURS[ItemState.TODO].name()};"
+    qtbot.waitUntil(lambda: shown(tab)[1] == dark, timeout=2_000)
+
+
+def test_a_message_without_a_state_is_plain(make_tab):
+    tab = make_tab()
+    tab.show_message("Saving...")
+    assert shown(tab) == ("Saving...", "")
+    assert tab.message_text == "Saving..."

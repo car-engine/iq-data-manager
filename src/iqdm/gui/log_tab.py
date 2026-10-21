@@ -150,6 +150,7 @@ class LogTab(QWidget):
         self._carried: dict[int, ChannelInput] = {}
         self._kept = False  # the form holds values kept from the previous entry (D79)
         self._template_folder = ""  # the folder of the last template file, this session
+        self._message: tuple[ItemState | None, str] = (None, "")  # the line under the buttons
         self._recorder: recorderlog.RecorderLog | None = None  # the scanned folder's logs
         self._log_filled: tuple[str, ...] = ()  # what the log filled in, for the checklist
         self._log_applied_for: str | None = None  # the folder the log filled in for
@@ -390,6 +391,7 @@ class LogTab(QWidget):
             _restyle_fields(self)
             if hasattr(self, "kept_note"):  # the palette can change before _build ends
                 self._show_kept_note()
+                self._show_message()
         super().changeEvent(event)
 
     # =====================================================================
@@ -449,8 +451,29 @@ class LogTab(QWidget):
         else:
             self.refresh_checklist()
 
-    def show_message(self, text: str) -> None:
-        self.message_label.setText(text)
+    def show_message(self, text: str, state: ItemState | None = None) -> None:
+        """The line under the buttons. A state adds its mark and colour (D84)."""
+        self._message = (state, text)
+        self._show_message()
+
+    @property
+    def message_text(self) -> str:
+        """The message line's text, without its mark."""
+        return self._message[1]
+
+    @property
+    def message_state(self) -> ItemState | None:
+        return self._message[0]
+
+    def _show_message(self) -> None:
+        state, text = self._message
+        if state is None or not text:
+            self.message_label.setText(text)
+            self.message_label.setStyleSheet("")
+            return
+        self.message_label.setText(f"{MARKS[state]}  {text}")
+        colour = colours_for(self.palette())[state]
+        self.message_label.setStyleSheet(f"color: {colour.name()};")
 
     def current_input(self) -> EntryInput:
         return EntryInput(
@@ -503,7 +526,7 @@ class LogTab(QWidget):
         self.remarks_edit.clear()
         self._reset_all_fields()
         self.mode_label.setText("New entry")
-        self.show_message("" if self.config.db_path else NO_DATABASE)
+        self.show_message("" if self.config.db_path else NO_DATABASE, ItemState.TODO)
         self.refresh_checklist()
 
     def _reset_all_fields(self) -> None:
@@ -562,7 +585,8 @@ class LogTab(QWidget):
             self.show_message(
                 entry.missing_channels_text(
                     channels, bool(gone), sum(1 for p in removed_rows if not p.is_blank)
-                )
+                ),
+                ItemState.INFO,
             )
 
     def _clear_scan(self) -> None:
@@ -877,7 +901,9 @@ class LogTab(QWidget):
         self.runner.start(
             lambda task: entry.load_choices(db),
             on_success=loaded,
-            on_failure=lambda exc: self.show_message(f"Cannot read the database: {exc}"),
+            on_failure=lambda exc: self.show_message(
+                f"Cannot read the database: {exc}", ItemState.ERROR
+            ),
         )
 
     def _choices_loaded(
@@ -910,7 +936,7 @@ class LogTab(QWidget):
     def add_site(self) -> None:
         db = self.config.db_path
         if not db:
-            self.show_message(NO_DATABASE)
+            self.show_message(NO_DATABASE, ItemState.TODO)
             return
         name, ok = QInputDialog.getText(self, "Add site", "Site name:")
         if not ok or not name.strip():
@@ -918,12 +944,12 @@ class LogTab(QWidget):
         self.runner.start(
             lambda task: entry.add_site(db, name),
             on_success=lambda site: self._site_added(site),
-            on_failure=lambda exc: self.show_message(f"Site not added: {exc}"),
+            on_failure=lambda exc: self.show_message(f"Site not added: {exc}", ItemState.ERROR),
         )
 
     def _site_added(self, site: object) -> None:
         site_id = getattr(site, "id", None)
-        self.show_message(f"Added site {getattr(site, 'name', '')}.")
+        self.show_message(f"Added site {getattr(site, 'name', '')}.", ItemState.OK)
         self.reload_choices(select_site=site_id)
 
     def _select_project(self, project_id: int | None) -> None:
@@ -934,7 +960,7 @@ class LogTab(QWidget):
     def add_project(self) -> None:
         db = self.config.db_path
         if not db:
-            self.show_message(NO_DATABASE)
+            self.show_message(NO_DATABASE, ItemState.TODO)
             return
         name, ok = QInputDialog.getText(self, "Add project", "Project name:")
         if not ok or not name.strip():
@@ -942,11 +968,13 @@ class LogTab(QWidget):
         self.runner.start(
             lambda task: entry.add_project(db, name),
             on_success=lambda project: self._project_added(project),
-            on_failure=lambda exc: self.show_message(f"Project not added: {exc}"),
+            on_failure=lambda exc: self.show_message(
+                f"Project not added: {exc}", ItemState.ERROR
+            ),
         )
 
     def _project_added(self, project: object) -> None:
-        self.show_message(f"Added project {getattr(project, 'name', '')}.")
+        self.show_message(f"Added project {getattr(project, 'name', '')}.", ItemState.OK)
         self.reload_choices(select_project=getattr(project, "id", None))
 
     # =====================================================================
@@ -958,10 +986,10 @@ class LogTab(QWidget):
             return
         folder = self.folder_edit.text().strip()
         if not folder:
-            self.show_message("Choose a folder first.")
+            self.show_message("Choose a folder first.", ItemState.TODO)
             return
         if self._original is None and self._location is None:
-            self.show_message(f"Folder cannot be logged: {self._location_error}")
+            self.show_message(f"Folder cannot be logged: {self._location_error}", ItemState.ERROR)
             return
         duration = self.duration_spin.value()
         db = self.config.db_path
@@ -1016,7 +1044,9 @@ class LogTab(QWidget):
         if self._original is None:
             self._drop_settings_of_missing_channels(outcome.scan)
         if outcome.db_error is not None:
-            self.show_message(f"Cannot check the database for this folder: {outcome.db_error}")
+            self.show_message(
+                f"Cannot check the database for this folder: {outcome.db_error}", ItemState.ERROR
+            )
         if self._original is not None:
             self._drop_rows_of_removed_channels(self._original, outcome.scan)
         self.refresh_checklist()
@@ -1039,7 +1069,8 @@ class LogTab(QWidget):
             f"{n} RF chain row{'' if n == 1 else 's'} of "
             f"{'that channel' if len(removed) == 1 else 'those channels'} "
             f"{'was' if n == 1 else 'were'} removed from the form. Saving asks for "
-            "confirmation."
+            "confirmation.",
+            ItemState.INFO,
         )
 
     def _duration_from_file_names(self, scan: ScanResult) -> None:
@@ -1080,7 +1111,7 @@ class LogTab(QWidget):
         if not db or self._saving or self._scan_task is not None:
             return
         if not entry.can_save(self.checklist.items):
-            self.show_message("Complete or fix the items in the checklist first.")
+            self.show_message("Complete or fix the items in the checklist first.", ItemState.TODO)
             return
         try:
             rec = entry.build_recording(
@@ -1091,7 +1122,7 @@ class LogTab(QWidget):
                 known_param_names=self._choices.param_names,
             )
         except ValueError as exc:
-            self.show_message(f"Not saved: {exc}")
+            self.show_message(f"Not saved: {exc}", ItemState.ERROR)
             return
 
         original = self._original
@@ -1099,7 +1130,8 @@ class LogTab(QWidget):
             self._start_save(lambda task: entry.save_new(db, rec), self._saved_new)
             return
         if entry.edit_changes_nothing(original, rec):
-            self.show_message("No changes to save.")  # keeps the last-changed time (D47)
+            # Keeps the last-changed time (D47).
+            self.show_message("No changes to save.", ItemState.INFO)
             return
         allow_removal = False
         if self._scan is not None:
@@ -1108,7 +1140,8 @@ class LogTab(QWidget):
                 if not self._confirm_removal(original, removed):
                     self.show_message(
                         "Nothing saved. The channels and their RF chain rows stay in the "
-                        "database. Open the entry again to see the stored rows."
+                        "database. Open the entry again to see the stored rows.",
+                        ItemState.INFO,
                     )
                     return
                 allow_removal = True
@@ -1146,7 +1179,7 @@ class LogTab(QWidget):
         self._saving = False
         self._logged_id = recording_id
         self._duplicate_checked = True
-        self.show_message(f"Saved as recording {recording_id}.")
+        self.show_message(f"Saved as recording {recording_id}.", ItemState.OK)
         self.reload_choices()
         self.refresh_checklist()
         self.saved.emit(recording_id)
@@ -1162,9 +1195,11 @@ class LogTab(QWidget):
 
     def _saved_edit(self, recording_id: int | None) -> None:
         self._saving = False
-        self.show_message(f"Saved changes to recording {recording_id}.")
+        self.show_message(f"Saved changes to recording {recording_id}.", ItemState.OK)
         if recording_id is not None:
-            self.load_recording(recording_id, message=self.message_label.text())
+            self.load_recording(
+                recording_id, message=self.message_text, message_state=ItemState.OK
+            )
             self.saved.emit(recording_id)
         QMessageBox.information(
             self, "Recording saved", f"Saved changes to recording {recording_id}."
@@ -1172,11 +1207,11 @@ class LogTab(QWidget):
 
     def _clear_message(self) -> None:
         """Drop a message about an earlier folder or save."""
-        self.show_message("" if self.config.db_path else NO_DATABASE)
+        self.show_message("" if self.config.db_path else NO_DATABASE, ItemState.TODO)
 
     def _save_failed(self, exc: Exception) -> None:
         self._saving = False
-        self.show_message(f"Not saved: {exc}")
+        self.show_message(f"Not saved: {exc}", ItemState.ERROR)
         self.refresh_checklist()
 
     def _channel_like_parent(self) -> str | None:
@@ -1195,21 +1230,28 @@ class LogTab(QWidget):
         if self._logged_id is not None:
             self.load_recording(self._logged_id)
 
-    def load_recording(self, recording_id: int, *, message: str = "") -> None:
-        """Open edit mode for a stored recording (DECISIONS.md D16)."""
+    def load_recording(
+        self, recording_id: int, *, message: str = "", message_state: ItemState | None = None
+    ) -> None:
+        """Open edit mode for a stored recording (DECISIONS.md D16).
+
+        message, with its state, replaces the message line once the entry is open.
+        """
         db = self.config.db_path
         if not db:
-            self.show_message(NO_DATABASE)
+            self.show_message(NO_DATABASE, ItemState.TODO)
             return
         self.runner.start(
             lambda task: entry.load_recording(db, recording_id),
-            on_success=lambda rec: self._enter_edit(rec, message),
+            on_success=lambda rec: self._enter_edit(rec, message, message_state),
             on_failure=lambda exc: self.show_message(
-                f"Cannot open recording {recording_id}: {exc}"
+                f"Cannot open recording {recording_id}: {exc}", ItemState.ERROR
             ),
         )
 
-    def _enter_edit(self, rec: Recording, message: str) -> None:
+    def _enter_edit(
+        self, rec: Recording, message: str, message_state: ItemState | None = None
+    ) -> None:
         self.cancel_scan()
         self._original = rec
         self._clear_scan()
@@ -1238,7 +1280,7 @@ class LogTab(QWidget):
         self._show_stored_channels(rec)
         self.param_table.set_rows(form.params)
         self.mode_label.setText(f"Editing recording {rec.id}")
-        self.show_message(message)
+        self.show_message(message, message_state)
         self.refresh_checklist()
 
     # =====================================================================
@@ -1321,7 +1363,7 @@ class LogTab(QWidget):
             if path.suffix.lower() != templates.FILE_SUFFIX:
                 path = path.with_name(path.name + templates.FILE_SUFFIX)
             if path.exists() and not self._confirm_replace(path):
-                self.show_message("Template not saved.")
+                self.show_message("Template not saved.", ItemState.INFO)
                 return
         site, project = self._names()
         tpl = templates.template_from_input(
@@ -1334,10 +1376,10 @@ class LogTab(QWidget):
         try:
             templates.write_template(path, tpl)
         except templates.TemplateError as exc:
-            self.show_message(f"Template not saved: {exc}")
+            self.show_message(f"Template not saved: {exc}", ItemState.ERROR)
             return
         self._template_folder = str(path.parent)
-        self.show_message(f"Template saved: {path}")
+        self.show_message(f"Template saved: {path}", ItemState.OK)
 
     def _confirm_replace(self, path: Path) -> bool:
         answer = QMessageBox.question(
@@ -1361,14 +1403,15 @@ class LogTab(QWidget):
         try:
             tpl = templates.read_template(path)
         except templates.TemplateError as exc:
-            self.show_message(f"Template not loaded: {exc}")
+            self.show_message(f"Template not loaded: {exc}", ItemState.ERROR)
             return
         self._template_folder = str(path.parent)
         applied = templates.apply_template(
             self.current_input(), tpl, self._choices.sites, self._choices.projects
         )
         self._set_template_fields(tpl, applied)
-        self.show_message(templates.applied_text(tpl, applied.notes))
+        state = ItemState.INFO if applied.notes else ItemState.OK  # a name not found
+        self.show_message(templates.applied_text(tpl, applied.notes), state)
         self.refresh_checklist()
 
     def _set_template_fields(self, tpl: templates.LogTemplate, applied: templates.Applied) -> None:
