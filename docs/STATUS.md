@@ -251,8 +251,6 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   databases, 2026-10-20).
 - `dev/o45-shots/` (queue screenshots, their script and scratch databases,
   2026-10-20).
-- `dev/v1.1-test/` (the manual checklist for 1.1, its test data of 40 MB and the
-  generator), after the manual test; also stop sharing its `data\nas` folder.
 - `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
   folders, 2026-10-21).
 - `recorder/` at the repository root: the user's two example recordings of
