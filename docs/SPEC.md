@@ -545,7 +545,12 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
 the scanner (D53). The rescan gives the real file names, the size of each file and the
 gaps. The selection holds, per channel, the files in the range, their total size and
 the missing seconds inside the range (D49). It also lists where the folder differs
-from the database entry.
+from the database entry. Every selection also holds the side files, the `*.txt` and
+`*.log` files at the top of the recording folder such as the recorder's logs,
+whatever its channels and range (D83). They are copied, checked, listed in the
+manifest and, after an archive, deleted with the laptop copy like data files; the
+transfer's file count and size include them. Check archive and Compare with laptop
+copy compare the channels only.
 
 ### Copy engine
 

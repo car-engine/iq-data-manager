@@ -843,3 +843,109 @@ def test_check_needs_an_archived_recording(env):
     with pytest.raises(TransferError, match="Only an archived recording"):
         check_archive(env.db, env.rid, performed_by="userC", now=env.now)
     assert env.transfers() == []
+
+
+# ---------------------------------------------------------------------------
+# The recorder's log files travel with the recording (D83)
+# ---------------------------------------------------------------------------
+
+LOGS = {
+    "recorder_rec.log": b"Files written: 10.\n",
+    "log.txt": b"--channels 0,1 --freq 300e6\n",
+    "notes.TXT": b"antenna moved at 10:05\n",
+}
+
+
+def with_logs(env) -> None:
+    for name, data in LOGS.items():
+        (env.source / name).write_bytes(data)
+
+
+def test_an_archive_takes_the_log_files_and_lists_them(env):
+    with_logs(env)
+    preview = env.preview(env.request())
+    assert preview.ok, preview.errors
+    assert preview.selection.n_files == 13
+    assert [f.rel_path for f in preview.selection.side_files] == sorted(LOGS, key=str)
+    summary = movecopy.preview_summary(preview, 110)
+    assert any(
+        line.text.startswith("Also copied: 3 files from the recording folder itself")
+        for line in summary.lines
+    )
+    out = env.run(preview)
+    assert out.passed
+    dest = env.nas / "2026" / env.source.name
+    assert tree(dest) == tree(env.source)
+    (row,) = env.transfers()
+    assert row.n_files == 13
+    assert row.total_bytes == 40_000 + sum(len(b) for b in LOGS.values())
+    manifest = read_manifest(Path(row.manifest_path), row.manifest_sha256)
+    assert {f.path for f in manifest.files} >= set(LOGS)
+
+
+def test_delete_removes_the_log_files_and_the_laptop_folder(env):
+    with_logs(env)
+    archive_id = archived_and_checked(env)
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert out.result.complete
+    assert set(LOGS) <= set(out.result.deleted)
+    assert not env.source.exists()
+    dest = env.nas / "2026" / env.source.name
+    assert {name: (dest / name).read_bytes() for name in LOGS} == LOGS
+
+
+def test_a_partial_copy_takes_the_log_files_too(env):
+    with_logs(env)
+    dest = env.tmp / "pc" / "part"
+    request = env.request(Operation.COPY, dest, channels=(0,), start_unix=T0, end_unix=T0 + 3)
+    out = env.run(env.preview(request))
+    assert out.passed
+    assert sorted(tree(dest)) == sorted(
+        [*LOGS, "0/1790733600.dat", "0/1790733601.dat", "0/1790733602.dat"]
+    )
+
+
+def test_an_archive_from_before_d83_leaves_later_logs_on_the_laptop(env):
+    """Its file list has no logs, so Delete laptop copy keeps them and the folder."""
+    archive_id = archived_and_checked(env)
+    with_logs(env)  # written after the archive
+    out = delete_laptop_copy(env.db, archive_id, performed_by="userB", now=env.now)
+    assert out.result.complete
+    assert sorted(p.name for p in env.source.iterdir() if p.is_file()) == sorted(LOGS)
+    assert not (env.source / "0").exists()  # the channel folders are empty and removed
+
+
+def test_a_log_file_changed_after_the_preview_fails_the_check(env):
+    with_logs(env)
+    preview = env.preview(env.request(Operation.COPY, env.tmp / "pc" / "rec"))
+    (env.source / "log.txt").write_bytes(LOGS["log.txt"] + b"one more line\n")
+    out = env.run(preview)
+    assert not out.passed
+    assert "log.txt" in (out.notes or "")
+
+
+def test_a_resumed_archive_skips_logs_already_in_place(env):
+    with_logs(env)
+    dest = env.nas / "2026" / env.source.name
+    dest.mkdir(parents=True)
+    (dest / "log.txt").write_bytes(LOGS["log.txt"])  # copied by an earlier, stopped run
+    preview = env.preview(env.request())
+    assert preview.ok, preview.errors
+    assert "log.txt" in preview.check.existing
+    assert env.run(preview).passed
+
+
+def test_compare_with_laptop_copy_compares_channels_only(env):
+    """A laptop copy made before D83 may lack the logs; they do not fail the comparison."""
+    rid = logged_in_place(env)
+    for name, data in LOGS.items():
+        (env.nas / "in-place" / name).write_bytes(data)
+    out = compare(env, rid, hash_mode=HashMode.NONE)
+    assert out.verification is Verification.PASS
+
+
+def test_check_archive_ignores_the_log_files(env):
+    with_logs(env)
+    archived(env)
+    out = check_archive(env.db, env.rid, performed_by="userC", now=env.now)
+    assert out.verification is Verification.PASS

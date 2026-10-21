@@ -20,9 +20,11 @@ for version 1.1 started).
   item below.
 - **Version 1.1 is built and waits for the user.** The plan, approved by the user on
   2026-10-20, is in [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41), one
-  branch each. All five are done on stacked branches, none merged; "Work after 1.0"
-  below lists them. Next: the user's review, the merges as fast-forwards in order,
-  and the release of 1.1.0 (HANDOFF.md, section 4).
+  branch each. On 2026-10-21 the user added O46 and O47 (the recorder's logs). All
+  seven are done on stacked branches, none merged; "Work after 1.0" below lists them,
+  and `transfer-log-files` holds them all. Next: the user's manual test
+  (`dev/v1.1-test/CHECKLIST.html`), the merge as a fast-forward, and the release of
+  1.1.0 (HANDOFF.md, section 4).
 - **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
   needs a numbered migration (HANDOFF.md, section 5).
 - **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
@@ -70,7 +72,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O43, a new folder keeps the previous entry's fields (D79) | Done, not merged | `log-keep-fields`, from `viewer-multi-filter` | `336276a`, `2b49761` (SPEC) | [2026-10-20-log-keep-fields](reports/2026-10-20-log-keep-fields.md) |
 | O44, Log tab templates (D80) | Done, not merged | `log-templates`, from `log-keep-fields` | `740fd54` | [2026-10-20-log-templates](reports/2026-10-20-log-templates.md) |
 | O45 and O41, the queue (D81) | Done, not merged | `transfer-queue`, from `log-templates` | `e1f1147`, `c0252f9` (two fixes found while writing the manual checklist) | [2026-10-20-transfer-queue](reports/2026-10-20-transfer-queue.md) |
-| O46, values from the recorder's log (D82) | Done, not merged | `recorder-log-fill`, from `transfer-queue` | The commit of the work and its report | [2026-10-21-recorder-log-fill](reports/2026-10-21-recorder-log-fill.md) |
+| O46, values from the recorder's log (D82) | Done, not merged | `recorder-log-fill`, from `transfer-queue` | `5f6831b` | [2026-10-21-recorder-log-fill](reports/2026-10-21-recorder-log-fill.md) |
+| O47, log files travel with the recording (D83) | Done, not merged | `transfer-log-files`, from `recorder-log-fill` | The commit of the work and its report | [2026-10-21-transfer-log-files](reports/2026-10-21-transfer-log-files.md) |
 
 The milestone branches are deleted; `main` holds every commit of them. On 2026-10-12,
 with the user's approval, `m8-release` was deleted on GitHub and these merged local
@@ -97,7 +100,6 @@ table in [reports/M0.md](reports/M0.md). The next free number is O48.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
-| O47 | Copy and archive the recorder's log files with the recording | 1.1.0 (approved 2026-10-21) | Every `*.txt` and `*.log` file at the top of the recording folder goes with every copy and archive, partial copies too; listed in the manifest and verified like data files; Delete laptop copy deletes them with the data. Check archive and Compare with laptop copy compare channels only. Transfer counts and sizes include them. | User, 2026-10-21 |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
@@ -151,6 +153,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O45 | A queue in the Archive / copy tab | D81 (2026-10-20) |
 | O41 | A batch Check archive for many recordings | D81 (2026-10-20): Check archive items in the queue |
 | O46 | Fill Log tab fields from the recorder's log files | D82 (2026-10-21) |
+| O47 | Copy and archive the recorder's log files with the recording | D83 (2026-10-21) |
 
 ## Pending checks for the user
 

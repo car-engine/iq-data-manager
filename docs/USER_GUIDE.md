@@ -247,6 +247,13 @@ catalogue entry at the NAS copy. The laptop copy stays until you delete it.
   with a laptop folder you choose. A passed comparison removes the "not verified"
   mark. It does not allow deleting the laptop copy.
 
+### Log files
+
+Every copy and archive also takes the `.txt` and `.log` files in the recording folder
+itself, such as the recorder's logs, even when it copies only some channels or a time
+range. The preview names them. Delete laptop copy deletes them with the data. A
+recording archived before version 1.1 keeps its log files on the laptop.
+
 ### Queue
 
 The queue runs several archives, copies and Check archive runs one after another.

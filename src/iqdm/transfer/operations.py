@@ -622,8 +622,9 @@ def compare_with_laptop(
     laptop = select_files(rec, folder=laptop_folder, progress=scan_progress, cancelled=cancelled)
     nas = select_files(rec, progress=scan_progress, cancelled=cancelled)
     started_at = now()
-    laptop_files = {f.rel_path: f.size for f in laptop.files}
-    nas_files = {f.rel_path for f in nas.files}
+    # Channels only: a laptop copy made before D83 may lack the recorder's logs.
+    laptop_files = {f.rel_path: f.size for f in laptop.data_files}
+    nas_files = {f.rel_path for f in nas.data_files}
     only_laptop = sorted(set(laptop_files) - nas_files)
     only_nas = sorted(nas_files - set(laptop_files))
     entry = TransferEntry(

@@ -282,6 +282,16 @@ def preview_summary(preview: Preview, speed_mb_s: float) -> PreviewSummary:
             )
         )
     lines.append(ChecklistItem(ItemState.INFO, _hash_text(preview)))
+    side = preview.selection.side_files
+    if side:
+        names = ", ".join(f.rel_path for f in side)
+        lines.append(
+            ChecklistItem(
+                ItemState.INFO,
+                f"Also copied: {files_text(len(side))} from the recording folder itself, "
+                f"such as the recorder's logs: {names}.",
+            )
+        )
     missing = missing_lines(preview)
     est = preview.estimate
     return PreviewSummary(

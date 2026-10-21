@@ -22,11 +22,14 @@ class SelectionError(ValueError):
 
 @dataclass(frozen=True, kw_only=True)
 class SelectedFile:
-    """One source file. rel_path is relative to the recording folder, '/'-separated."""
+    """One source file. rel_path is relative to the recording folder, '/'-separated.
+
+    timestamp is None for a side file, such as a recorder log (D83).
+    """
 
     rel_path: str
     size: int
-    timestamp: float
+    timestamp: float | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -57,7 +60,9 @@ class Selection:
 
     channel_indices is None when every channel of the recording is selected, as
     transfer_log.channels stores it (D5). differences lists where the folder differs
-    from the database entry.
+    from the database entry. side_files are the `*.txt` and `*.log` files at the top
+    of the recording folder, such as the recorder's logs; every transfer takes them,
+    whatever its channels and range (D83). files, n_files and total_bytes include them.
     """
 
     recording_id: int | None
@@ -68,19 +73,25 @@ class Selection:
     channel_indices: tuple[int, ...] | None
     channels: tuple[ChannelSelection, ...]
     differences: tuple[str, ...]
+    side_files: tuple[SelectedFile, ...] = ()
     scan: ScanResult | None = field(default=None, compare=False, repr=False)  # the rescan
 
     @property
-    def files(self) -> tuple[SelectedFile, ...]:
+    def data_files(self) -> tuple[SelectedFile, ...]:
+        """The channels' files, without the side files."""
         return tuple(f for c in self.channels for f in c.files)
 
     @property
+    def files(self) -> tuple[SelectedFile, ...]:
+        return self.data_files + self.side_files
+
+    @property
     def n_files(self) -> int:
-        return sum(c.n_files for c in self.channels)
+        return sum(c.n_files for c in self.channels) + len(self.side_files)
 
     @property
     def total_bytes(self) -> int:
-        return sum(c.total_bytes for c in self.channels)
+        return sum(c.total_bytes for c in self.channels) + sum(f.size for f in self.side_files)
 
     @property
     def is_whole(self) -> bool:
@@ -183,6 +194,9 @@ def select_from_scan(
         channel_indices=indices,
         channels=selected,
         differences=tuple(scan_differences(rec, scan)),
+        side_files=tuple(
+            SelectedFile(rel_path=f.name, size=f.size, timestamp=None) for f in scan.side_files
+        ),
         scan=scan,
     )
 

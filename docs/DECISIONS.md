@@ -100,6 +100,7 @@ Rules for this file:
 | D80 | Log tab templates in files | 2026-10-20, version 1.1 | Active |
 | D81 | A queue in the Archive / copy tab | 2026-10-20, version 1.1 | Active |
 | D82 | Values from the recorder's log | 2026-10-21, version 1.1 | Active |
+| D83 | The recorder's log files travel with the recording | 2026-10-21, version 1.1 | Active |
 
 ## D1. Sample types
 
@@ -1758,3 +1759,30 @@ count that differs from the recorder's is information only.
 Affects: SPEC sections 6 and 7, `recorderlog.py`, `scan/scanner.py`, `entry.py`,
 `gui/log_tab.py`, `diagnostics/fixtures.py` (its junk file is now `notes.md`), the
 user guide.
+
+## D83. The recorder's log files travel with the recording
+
+Closes O47. Found while assessing O46: archives and copies took only the data files,
+so the recorder's logs stayed on the laptop and never reached the NAS. The user asked
+on 2026-10-21 that every `*.txt` and `*.log` file at the top of the recording folder
+is copied and archived with the data.
+
+- The side files of D82 join every selection: whole archives, whole copies, and copies
+  of some channels or a time range, because they describe the whole recording.
+- They are copied, checked and listed in the manifest like data files. A transfer's
+  file count and size include them, and the preview names them in one line.
+- Delete laptop copy deletes them with the data, through the same per-file checks
+  (D52, D55, D75), because the manifest lists them. The laptop folder is then empty
+  and is removed.
+- An archive made before this change lists no logs. Its Delete laptop copy keeps the
+  logs, so the laptop folder keeps them and stays.
+- A log already at the destination with the source's size counts as copied (D51). A
+  log that changes after the preview fails the check after the copy, as a data file
+  does.
+- Check archive and Compare with laptop copy still compare the channels only. A laptop
+  copy made before this change may lack the logs.
+- No change to the copy engine, the verification or the delete module: the selection
+  now holds the side files, and those parts work on the selection's file list.
+
+Affects: SPEC section 8, `transfer/selection.py`, `transfer/operations.py`
+(`compare_with_laptop`), `movecopy.py`, the user guide.

@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import recorderlog, templates, transferqueue
+from conftest import recording_from
+from iqdm import movecopy, recorderlog, templates, transferqueue
 from iqdm.app import (
     CLEAR_LOG_TAB_QUESTION,
     CLOSE_QUESTION,
@@ -65,13 +66,14 @@ from iqdm.models import (
     IN_PLACE_NOTE,
     ArchiveState,
     Channel,
+    HashMode,
     Operation,
     Param,
     Recording,
     TransferEntry,
 )
 from iqdm.scan.scanner import scan_recording
-from iqdm.transfer.operations import FILE_LIST_UNUSABLE
+from iqdm.transfer.operations import FILE_LIST_UNUSABLE, TransferRequest, preview_transfer
 from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
 
@@ -283,6 +285,39 @@ def test_recorder_log_text_is_plain(make_recording):
     texts = [i.text for i in items + pass_line] + [recorderlog.FROM_LOG_TOOLTIP]
     assert len(texts) == 10  # 8 lines, the pass line and the tooltip
     assert offending(texts) == []
+
+
+def test_side_file_preview_line_is_plain(tmp_path, db_path, make_recording):
+    """The preview line about the recorder's logs that a transfer takes along (D83)."""
+    info = make_recording()
+    (Path(info.root) / "log.txt").write_text("--channels 0\n", encoding="utf-8")
+    nas = tmp_path / "nas"
+    rid = write_transaction(
+        db_path,
+        lambda c: repo.insert_recording(
+            c, recording_from(info, site_id=repo.add_site(c, "SiteA").id)
+        ),
+    )
+    preview = preview_transfer(
+        db_path,
+        TransferRequest(
+            recording_id=rid,
+            operation=Operation.COPY,
+            destination=str(tmp_path / "pc"),
+            hash_mode=HashMode.SAMPLE,
+        ),
+        Config(nas_roots=(str(nas),)),
+        resolve_drive=None,
+        disk_usage=lambda _p: DiskUsage(10**15, 0, 10**15),
+        long_paths=True,
+    )
+    lines = [i.text for i in movecopy.preview_summary(preview, 110).lines]
+    also = [t for t in lines if t.startswith("Also copied")]
+    assert also == [
+        "Also copied: 1 file from the recording folder itself, such as the "
+        "recorder's logs: log.txt."
+    ]
+    assert offending(also) == []
 
 
 def test_kept_fields_text_is_plain():

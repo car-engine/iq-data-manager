@@ -41,6 +41,18 @@ def test_whole_recording_selects_every_file(make_recording):
     assert sel.source == Path(info.root)
 
 
+def test_side_files_come_with_every_selection(make_recording):
+    """D83: the recorder's logs at the top go with any channels and range."""
+    info = make_recording(n_channels=2, n_slots=5)
+    (Path(info.root) / "log.txt").write_bytes(b"x" * 7)
+    (Path(info.root) / "0" / "notes.txt").write_bytes(b"deeper: not a side file")
+    sel = select(info, channels=[1], start_unix=T0, end_unix=T0 + 2)
+    assert [(f.rel_path, f.size, f.timestamp) for f in sel.side_files] == [("log.txt", 7, None)]
+    assert sel.files[-1].rel_path == "log.txt"
+    assert len(sel.data_files) == 2
+    assert (sel.n_files, sel.total_bytes) == (3, 2 * 4000 + 7)
+
+
 def test_files_carry_their_sizes(make_recording):
     info = make_recording(n_slots=3, wrong_size={2: 100})
     sizes = [f.size for f in select(info).files]
