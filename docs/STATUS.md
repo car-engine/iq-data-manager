@@ -286,6 +286,8 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
 - After the review of 1.1.0: `dist/review-1.1/`, `build/work-review-1.1/`,
   `build/review-1.1-build.log` and `dev/review-1.1/` (probe tests and reading
   scripts).
+- After the manual test of 1.1.1: `dist/test-1.1.1/`, `build/work-test-1.1.1/` and
+  `build/test-1.1.1-build.log` (built from `48804a2`; it still shows version 1.1.0).
   `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
 - `recorder/` at the repository root: the user's two example recordings of
   2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder
