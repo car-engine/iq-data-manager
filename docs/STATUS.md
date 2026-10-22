@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-22 (version 1.1.1 released).
+its report. Last updated: 2026-10-23 (O50 done on branch `band-from-fc`).
 
 ## Current state
 
@@ -40,9 +40,10 @@ its report. Last updated: 2026-10-22 (version 1.1.1 released).
   skip; `ruff check` is clean.
 - **The next work is version 1.2** (user, 2026-10-22), in this order: O50 (the band
   from fc), O39 (deleting an entry added by mistake, which changes D41), then a plan,
-  discussed first, for O51 (logging several recordings with one set-up). None is
-  started. A new session starts from the prompt "Version 1.2" in
-  [KICKOFF.md](KICKOFF.md).
+  discussed first, for O51 (logging several recordings with one set-up). The user
+  approved the plan for O50 and O39 on 2026-10-23, and asked to discuss O51 again
+  before any code for it. O50 is done on `band-from-fc` (D88), not merged. A new
+  session starts from the prompt "Version 1.2" in [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -104,6 +105,7 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, `790177d` (report); `5bccf96` (Open in form, on `log-fixes-1.1.1`) | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
 | Log tab fixes for 1.1.1 (D87; review findings 2, 3, 4, 7, 8) | Done, merged | `log-fixes-1.1.1`, from `queue-fixes-1.1.1` | `a9fa00e`, `58acd99` (report), `48804a2`–`3cedd34` (records and the manual test) | [2026-10-22-log-fixes-1.1.1](reports/2026-10-22-log-fixes-1.1.1.md) |
 | Release 1.1.1 | Released: tag `v1.1.1`, pushed | `release-1.1.1`, from `main` at `3cedd34` | `3108c63`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+| O50, the band filled in from fc (D88) | Done, not merged | `band-from-fc`, from `main` at `9403f46` | `9bfba8c`, plus the commit of its report | [2026-10-23-band-from-fc](reports/2026-10-23-band-from-fc.md) |
 
 The four branches of 1.1.1, from `review-1.1.0` to `release-1.1.1`, were merged into
 `main` as fast-forwards on 2026-10-22. With the user's approval they were deleted with
@@ -142,7 +144,6 @@ table in [reports/M0.md](reports/M0.md). The next free number is O52.
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
-| O50 | The band is not filled in from fc. The band box lists only the bands already in the catalogue (VHF, UHF). Bands can overlap, such as VHF (30–300 MHz) and Marine VHF (about 155–160 MHz). A band kept from the previous folder (D79) stays when the log changes fc (D82). | Version 1.2 (user, 2026-10-22), first | None yet; to settle in the plan: what "closest" means for overlapping bands, where the band definitions live (settings are per PC, D68), and what happens to a typed, kept or template band when fc changes. | User, 2026-10-22 |
 | O39 | Deleting a catalogue entry that was added by mistake. D41 keeps it out of the GUI and leaves it as "a manual database job"; SPEC section 13 lists it as out of scope. | Version 1.2 (user, 2026-10-22), second | None yet; to settle in the plan. `repository.delete_recording()` removes catalogue rows only and refuses any recording with transfer history, which includes every entry logged in place on the NAS (D2) and every legacy import (D66). Earlier proposal: a procedure for the administrator, or an admin command in `IQDataManager-check.exe`. | Release review, finding 15; user, 2026-10-22 |
 | O51 | Logging several recordings with one set-up at once: the same typed fields for N folders, with the values from each folder's scan and recorder log, a preview of all, and a way to deal with an error in one of them. Today each folder is browsed, scanned and saved on its own. | Version 1.2 (user, 2026-10-22), after O50 and O39, with a full plan discussed first | None yet; the user asked for a proposal: how the user chooses the fields that need input without logging one folder first, what the preview looks like for many folders, and what happens when one folder has an error. | User, 2026-10-22 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
@@ -150,7 +151,7 @@ table in [reports/M0.md](reports/M0.md). The next free number is O52.
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D87). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D88). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -199,6 +200,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D87). The M0 review table in
 | O48 | The Log tab's message line shows no state (user's manual test, 2026-10-22) | D84 (2026-10-22) |
 | O49 | A queue archive whose check did not pass showed as Failed (user's manual test, 2026-10-22) | D85 (2026-10-22) |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | Closed by the user on 2026-10-22: a backup runs outside the app |
+| O50 | The band filled in from fc | D88 (2026-10-23) |
 
 ## Pending checks for the user
 
@@ -307,6 +309,7 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   `build/test-1.1.1-build.log` (built from `48804a2`; it still shows version 1.1.0),
   and `dev/test-1.1.1/` (the checklist `CHECKLIST.html`, its data script and 115.6 MB
   of synthetic data with a scratch database).
+- `dev/o50-probe/` (a script that checks the italic band box offscreen, 2026-10-23).
 - `dev/kickoff-head.txt` (the old `KICKOFF.md`, used to check its archive copy).
   `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
 - `recorder/` at the repository root: the user's two example recordings of
