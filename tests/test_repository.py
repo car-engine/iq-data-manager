@@ -675,9 +675,60 @@ def test_delete_recording_cascades(conn, site_id):
 def test_delete_refused_with_transfer_history(conn, site_id):
     rid = repo.insert_recording(conn, recording(site_id))
     repo.insert_transfer(conn, transfer(rid))
-    with pytest.raises(repo.HasTransferHistoryError):
+    with pytest.raises(repo.HasTransferHistoryError, match="archive or a copy in its history"):
         repo.delete_recording(conn, rid)
     assert count(conn, "recordings") == 1
+    assert count(conn, "transfer_log") == 1
+
+
+def check_row(rid: int, **kw) -> TransferEntry:
+    return transfer(rid, operation=Operation.CHECK, destination=None, **kw)
+
+
+def test_delete_takes_the_check_rows_without_a_parent(conn, site_id):
+    """D89: the in-place row (D2), Check archive and Compare with laptop copy go along."""
+    rid = repo.insert_recording(conn, recording(site_id))
+    other = repo.insert_recording(conn, recording(site_id, rel_path="rec2"))
+    repo.insert_in_place_check(conn, rid, source="//nas/rec1", performed_by="u", at="t")
+    repo.insert_transfer(conn, check_row(rid, verification=Verification.PASS))
+    repo.insert_in_place_check(conn, other, source="//nas/rec2", performed_by="u", at="t")
+    assert repo.delete_recording(conn, rid) == 2
+    assert count(conn, "recordings") == 1
+    assert [t.recording_id for t in repo.list_transfers(conn, other)] == [other]
+    assert count(conn, "transfer_log") == 1
+    assert count(conn, "channels") == len(recording(site_id).channels)
+
+
+@pytest.mark.parametrize("operation", [Operation.COPY, Operation.ARCHIVE])
+def test_an_archive_or_a_copy_row_keeps_the_recording(conn, site_id, operation):
+    rid = repo.insert_recording(conn, recording(site_id))
+    repo.insert_in_place_check(conn, rid, source="//nas/rec1", performed_by="u", at="t")
+    repo.insert_transfer(conn, transfer(rid, operation=operation))
+    with pytest.raises(repo.HasTransferHistoryError):
+        repo.delete_recording(conn, rid)
+    assert count(conn, "transfer_log") == 2
+
+
+@pytest.mark.parametrize(
+    ("kw", "blocks"),
+    [
+        ({"operation": Operation.CHECK}, False),
+        ({"operation": Operation.CHECK, "parent_id": 7}, True),  # a check before delete
+        ({"operation": Operation.DELETE, "parent_id": 7}, True),
+        ({"operation": Operation.ARCHIVE}, True),
+        ({"operation": Operation.COPY}, True),
+    ],
+)
+def test_blocks_deletion(kw, blocks):
+    assert repo.blocks_deletion(transfer(1, **kw)) is blocks
+
+
+def test_a_transfer_of_a_deleted_recording_is_not_found(conn, site_id):
+    rid = repo.insert_recording(conn, recording(site_id))
+    repo.delete_recording(conn, rid)
+    with pytest.raises(repo.NotFoundError, match=f"Recording {rid} is no longer in the catalogue"):
+        repo.insert_transfer(conn, transfer(rid))
+    assert count(conn, "transfer_log") == 0
 
 
 # ---------------------------------------------------------------------------

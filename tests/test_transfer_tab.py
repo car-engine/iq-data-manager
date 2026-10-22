@@ -175,6 +175,20 @@ def test_a_saved_database_path_clears_the_no_database_line(env):
     assert tab.recording is not None
 
 
+def test_an_operation_on_the_recording_holds_it_against_a_delete(env, monkeypatch):
+    """D89: the Log tab may not delete a recording this tab is working on."""
+    tab = env.loaded(env.tab())
+    assert tab.deletion_blocked(env.rid) is None
+    monkeypatch.setattr(TransferTab, "is_busy", property(lambda self: True))
+    assert tab.deletion_blocked(env.rid) == (
+        f"The Archive / copy tab is working on recording {env.rid}. Wait until it finishes, "
+        "then delete the entry."
+    )
+    assert tab.deletion_blocked(env.rid + 1) is None
+    tab.recording_deleted(env.rid)  # busy: the form stays
+    assert tab.recording is not None
+
+
 def test_loading_a_local_recording_prepares_an_archive(env):
     tab = env.loaded(env.tab())
     assert tab.archive_radio.isChecked()

@@ -40,17 +40,25 @@ from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
 from iqdm.entry import (
     ChannelInput,
+    DeletionCheck,
     EntryInput,
     ParamInput,
+    changed_delete_text,
     changed_text,
     checklist,
+    delete_question,
+    deleted_text,
     kept_note,
     missing_channels_text,
 )
 from iqdm.gui.log_tab import (
     BAND_TOOLTIP,
     CONFLICT_TITLE,
+    DELETE_BUTTON,
+    DELETE_TITLE,
+    DELETE_TOOLTIP,
     KEEP_LOG_BUTTON,
+    NO_RECORDS_FOLDER,
     REPLACE_TEMPLATE_TITLE,
     TEMPLATE_FILTER,
     USE_TEMPLATE_BUTTON,
@@ -69,6 +77,8 @@ from iqdm.gui.transfer_tab import (
     QUEUE_NOTE_HINT,
     QUEUED_TEXT,
     TransferTab,
+    queue_holds_text,
+    tab_holds_text,
 )
 from iqdm.gui.viewer_tab import NO_PROJECT_FILTER, NO_PROJECT_TEXT, ViewerTab
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
@@ -370,6 +380,37 @@ def test_band_text_is_plain(make_recording):
         "Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check the band."
     ]
     texts = [BAND_TOOLTIP, *lines, *(band_filled_tooltip(b) for b in BANDS)]
+    assert offending(texts) == []
+
+
+def test_delete_text_is_plain(tmp_path):
+    """The question, the messages and the refusals of a delete (D89)."""
+    rec = Recording(
+        id=12,
+        logged_by="u",
+        site_id=1,
+        storage_root="C:/captures",
+        rel_path="rec1",
+        start_unix=1790733600,
+        channels=[Channel(channel_index=0, fc_hz=145.8e6, fs_hz=1e3, start_unix=0, end_unix=1)],
+    )
+    check = DeletionCheck(recording=rec, transfers=[])
+    texts = [
+        DELETE_TITLE,
+        DELETE_BUTTON,
+        DELETE_TOOLTIP,
+        NO_RECORDS_FOLDER,
+        "Delete entry...",
+        "Nothing deleted.",
+        delete_question(check, 8.0, tmp_path / "deleted-entries"),
+        deleted_text(12, tmp_path / "deleted-entries" / "recording-12.json"),
+        changed_delete_text(12),
+        repo.history_text(12),
+        repo.gone_text(12),
+        queue_holds_text(12),
+        tab_holds_text(12),
+        "Recording 12 was deleted from the catalogue.",
+    ]
     assert offending(texts) == []
 
 

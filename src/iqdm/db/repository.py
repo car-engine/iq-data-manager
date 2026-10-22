@@ -419,15 +419,43 @@ def update_channels_from_folder(
     )
 
 
-def delete_recording(conn: sqlite3.Connection, recording_id: int) -> None:
-    """Delete a catalogue entry (not its files). Refused if it has transfer history."""
-    if _one(conn, "SELECT 1 FROM transfer_log WHERE recording_id = ?", (recording_id,)):
-        raise HasTransferHistoryError(
-            f"recording {recording_id} has transfer history and cannot be deleted"
-        )
+def blocks_deletion(entry: TransferEntry) -> bool:
+    """True for a transfer row that keeps its recording in the catalogue (DECISIONS.md D89).
+
+    Only check rows without a parent go with the recording: the row of a folder logged
+    in place (D2), Check archive and Compare with laptop copy. An archive, a copy, a
+    delete and a check before delete stay, so the recording stays too.
+    """
+    return entry.operation is not Operation.CHECK or entry.parent_id is not None
+
+
+def history_text(recording_id: int) -> str:
+    """Why a recording with an archive, a copy or a delete cannot be deleted."""
+    return (
+        f"Recording {recording_id} has an archive or a copy in its history, so it cannot be "
+        "deleted. Correct it with Save entry instead."
+    )
+
+
+def delete_recording(conn: sqlite3.Connection, recording_id: int) -> int:
+    """Delete a catalogue entry, not its files, with its check rows (D89).
+
+    Refused with HasTransferHistoryError while any row blocks it (blocks_deletion()).
+    The check rows without a parent are deleted first, because transfer_log does not
+    cascade. Channels and params cascade. Returns the number of transfer rows deleted.
+    """
+    rows = list_transfers(conn, recording_id)
+    if any(blocks_deletion(t) for t in rows):
+        raise HasTransferHistoryError(history_text(recording_id))
+    conn.execute(
+        "DELETE FROM transfer_log WHERE recording_id = ? AND operation = 'check'"
+        " AND parent_id IS NULL",
+        (recording_id,),
+    )
     cur = conn.execute("DELETE FROM recordings WHERE id = ?", (recording_id,))
     if cur.rowcount == 0:
         raise NotFoundError(f"no recording with id {recording_id}")
+    return len(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -728,8 +756,28 @@ def insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
     """Add a transfer_log row. Returns its id.
 
     A delete row needs parent_id: an archive of the same recording that passed
-    verification. The schema refuses any other delete row (D52).
+    verification. The schema refuses any other delete row (D52). A recording that is no
+    longer in the catalogue, for example after a delete on another PC (D89), raises
+    NotFoundError, so a transfer stops before it copies a file.
     """
+    try:
+        return _insert_transfer(conn, entry)
+    except sqlite3.IntegrityError as exc:
+        gone = _one(conn, "SELECT 1 FROM recordings WHERE id = ?", (entry.recording_id,)) is None
+        if "FOREIGN KEY" in str(exc) and gone:
+            raise NotFoundError(gone_text(entry.recording_id)) from exc
+        raise
+
+
+def gone_text(recording_id: int | None) -> str:
+    """The message for a recording that was deleted while it was open (D89)."""
+    return (
+        f"Recording {recording_id} is no longer in the catalogue. It may have been deleted "
+        "on another PC."
+    )
+
+
+def _insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
     row = conn.execute(
         "INSERT INTO transfer_log (recording_id, operation, parent_id, source, destination,"
         " range_start_unix, range_end_unix, channels, hash_mode, started_at, finished_at,"

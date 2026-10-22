@@ -80,6 +80,32 @@ def replace_template_question(path: Path) -> str:
     return f"{path} already exists. Replace it with the fields you chose?"
 
 
+DELETE_TITLE = "Delete entry?"
+DELETE_BUTTON = "Delete entry"
+DELETE_TOOLTIP = (
+    "Delete this entry from the catalogue, for example a folder logged by mistake. "
+    "The files stay. An entry that was archived or copied cannot be deleted."
+)
+NO_RECORDS_FOLDER = (
+    "This entry cannot be deleted here, because the app has no folder for the copy it "
+    "saves before a delete."
+)
+
+
+def confirm_delete(parent: QWidget, text: str) -> bool:
+    """Ask before a delete (D89). Cancel is the default; Esc cancels."""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setWindowTitle(DELETE_TITLE)
+    box.setText(text)
+    delete = box.addButton(DELETE_BUTTON, QMessageBox.ButtonRole.DestructiveRole)
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(cancel)
+    box.setEscapeButton(cancel)
+    box.exec()
+    return box.clickedButton() is delete
+
+
 CONFLICT_TITLE = "Template and recorder's log differ"
 KEEP_LOG_BUTTON = "Keep the log's values"
 USE_TEMPLATE_BUTTON = "Use the template's values"
@@ -175,6 +201,7 @@ class LogTab(QWidget):
     """Form for logging a recording folder, and for editing a logged one."""
 
     saved = Signal(int)  # recording id after a save, new or edited; the Viewer refreshes
+    deleted = Signal(int)  # recording id after a delete (D89)
 
     def __init__(
         self,
@@ -182,10 +209,16 @@ class LogTab(QWidget):
         *,
         resolve_drive: DriveResolver | None = mapped_drive_unc,
         runner: TaskRunner | None = None,
+        records_folder: Path | None = None,
+        deletion_blocked: Callable[[int], str | None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
+        """records_folder receives the copy of a deleted entry; without it, edit mode
+        cannot delete. deletion_blocked names why another tab holds a recording (D89)."""
         super().__init__(parent)
         self.config = Config() if config is None else config
+        self._records_folder = records_folder
+        self._deletion_blocked = deletion_blocked
         self._offset = self.config.display_utc_offset_hours
         self._zone = offset_label(self._offset)
         self._resolve_drive = resolve_drive
@@ -400,6 +433,9 @@ class LogTab(QWidget):
         self.save_button.clicked.connect(self.save)
         self.clear_button = QPushButton("Clear form")
         self.clear_button.clicked.connect(self.clear_form)
+        self.delete_button = QPushButton("Delete entry...")  # edit mode only (D89)
+        self.delete_button.setToolTip(DELETE_TOOLTIP)
+        self.delete_button.clicked.connect(self.delete_entry)
         self.import_button = QPushButton("Import template...")
         self.import_button.setToolTip("Fill in the form from a template file.")
         self.import_button.clicked.connect(lambda: self.import_template())
@@ -424,6 +460,7 @@ class LogTab(QWidget):
         layout.addWidget(self.state_note)
         layout.addLayout(template_buttons)
         layout.addLayout(buttons)
+        layout.addWidget(self.delete_button)
         layout.addWidget(self.message_label)
         return box
 
@@ -977,6 +1014,10 @@ class LogTab(QWidget):
             and not self._saving
             and entry.can_save(self.checklist.items)
         )
+        self.delete_button.setVisible(self._original is not None)
+        self.delete_button.setEnabled(
+            bool(self.config.db_path) and not scanning and not self._saving
+        )
 
     # =====================================================================
     # Database lists
@@ -1316,6 +1357,76 @@ class LogTab(QWidget):
     def _save_failed(self, exc: Exception) -> None:
         self._saving = False
         self.show_message(f"Not saved: {exc}", ItemState.ERROR)
+        self.refresh_checklist()
+
+    # =====================================================================
+    # Deleting an entry added by mistake (DECISIONS.md D89)
+    # =====================================================================
+
+    def _blocked(self, recording_id: int) -> str | None:
+        return None if self._deletion_blocked is None else self._deletion_blocked(recording_id)
+
+    def delete_entry(self) -> None:
+        """Delete the entry open in edit mode, after a question. Its files stay.
+
+        A worker first reads the entry and its history again (entry.check_deletion());
+        the question follows, then a second worker saves the copy and deletes.
+        """
+        original, db = self._original, self.config.db_path
+        if original is None or original.id is None or not db:
+            return
+        if self._saving or self._scan_task is not None:
+            return
+        if self._records_folder is None:
+            self.show_message(NO_RECORDS_FOLDER, ItemState.ERROR)
+            return
+        blocked = self._blocked(original.id)
+        if blocked is not None:
+            self.show_message(blocked, ItemState.ERROR)
+            return
+        self._saving = True
+        self._update_buttons()
+        self.show_message("Checking the entry...")
+        self.runner.start(
+            lambda task: entry.check_deletion(db, original),
+            on_success=self._deletion_checked,
+            on_failure=self._delete_failed,
+        )
+
+    def _deletion_checked(self, check: entry.DeletionCheck) -> None:
+        self._saving = False
+        self._update_buttons()
+        db, folder, rid = self.config.db_path, self._records_folder, check.recording.id
+        if not db or folder is None or rid is None or self._original is None:
+            return
+        question = entry.delete_question(check, self._offset, folder)
+        if not confirm_delete(self, question):
+            self.show_message("Nothing deleted.", ItemState.INFO)
+            return
+        blocked = self._blocked(rid)  # the queue may have taken it meanwhile
+        if blocked is not None:
+            self.show_message(blocked, ItemState.ERROR)
+            return
+        self._saving = True
+        self._update_buttons()
+        self.show_message("Deleting...")
+        self.runner.start(
+            lambda task: entry.delete_entry(
+                db, check, records_folder=folder, deleted_by=entry.default_logged_by()
+            ),
+            on_success=lambda record: self._entry_deleted(rid, record),
+            on_failure=self._delete_failed,
+        )
+
+    def _entry_deleted(self, recording_id: int, record: Path) -> None:
+        self._saving = False
+        self.clear_form()
+        self.show_message(entry.deleted_text(recording_id, record), ItemState.OK)
+        self.deleted.emit(recording_id)
+
+    def _delete_failed(self, exc: Exception) -> None:
+        self._saving = False
+        self.show_message(f"Not deleted: {exc}", ItemState.ERROR)
         self.refresh_checklist()
 
     def _channel_like_parent(self) -> str | None:

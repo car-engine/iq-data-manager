@@ -22,6 +22,7 @@ from iqdm.config import (
 )
 from iqdm.db.connection import verify_schema_in_memory
 from iqdm.db.version import LATEST_VERSION
+from iqdm.deletion_record import records_dir
 from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab
 from iqdm.gui.transfer_tab import TransferTab
@@ -134,9 +135,14 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
 
         self.viewer_tab = ViewerTab(self.config)
-        self.log_tab = LogTab(self.config)
+        self.log_tab = LogTab(
+            self.config,
+            records_folder=None if config_path is None else records_dir(config_path),
+            deletion_blocked=lambda rid: self.transfer_tab.deletion_blocked(rid),
+        )
         self.viewer_tab.edit_requested.connect(self.edit_recording)
         self.log_tab.saved.connect(lambda _id: self.viewer_tab.refresh())
+        self.log_tab.deleted.connect(lambda _id: self.viewer_tab.refresh())
         self.transfer_tab = TransferTab(
             self.config,
             manifests_dir=None if config_path is None else manifests_dir(config_path),
@@ -144,6 +150,7 @@ class MainWindow(QMainWindow):
         self.viewer_tab.transfer_requested.connect(self.open_transfer)
         self.viewer_tab.queue_requested.connect(self.add_to_queue)
         self.log_tab.saved.connect(self.transfer_tab.recording_saved)
+        self.log_tab.deleted.connect(self.transfer_tab.recording_deleted)
         self.transfer_tab.recording_changed.connect(lambda _id: self.viewer_tab.refresh())
         self.transfer_tab.pick_requested.connect(
             lambda: self.tabs.setCurrentWidget(self.viewer_tab)

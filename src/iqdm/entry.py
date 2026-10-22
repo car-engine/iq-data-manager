@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 
-from iqdm import bands
+from iqdm import bands, deletion_record
 from iqdm.db import repository
 from iqdm.db.connection import Connection, open_db, write_transaction
 from iqdm.location import Location, join_location
@@ -34,6 +34,7 @@ from iqdm.models import (
     SameStart,
     SampleType,
     Site,
+    TransferEntry,
     same_capture,
 )
 from iqdm.scan.scanner import (
@@ -44,7 +45,7 @@ from iqdm.scan.scanner import (
     check_channel,
     expected_file_bytes,
 )
-from iqdm.timeutil import utc_now_iso
+from iqdm.timeutil import display_time, offset_label, utc_now_iso
 
 TIMES = "\N{MULTIPLICATION SIGN}"
 
@@ -1376,12 +1377,144 @@ def save_edit(
         raise ValueError("save_edit needs the original of the same recording")
 
     def work(conn: Connection) -> None:
-        stored = repository.get_recording(conn, rec.id)
+        stored = _stored_or_gone(conn, rec.id)
         if _stored_fields(stored) != _stored_fields(original):
             raise repository.RecordingChangedError(changed_text(rec.id))
         repository.update_recording(conn, rec, allow_channel_removal=allow_channel_removal)
 
     write_transaction(db_path, work, delays=delays)
+
+
+def _stored_or_gone(conn: Connection, recording_id: int) -> Recording:
+    """The stored recording, or NotFoundError with a plain message after a delete (D89)."""
+    try:
+        return repository.get_recording(conn, recording_id)
+    except repository.NotFoundError:
+        raise repository.NotFoundError(repository.gone_text(recording_id)) from None
+
+
+# ---------------------------------------------------------------------------
+# Deleting an entry added by mistake (DECISIONS.md D89)
+# ---------------------------------------------------------------------------
+
+
+class EntryNotDeletedError(Exception):
+    """The record of the entry was written, but the delete did not happen."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class DeletionCheck:
+    """The stored entry and its transfer rows, read before the question (D89)."""
+
+    recording: Recording
+    transfers: list[TransferEntry]
+
+
+def changed_delete_text(recording_id: int | None) -> str:
+    return (
+        f"Recording {recording_id} changed after you opened it, for example by an archive "
+        "or a check. Open it again with Edit entry, then delete it."
+    )
+
+
+def check_deletion(db_path: Path | str, original: Recording) -> DeletionCheck:
+    """Read the stored entry again, and refuse a delete that D89 does not allow.
+
+    `original` is the recording as edit mode opened it. Raises NotFoundError when it
+    is gone, RecordingChangedError when it changed since it was opened (D76), and
+    HasTransferHistoryError when an archive, a copy or a delete row keeps it.
+    """
+    if original.id is None:
+        raise ValueError("check_deletion needs a stored recording")
+    with open_db(db_path, readonly=True) as conn:
+        stored = _stored_or_gone(conn, original.id)
+        rows = repository.list_transfers(conn, original.id)
+    if _stored_fields(stored) != _stored_fields(original):
+        raise repository.RecordingChangedError(changed_delete_text(original.id))
+    if any(repository.blocks_deletion(t) for t in rows):
+        raise repository.HasTransferHistoryError(repository.history_text(original.id))
+    return DeletionCheck(recording=stored, transfers=rows)
+
+
+def delete_question(check: DeletionCheck, offset_hours: float, records_folder: Path) -> str:
+    """The question before a delete: what goes, and that the files stay (D89)."""
+    rec = check.recording
+    counts = [c.n_files for c in rec.channels]
+    files = (
+        "file count not known"
+        if any(n is None for n in counts)
+        else _plural(sum(n for n in counts if n is not None), "file")
+    )
+    start = "" if rec.start_unix is None else display_time(rec.start_unix, offset_hours)
+    n = len(check.transfers)
+    checks = (
+        ""
+        if n == 0
+        else "Its check result is deleted with it. "
+        if n == 1
+        else f"Its {n} check results are deleted with it. "
+    )
+    return (
+        f"Delete recording {rec.id} from the catalogue?\n\n"
+        f"Folder: {join_location(rec.storage_root, rec.rel_path)}\n"
+        f"Start: {start} {offset_label(offset_hours)}\n"
+        f"{_plural(len(rec.channels), 'channel')}, {files}\n\n"
+        f"The files in the folder are not touched. {checks}Before the delete, a copy of "
+        f"the entry is saved in {records_folder}."
+    )
+
+
+def deleted_text(recording_id: int | None, record: Path) -> str:
+    return (
+        f"Deleted recording {recording_id} from the catalogue. Its files were not touched. "
+        f"A copy of the entry is in {record}."
+    )
+
+
+def delete_entry(
+    db_path: Path | str,
+    check: DeletionCheck,
+    *,
+    records_folder: Path,
+    deleted_by: str,
+    now: str | None = None,
+    delays: Sequence[float] | None = None,
+) -> Path:
+    """Save a copy of the entry, then delete it with its check rows (D89). Returns the
+    copy's path.
+
+    The transaction reads the entry and its rows again. If either differs from
+    `check`, nothing is deleted. No file of the recording is touched. A failure after
+    the copy was saved raises EntryNotDeletedError, whose message names the copy.
+    """
+    rec = check.recording
+    if rec.id is None:
+        raise ValueError("delete_entry needs a stored recording")
+    stamp = utc_now_iso() if now is None else now
+    record = deletion_record.write_record(
+        records_folder,
+        rec,
+        check.transfers,
+        database=str(db_path),
+        deleted_by=deleted_by,
+        deleted_at=stamp,
+    )
+
+    def work(conn: Connection) -> int:
+        stored = _stored_or_gone(conn, rec.id)
+        rows = repository.list_transfers(conn, rec.id)
+        if _stored_fields(stored) != _stored_fields(rec) or rows != check.transfers:
+            raise repository.RecordingChangedError(changed_delete_text(rec.id))
+        return repository.delete_recording(conn, rec.id)
+
+    try:
+        write_transaction(db_path, work, delays=delays)
+    except Exception as exc:  # any failure: the entry stays, and the copy is named
+        raise EntryNotDeletedError(
+            f"{exc} Recording {rec.id} was not deleted. The copy of the entry saved before "
+            f"the attempt is in {record}."
+        ) from exc
+    return record
 
 
 # ---------------------------------------------------------------------------

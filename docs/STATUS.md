@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-23 (O50 done on branch `band-from-fc`).
+its report. Last updated: 2026-10-23 (O50 on `band-from-fc` and O39 on `delete-entry`, done).
 
 ## Current state
 
@@ -42,7 +42,8 @@ its report. Last updated: 2026-10-23 (O50 done on branch `band-from-fc`).
   from fc), O39 (deleting an entry added by mistake, which changes D41), then a plan,
   discussed first, for O51 (logging several recordings with one set-up). The user
   approved the plan for O50 and O39 on 2026-10-23, and asked to discuss O51 again
-  before any code for it. O50 is done on `band-from-fc` (D88), not merged. A new
+  before any code for it. O50 is done on `band-from-fc` (D88) and O39 on
+  `delete-entry` (D89), neither merged. A new
   session starts from the prompt "Version 1.2" in [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
@@ -105,7 +106,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, `790177d` (report); `5bccf96` (Open in form, on `log-fixes-1.1.1`) | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
 | Log tab fixes for 1.1.1 (D87; review findings 2, 3, 4, 7, 8) | Done, merged | `log-fixes-1.1.1`, from `queue-fixes-1.1.1` | `a9fa00e`, `58acd99` (report), `48804a2`–`3cedd34` (records and the manual test) | [2026-10-22-log-fixes-1.1.1](reports/2026-10-22-log-fixes-1.1.1.md) |
 | Release 1.1.1 | Released: tag `v1.1.1`, pushed | `release-1.1.1`, from `main` at `3cedd34` | `3108c63`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| O50, the band filled in from fc (D88) | Done, not merged | `band-from-fc`, from `main` at `9403f46` | `9bfba8c`, plus the commit of its report | [2026-10-23-band-from-fc](reports/2026-10-23-band-from-fc.md) |
+| O50, the band filled in from fc (D88) | Done, not merged | `band-from-fc`, from `main` at `9403f46` | `9bfba8c`, `12ae30a` (report) | [2026-10-23-band-from-fc](reports/2026-10-23-band-from-fc.md) |
+| O39, deleting an entry added by mistake (D89) | Done, not merged | `delete-entry`, from `band-from-fc` at `12ae30a` | One commit with its report | [2026-10-23-delete-entry](reports/2026-10-23-delete-entry.md) |
 
 The four branches of 1.1.1, from `review-1.1.0` to `release-1.1.1`, were merged into
 `main` as fast-forwards on 2026-10-22. With the user's approval they were deleted with
@@ -144,14 +146,13 @@ table in [reports/M0.md](reports/M0.md). The next free number is O52.
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
-| O39 | Deleting a catalogue entry that was added by mistake. D41 keeps it out of the GUI and leaves it as "a manual database job"; SPEC section 13 lists it as out of scope. | Version 1.2 (user, 2026-10-22), second | None yet; to settle in the plan. `repository.delete_recording()` removes catalogue rows only and refuses any recording with transfer history, which includes every entry logged in place on the NAS (D2) and every legacy import (D66). Earlier proposal: a procedure for the administrator, or an admin command in `IQDataManager-check.exe`. | Release review, finding 15; user, 2026-10-22 |
 | O51 | Logging several recordings with one set-up at once: the same typed fields for N folders, with the values from each folder's scan and recorder log, a preview of all, and a way to deal with an error in one of them. Today each folder is browsed, scanned and saved on its own. | Version 1.2 (user, 2026-10-22), after O50 and O39, with a full plan discussed first | None yet; the user asked for a proposal: how the user chooses the fields that need input without logging one folder first, what the preview looks like for many folders, and what happens when one folder has an error. | User, 2026-10-22 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D88). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D89). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -201,6 +202,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D88). The M0 review table in
 | O49 | A queue archive whose check did not pass showed as Failed (user's manual test, 2026-10-22) | D85 (2026-10-22) |
 | O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | Closed by the user on 2026-10-22: a backup runs outside the app |
 | O50 | The band filled in from fc | D88 (2026-10-23) |
+| O39 | Deleting a catalogue entry that was added by mistake | D89 (2026-10-23) |
 
 ## Pending checks for the user
 

@@ -141,6 +141,17 @@ def test_copy_of_the_whole_recording(env):
     assert env.recording().archive_state is ArchiveState.LOCAL
 
 
+def test_a_copy_of_a_recording_deleted_after_the_preview_copies_nothing(env):
+    """D89: the transfer's first row needs the recording, so no file is copied."""
+    dest = env.tmp / "pc" / "rec"
+    preview = env.preview(env.request(Operation.COPY, dest))
+    assert preview.ok, preview.errors
+    write_transaction(env.db, lambda conn: repo.delete_recording(conn, env.rid))
+    with pytest.raises(repo.NotFoundError, match="is no longer in the catalogue"):
+        env.run(preview)
+    assert not dest.exists()
+
+
 def test_copy_of_a_range_and_a_channel(env):
     dest = env.tmp / "pc" / "part"
     request = env.request(

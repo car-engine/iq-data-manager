@@ -126,6 +126,22 @@ def hash_mode_text(mode: HashMode, fraction: float) -> str:
     return "Sizes and hashes of every file"
 
 
+def queue_holds_text(recording_id: int) -> str:
+    """Why the Log tab cannot delete a recording the queue holds (D89)."""
+    return (
+        f"The Archive / copy queue holds recording {recording_id}. Remove it from the queue "
+        "first, then delete the entry."
+    )
+
+
+def tab_holds_text(recording_id: int) -> str:
+    """Why the Log tab cannot delete a recording this tab works on (D89)."""
+    return (
+        f"The Archive / copy tab is working on recording {recording_id}. Wait until it "
+        "finishes, then delete the entry."
+    )
+
+
 def _cell(text: str, tooltip: str = "") -> QTableWidgetItem:
     item = QTableWidgetItem(text)
     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -726,6 +742,29 @@ class TransferTab(QWidget):
         its channels or folder may have changed."""
         if self._rec is not None and self._rec.id == recording_id and not self.is_busy:
             self.load_recording(recording_id)
+
+    def deletion_blocked(self, recording_id: int) -> str | None:
+        """Why the Log tab may not delete this recording now, or None (D89).
+
+        A waiting, running or paused queue item, or an operation that runs on the
+        recording in the form, holds it.
+        """
+        if any(
+            i.recording_id == recording_id and i.state in transferqueue.ACTIVE
+            for i in self._queue.items
+        ):
+            return queue_holds_text(recording_id)
+        if self.is_busy and self._rec is not None and self._rec.id == recording_id:
+            return tab_holds_text(recording_id)
+        return None
+
+    def recording_deleted(self, recording_id: int) -> None:
+        """The Log tab deleted a recording. Drop it from the form if it is shown (D89)."""
+        if self._rec is not None and self._rec.id == recording_id and not self.is_busy:
+            self._clear_recording()
+            self._set_message(
+                ItemState.INFO, f"Recording {recording_id} was deleted from the catalogue."
+            )
 
     def _loaded(self, load_id: int, result: object, *, keep_form: bool = False) -> None:
         if load_id != self._load_id or not isinstance(result, viewer.Details):

@@ -58,7 +58,7 @@ Rules for this file:
 | D38 | Plain text for users; coloured database status | 2026-10-03, Milestone 3a | Active |
 | D39 | Coverage highlight threshold | 2026-10-03, Milestone 4 | Active |
 | D40 | Recordings list at the size of the catalogue | 2026-10-03, Milestone 4 | Active |
-| D41 | No deletion of recordings in the GUI | 2026-10-03, Milestone 4 | Active |
+| D41 | No deletion of recordings in the GUI | 2026-10-03, Milestone 4 | Replaced by D89 |
 | D42 | No Copy / move button in the Viewer before Milestone 6 | 2026-10-03, Milestone 4 | Active |
 | D43 | Viewer filters | 2026-10-03, Milestone 4 | Active; D78 allows several sites, projects and bands |
 | D44 | The "not verified" mark in the Viewer | 2026-10-03, Milestone 4 | Active |
@@ -106,6 +106,7 @@ Rules for this file:
 | D86 | A paused queue item continues in the queue only | 2026-10-22, version 1.1.1 | Active; amends D81 |
 | D87 | A template imported after the log filled the form | 2026-10-22, version 1.1.1 | Active; amends D80 and D82 |
 | D88 | The band filled in from fc | 2026-10-23, version 1.2 | Active; amends D19 |
+| D89 | Deleting an entry added by mistake | 2026-10-23, version 1.2 | Active; replaces D41 |
 
 ## D1. Sample types
 
@@ -791,6 +792,8 @@ Closes O17. The user chose the proposed default on 2026-10-03.
 - A wrongly logged entry is corrected with "Edit entry". Removing an entry stays a
   manual database job. `repository.delete_recording()` exists and refuses a recording
   with transfer history.
+- **Replaced by D89** (2026-10-23): the Log tab's edit mode deletes an entry that has
+  no archive, copy or delete in its history.
 
 Affects: SPEC sections 5 and 13.
 
@@ -1986,3 +1989,66 @@ names; fc is the frequency on air.
 
 Affects: SPEC sections 6 and 9, `bands.py`, `entry.py`, `gui/log_tab.py`, the user
 guide.
+
+## D89. Deleting an entry added by mistake
+
+Closes O39. Replaces D41. The release review (finding 15) and the user, on
+2026-10-22, asked how an entry logged by mistake is removed. The user chose these
+points on 2026-10-23: the action sits in the Log tab's edit mode, and a copy of the
+entry is saved as a file on the PC that deletes it.
+
+- Under D41, removing an entry was a manual database job, and
+  `repository.delete_recording()` refused any recording with a `transfer_log` row.
+  Every entry logged in place on the NAS has the row of D2, and so does every legacy
+  import (D66), so the function refused all of those.
+- **Which entries can be deleted.** An entry whose history holds only check rows
+  without a parent: the row of D2, Check archive and Compare with laptop copy. These
+  rows describe the entry and go with it. Any archive, copy or delete row keeps the
+  entry, and so does a check before delete, which always follows an archive. The
+  history of a transfer then stays, with its manifest. `repository.blocks_deletion()`
+  holds the rule.
+- **Also refused:** an entry that this PC's Archive / copy queue holds as waiting,
+  running or paused, and an entry the Archive / copy tab is working on. The message
+  names the reason and what to do first.
+- **The action.** "Delete entry..." in the Log tab, shown in edit mode only. The
+  user reaches it from the Viewer's Edit entry, or from "Edit existing entry" after a
+  scan. The Viewer stays read-only (SPEC section 5).
+- **The question.** "Delete entry?" names the recording number, the folder, the start
+  at the display offset, the number of channels and files, how many check results
+  are deleted with the entry, and where the copy is saved. It says that the files in
+  the folder are not touched. The buttons are "Delete entry" and Cancel, and Cancel is
+  the default.
+- **The steps.**
+  1. A worker reads the stored entry and its rows again. It refuses an entry that
+     changed after edit mode opened it (D76), and an entry with a blocking row. The
+     question follows.
+  2. The copy of the entry is written to a new file,
+     `deleted-entries/recording-<id>-<UTC time>.json`, next to the settings file, as
+     for manifests (D52). It holds the database path, the time, who deleted, all
+     fields, the channels, the RF chain and the check rows. An existing file is never
+     replaced. If the copy cannot be written, nothing is deleted.
+  3. One write transaction reads the entry and its rows again, refuses if either
+     differs from step 1, and deletes the check rows and the recording. Channels and
+     RF chain rows go by cascade. `transfer_log` has no cascade, so the check rows are
+     deleted first. If this step fails, the message names the copy and says that the
+     entry was not deleted.
+  4. The form is cleared. The message line says "Deleted recording 12 from the
+     catalogue. Its files were not touched. A copy of the entry is in …". The Viewer
+     refreshes, and the Archive / copy tab drops the recording from its form.
+- **No file of the recording is touched.** The delete removes catalogue rows only.
+  `transfer/delete.py` stays the only module that deletes files.
+- **Two PCs.** A copy or an archive writes its `transfer_log` row before its first
+  file. A delete that comes later finds that row and is refused. If the delete comes
+  first, the transfer's row fails on the foreign key, and the transfer stops with
+  "Recording 12 is no longer in the catalogue. It may have been deleted on another
+  PC." before it copies a file. A save in edit mode, and a second delete, of an entry
+  deleted on another PC give the same message.
+- **The copy stays on the PC that deleted.** A shared record would need a new table,
+  so schema version 2 and a migration (HANDOFF.md, section 5). The user chose the
+  file.
+- No schema change.
+
+Affects: SPEC sections 3, 5, 6, 9 and 13, `db/repository.py` (`blocks_deletion()`,
+`delete_recording()`, `insert_transfer()`), `entry.py` (`check_deletion()`,
+`delete_entry()`), `deletion_record.py`, `gui/log_tab.py`, `gui/transfer_tab.py`,
+`app.py`, the user guide.

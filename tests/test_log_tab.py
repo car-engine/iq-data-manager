@@ -32,7 +32,14 @@ from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
-from iqdm.models import ArchiveState, Endianness, IqLayout, Operation, SampleType
+from iqdm.models import (
+    ArchiveState,
+    Endianness,
+    IqLayout,
+    Operation,
+    SampleType,
+    TransferEntry,
+)
 from iqdm.scan.scanner import ScanCancelled, scan_recording
 from make_fixtures import ChannelSpec
 
@@ -2041,3 +2048,163 @@ def test_a_message_without_a_state_is_plain(make_tab):
     tab.show_message("Saving...")
     assert shown(tab) == ("Saving...", "")
     assert tab.message_text == "Saving..."
+
+
+# ---------------------------------------------------------------------------
+# Deleting an entry added by mistake (D89)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def delete_answer(monkeypatch):
+    """Replace the question: record its text and give a set answer."""
+    asked: list[str] = []
+    answer = {"delete": True}
+
+    def confirm(parent, text):
+        asked.append(text)
+        return answer["delete"]
+
+    monkeypatch.setattr(log_tab_module, "confirm_delete", confirm)
+    return asked, answer
+
+
+def opened_for_edit(qtbot, make_tab, info, site_id, **kw) -> LogTab:
+    """A saved entry, open in edit mode as recording 1."""
+    tab = make_tab(**kw)
+    logged_ready(qtbot, tab, info, site_id)
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    assert tab.editing is not None
+    return tab
+
+
+def delete_and_wait(qtbot, tab: LogTab) -> None:
+    tab.delete_button.click()
+    wait_idle(qtbot, tab)
+    wait_idle(qtbot, tab)  # the check, then the delete
+
+
+def test_the_delete_button_shows_in_edit_mode_only(
+    qtbot, make_tab, make_recording, site_id, tmp_path
+):
+    tab = opened_for_edit(qtbot, make_tab, make_recording(), site_id, records_folder=tmp_path)
+    assert not tab.delete_button.isHidden()
+    assert tab.delete_button.isEnabled()
+    tab.clear_form()
+    assert tab.delete_button.isHidden()
+
+
+def test_delete_clears_the_form_and_says_so(
+    qtbot, make_tab, make_recording, site_id, db_path, tmp_path, delete_answer
+):
+    asked, _ = delete_answer
+    info = make_recording()
+    before = sorted((p.name, p.stat().st_size) for p in Path(info.root).rglob("*"))
+    records = tmp_path / "deleted-entries"
+    tab = opened_for_edit(qtbot, make_tab, info, site_id, records_folder=records)
+    with qtbot.waitSignal(tab.deleted) as signal:
+        delete_and_wait(qtbot, tab)
+    assert signal.args == [1]
+    (question,) = asked
+    assert question.startswith("Delete recording 1 from the catalogue?")
+    (record,) = records.iterdir()
+    assert tab.message_state is ItemState.OK
+    assert tab.message_text == (
+        "Deleted recording 1 from the catalogue. Its files were not touched. "
+        f"A copy of the entry is in {record}."
+    )
+    assert tab.editing is None
+    assert tab.mode_label.text() == "New entry"
+    with open_db(db_path, readonly=True) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0] == 0
+    assert sorted((p.name, p.stat().st_size) for p in Path(info.root).rglob("*")) == before
+
+
+def test_cancel_deletes_nothing(
+    qtbot, make_tab, make_recording, site_id, db_path, tmp_path, delete_answer
+):
+    _, answer = delete_answer
+    answer["delete"] = False
+    records = tmp_path / "deleted-entries"
+    tab = opened_for_edit(qtbot, make_tab, make_recording(), site_id, records_folder=records)
+    delete_and_wait(qtbot, tab)
+    assert (tab.message_state, tab.message_text) == (ItemState.INFO, "Nothing deleted.")
+    assert tab.editing is not None
+    assert not records.exists()
+    with open_db(db_path, readonly=True) as conn:
+        assert repository.get_recording(conn, 1).id == 1
+
+
+def test_an_archived_or_copied_entry_is_not_deleted(
+    qtbot, make_tab, make_recording, site_id, db_path, tmp_path, delete_answer
+):
+    asked, _ = delete_answer
+    tab = opened_for_edit(qtbot, make_tab, make_recording(), site_id, records_folder=tmp_path)
+    write_transaction(
+        db_path,
+        lambda conn: repository.insert_transfer(
+            conn,
+            TransferEntry(
+                recording_id=1,
+                operation=Operation.COPY,
+                source="C:/rec",
+                destination="D:/work/rec",
+                started_at="2026-10-23T08:00:00Z",
+                performed_by="u",
+            ),
+        ),
+    )
+    delete_and_wait(qtbot, tab)
+    assert asked == []
+    assert tab.message_state is ItemState.ERROR
+    assert tab.message_text == (
+        "Not deleted: Recording 1 has an archive or a copy in its history, so it cannot be "
+        "deleted. Correct it with Save entry instead."
+    )
+    assert tab.editing is not None
+
+
+def test_a_recording_another_tab_holds_is_not_deleted(
+    qtbot, make_tab, make_recording, site_id, tmp_path, delete_answer
+):
+    asked, _ = delete_answer
+    held = "The Archive / copy queue holds recording 1."
+    tab = opened_for_edit(
+        qtbot,
+        make_tab,
+        make_recording(),
+        site_id,
+        records_folder=tmp_path,
+        deletion_blocked=lambda rid: held if rid == 1 else None,
+    )
+    tab.delete_button.click()
+    assert not tab.runner.busy
+    assert (tab.message_state, tab.message_text) == (ItemState.ERROR, held)
+    assert asked == []
+
+
+def test_without_a_records_folder_nothing_is_deleted(
+    qtbot, make_tab, make_recording, site_id, delete_answer
+):
+    tab = opened_for_edit(qtbot, make_tab, make_recording(), site_id)
+    tab.delete_button.click()
+    assert tab.message_text == log_tab_module.NO_RECORDS_FOLDER
+    assert tab.editing is not None
+
+
+def test_a_save_over_an_entry_deleted_elsewhere(
+    qtbot, make_tab, make_recording, site_id, db_path, tmp_path
+):
+    tab = opened_for_edit(qtbot, make_tab, make_recording(), site_id)
+    original = tab.editing
+    check = entry.check_deletion(db_path, original)
+    entry.delete_entry(db_path, check, records_folder=tmp_path, deleted_by="other")
+    tab.plan_edit.setText("plan-2")
+    save_and_wait(qtbot, tab)
+    assert tab.message_state is ItemState.ERROR
+    assert tab.message_text == (
+        "Not saved: Recording 1 is no longer in the catalogue. It may have been deleted on "
+        "another PC."
+    )

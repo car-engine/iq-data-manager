@@ -80,7 +80,9 @@ Key semantics:
   verification, and its log entry marks it as unverified (DECISIONS.md D2).
 - **Deletion**: `channels` and `recording_params` cascade on recording delete.
   `transfer_log` does not, so a recording with transfer history cannot be deleted
-  without explicit handling.
+  without explicit handling. `repository.delete_recording()` deletes the recording's
+  check rows without a parent first, and refuses a recording with any other row
+  (D89; section 6).
 - **Schema version**: `PRAGMA user_version`. Changes are numbered migrations in
   `src/iqdm/db/migrations.py`. They run only from an explicit, user-confirmed
   upgrade action, with a backup copy made first (DECISIONS.md D6). Version 1 is the
@@ -253,8 +255,8 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
   and the selection), Open folder (the recording folder, or the channel folder when a
   channel is selected), Edit entry (D45: opens the Log tab in edit mode, and asks
   first when the Log tab form holds input that is not saved). "Archive / copy" comes
-  with the Archive / copy tab in Milestone 6 (D42, D64). The GUI does not delete
-  recordings (D41).
+  with the Archive / copy tab in Milestone 6 (D42, D64). The Viewer does not delete
+  recordings; the Log tab's edit mode does (D89, section 6).
 - **Database states**: no database path gives a line that points to the Settings
   tab. A database from a newer app version is shown with an amber line (D6). A file
   that is missing, older or not an IQ Data Manager database gives a red line with the
@@ -409,7 +411,24 @@ Edit mode (DECISIONS.md D16):
   (D20). Rows for the whole recording and for other channels stay.
 - A save writes nothing when the stored entry changed after the edit opened, for
   example through an archive, a Check archive or another edit. The tab says so, keeps
-  the form and asks the user to open the entry again (D76).
+  the form and asks the user to open the entry again (D76). A save over an entry
+  deleted on another PC says that the entry is no longer in the catalogue (D89).
+- **Delete entry...** (D89), shown in edit mode only, deletes an entry added by
+  mistake from the catalogue. Its files are never touched. It is refused when the
+  entry's history holds an archive, a copy, a delete or a check before delete, when
+  this PC's Archive / copy queue holds the entry as waiting, running or paused, when
+  the Archive / copy tab works on it, and when the entry changed after the edit
+  opened (D76). Check rows without a parent (the row of D2, Check archive, Compare
+  with laptop copy) go with the entry. A question names the recording, its folder,
+  start, channels, files and check rows, says that the files stay, and defaults to
+  Cancel. Before the delete, a copy of the entry and its check rows is written to a
+  new file `deleted-entries/recording-<id>-<UTC time>.json` next to the settings file;
+  if that fails, nothing is deleted. One transaction then reads the entry and its
+  rows again, refuses if they changed since the question, and deletes them. The form
+  is cleared, the message names the copy, the Viewer refreshes, and the Archive /
+  copy tab drops the recording from its form. A transfer whose recording was deleted
+  meanwhile stops before it copies a file, because its first row needs the
+  recording.
 
 ## 7. Scanner
 
@@ -694,6 +713,7 @@ iq-data-manager/
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     bands.py                  # the band list and the band of an fc (D88)
+    deletion_record.py        # the copy of a deleted entry, written once (D89)
     viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
     movecopy.py               # Archive / copy tab logic: time input, preview text, states (no Qt)
     legacy.py                 # legacy import: folder rules, grouping, report (D66; no Qt, no SQL)
@@ -849,8 +869,9 @@ specified here first, with its decision.
 ## 13. Scope
 
 Out of scope for v1: Linux build, transfer scripts (D48), file-level gap storage in
-the DB, user accounts, editing RF chain templates, deleting catalogue entries from the
-GUI (D41).
+the DB, user accounts, editing RF chain templates. Deleting a catalogue entry with an
+archive, a copy or a delete in its history (D89; D41 kept every delete out of the GUI
+until version 1.2).
 
 Open questions and assumptions that may still change are listed in `docs/STATUS.md`.
 Resolved decisions are in `docs/DECISIONS.md`.

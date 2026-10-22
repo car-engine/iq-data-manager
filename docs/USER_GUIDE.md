@@ -211,6 +211,16 @@ A folder that is already logged shows **Edit existing entry**. In edit mode, a c
 to the sample rate, sample type, header or file duration needs a new scan first. The
 site, the project, the remarks and the RF chain change without a scan.
 
+**Deleting an entry added by mistake.** Open the entry with **Edit entry** in the
+Viewer, or **Edit existing entry** here, and click **Delete entry...**. A window names
+the recording, its folder and its files, and asks first; **Cancel** is the default.
+The delete removes the entry from the catalogue only. The files in the folder stay
+where they are. Before the delete, the app saves a copy of the entry in the folder
+`deleted-entries` next to the settings file, and the line under the buttons names the
+file. Check results of the entry are deleted with it. An entry that was archived or
+copied cannot be deleted; correct it with **Save entry** instead. Remove a recording
+from the Archive / copy queue before you delete it.
+
 A folder under a NAS location is logged as archived. The Viewer shows it as "archived,
 not verified" until a comparison with the laptop copy passes (section 5).
 

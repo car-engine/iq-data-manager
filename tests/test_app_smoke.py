@@ -722,6 +722,38 @@ def test_a_log_tab_save_refreshes_the_viewer(qtbot, tmp_path, db_path):
     assert window.viewer_tab.selected_id == rid
 
 
+def test_a_log_tab_delete_refreshes_the_viewer_and_the_archive_copy_form(
+    qtbot, tmp_path, db_path
+):
+    """D89: the deleted recording leaves the Viewer and the Archive / copy form."""
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    assert window.log_tab._records_folder == tmp_path / "deleted-entries"
+    window.transfer_tab.load_recording(rid)
+    wait_window(qtbot, window)
+    write_transaction(db_path, lambda conn: repo.delete_recording(conn, rid))
+    window.log_tab.deleted.emit(rid)
+    wait_window(qtbot, window)
+    assert window.viewer_tab.model.rowCount() == 0
+    shown = window.transfer_tab.message_label.text()
+    assert shown.endswith(f"Recording {rid} was deleted from the catalogue.")
+    assert window.transfer_tab.id_spin.value() == 0
+
+
+def test_the_queue_holds_a_recording_against_a_delete(qtbot, tmp_path, db_path):
+    window, rid = window_with_recording(qtbot, tmp_path, db_path)
+    blocked = window.log_tab._deletion_blocked
+    assert blocked(rid) is None
+    item = window.transfer_tab._queue.add(
+        QueueItem(recording_id=rid, label="r", kind=QueueKind.CHECK_ARCHIVE)
+    )
+    assert blocked(rid) == (
+        f"The Archive / copy queue holds recording {rid}. Remove it from the queue first, "
+        "then delete the entry."
+    )
+    window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
+    assert blocked(rid) is None
+
+
 def test_saved_settings_reach_the_viewer(qtbot, tmp_path, db_path):
     window, _rid = window_with_recording(qtbot, tmp_path, db_path)
     window.settings_tab.coverage_spin.setValue(90.0)
