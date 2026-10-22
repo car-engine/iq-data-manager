@@ -534,8 +534,15 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   the recording points at the NAS copy and the laptop copy stays (D85). Clear
   finished keeps such items, Remove removes them, Start skips them, and the summary
   counts them apart.
-- Pause asks first. It stops the running item between chunks, as Stop does; Start
-  continues it, skipping the files already in place (D51, D63).
+- Pause asks first. It stops the running item between chunks, as Stop does. While a
+  paused item waits, the Start button reads Resume; it continues the item, skipping
+  the files already in place (D51, D63). A pause during Check before delete stops the
+  check, and the item becomes "Archived, check needed".
+- A paused or waiting item continues only in the queue (D86). The form's Run and Add
+  to queue stay disabled while the queue holds a waiting, running or paused item that
+  the form's transfer repeats, by the rule above; a line under the buttons says so.
+  Remove frees the transfer for the form. The end of a queue run drops the form's
+  preview.
 - The queue lives in memory. Closing the window asks first while it runs or holds
   items that have not run.
 

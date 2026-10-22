@@ -25,7 +25,6 @@ from iqdm.timeutil import display_time
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import (
     CHECK_NEEDS_HASHES,
-    TransferError,
     TransferRequest,
     check_archive,
     check_before_delete,
@@ -138,18 +137,42 @@ class TransferQueue:
         recording to different folders do not, for example two channels to two places.
         Any item to the same destination folder repeats.
         """
+        other = self._repeated_by(item)
+        if other is None:
+            return ""
+        same_recording = other.recording_id == item.recording_id and other.kind is item.kind
+        if same_recording and item.kind is not QueueKind.COPY:
+            return f"Recording {item.recording_id} is already in the queue for this."
+        return f"Another item in the queue already goes to {item.destination}."
+
+    def holding(self, request: TransferRequest) -> QueueItem | None:
+        """The waiting, running or paused item that a run of `request` in the form repeats.
+
+        The form does not run such a transfer: the queue continues it (D86).
+        """
+        kind = QueueKind.ARCHIVE if request.operation is Operation.ARCHIVE else QueueKind.COPY
+        return self._repeated_by(
+            QueueItem(recording_id=request.recording_id, label="", kind=kind, request=request)
+        )
+
+    def _repeated_by(self, item: QueueItem) -> QueueItem | None:
+        """The first active item that `item` repeats, by the rules of duplicate_problem()."""
         for other in self._items:
             if other.state not in ACTIVE:
                 continue
             same_recording = other.recording_id == item.recording_id and other.kind is item.kind
             if same_recording and item.kind is not QueueKind.COPY:
-                return f"Recording {item.recording_id} is already in the queue for this."
+                return other
             same_folder = ntpath.normcase(ntpath.normpath(other.destination)) == (
                 ntpath.normcase(ntpath.normpath(item.destination))
             )
             if item.destination and other.destination and same_folder:
-                return f"Another item in the queue already goes to {item.destination}."
-        return ""
+                return other
+        return None
+
+    def has_paused(self) -> bool:
+        """True when an item waits to be resumed. The Start button then reads Resume."""
+        return any(i.state is QueueState.PAUSED for i in self._items)
 
     def remove(self, key: int) -> QueueItem:
         """Take an item out of the queue. A running item cannot be removed."""
@@ -327,7 +350,8 @@ def run_item(
     report gets Phase, scan counts (int), VerifyProgress and RetryNotice; copy_report
     gets CopyProgress, and defaults to report. A cancel gives PAUSED while the item can
     be continued, and a failed preview gives NOT_STARTED. Errors the operations raise
-    for a plain reason give FAILED; other exceptions reach the caller.
+    for a plain reason give FAILED; other exceptions reach the caller. Once an archive
+    passed, every error of its Check before delete gives CHECK_NEEDED (D85).
     """
     if item.kind is QueueKind.CHECK_ARCHIVE:
         return _run_check_archive(db_path, item, performed_by, report, cancelled)
@@ -376,7 +400,7 @@ def run_item(
     )
     tid = outcome.transfer_id
     if outcome.verification is Verification.SKIPPED:
-        note = f"{outcome.notes or 'Stopped.'} Start continues it."
+        note = f"{outcome.notes or 'Stopped.'} Resume continues it."
         return ItemResult(state=QueueState.PAUSED, note=note, transfer_id=tid, size_bytes=size)
     if not outcome.passed:
         note = f"Transfer {tid}: {outcome.notes or 'the check after the copy failed.'}"
@@ -412,7 +436,9 @@ def run_item(
         )
     except DeleteRefused as exc:
         return check_needed(f"Check before delete could not run: {' '.join(exc.reasons)}")
-    except (TransferError, OSError) as exc:
+    except Exception as exc:
+        # The archive passed, so any error here, a locked database among them, is a
+        # check still needed. The tab would show it as Failed (review of 1.1.0, finding 1).
         return check_needed(f"Check before delete could not run: {exc}")
     if check.verification is Verification.PASS:
         note = f"{done} Check before delete passed; the laptop copy can be deleted."

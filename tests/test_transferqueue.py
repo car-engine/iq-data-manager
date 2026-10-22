@@ -15,7 +15,7 @@ from conftest import recording_from
 from iqdm import transferqueue
 from iqdm.config import Config
 from iqdm.db import repository as repo
-from iqdm.db.connection import open_db, write_transaction
+from iqdm.db.connection import DatabaseBusyError, DatabaseError, open_db, write_transaction
 from iqdm.models import ArchiveState, HashMode, Operation, Verification
 from iqdm.transfer.copier import CopyProgress
 from iqdm.transfer.delete import DeleteRefused
@@ -94,6 +94,29 @@ def test_two_copies_of_one_recording_to_two_folders_are_allowed():
     assert len(queue) == 2
     with pytest.raises(QueueError, match="already goes to"):
         queue.add(replace(first, request=request(7, "c:\\PC\\ch0", Operation.COPY)))
+
+
+def test_holding_finds_the_item_a_form_run_would_repeat():
+    """D86: the form does not run a transfer that the queue holds."""
+    queue = TransferQueue()
+    archive = queue.add(item(1, "D:\\nas\\a"))
+    copy = queue.add(
+        replace(item(2, kind=QueueKind.COPY), request=request(2, "C:\\pc\\x", Operation.COPY))
+    )
+    assert queue.holding(request(1, "D:\\nas\\elsewhere")) == archive  # the same archive
+    assert queue.holding(request(2, "c:\\PC\\x\\", Operation.COPY)) == copy  # the same folder
+    assert queue.holding(request(2, "C:\\pc\\y", Operation.COPY)) is None  # another copy
+    assert queue.holding(request(3, "D:\\nas\\b")) is None
+    queue.set_state(archive.key, QueueState.DONE)
+    assert queue.holding(request(1, "D:\\nas\\a")) is None  # finished items do not hold
+
+
+def test_has_paused():
+    queue = TransferQueue()
+    first = queue.add(item(1))
+    assert not queue.has_paused()
+    queue.set_state(first.key, QueueState.PAUSED)
+    assert queue.has_paused()
 
 
 def test_a_finished_item_may_be_added_again():
@@ -367,6 +390,10 @@ def test_a_failed_check_before_delete_is_check_needed(env, monkeypatch):
     [
         (OSError(87, "The parameter is incorrect"), "The parameter is incorrect"),
         (DeleteRefused(["The archive copy has no file list."]), "has no file list"),
+        # A locked catalogue after a passed archive (review of 1.1.0, finding 1)
+        (DatabaseBusyError("The database is in use by someone else."), "in use by someone"),
+        (DatabaseError("disk I/O error"), "disk I/O error"),
+        (RuntimeError("unexpected"), "unexpected"),
     ],
 )
 def test_a_check_that_cannot_run_is_check_needed(env, monkeypatch, error, reason):
@@ -427,7 +454,7 @@ def test_a_failed_preview_is_not_started(env):
     assert not outside.exists()
 
 
-def test_a_pause_stops_the_item_and_start_continues_it(env):
+def test_a_pause_stops_the_item_and_resume_continues_it(env):
     """D81: a cancel finishes the row as skipped; the next run skips the copied files."""
     stop = {"now": False}
 
@@ -437,7 +464,7 @@ def test_a_pause_stops_the_item_and_start_continues_it(env):
 
     paused, _ = env.run(env.item(), cancelled=lambda: stop["now"], report=report)
     assert paused.state is QueueState.PAUSED
-    assert "Start continues it" in paused.note
+    assert "Resume continues it" in paused.note
     (row,) = env.transfers()
     assert row.verification is Verification.SKIPPED
     assert env.recording().archive_state is ArchiveState.LOCAL

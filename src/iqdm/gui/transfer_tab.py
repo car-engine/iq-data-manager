@@ -79,9 +79,20 @@ from iqdm.transferqueue import ItemResult, Phase, QueueError, QueueItem, QueueKi
 PROGRESS_EVERY_S = 0.1  # copy progress reaches the GUI at most this often
 PAUSE_QUEUE_QUESTION = (
     "Pause the queue?\n\nThe running item stops after the part of a file it is copying. "
-    "Files already copied stay. Start continues with that item and does not copy them "
-    "again."
+    "Files already copied stay. Resume continues with that item and does not copy them "
+    "again.\n\nDuring a Check before delete, the check stops instead. The item is then "
+    '"Archived, check needed": run Check before delete for it in the form.'
 )
+QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
+    QueueState.WAITING: (
+        "This transfer is waiting in the queue. Click Start under the queue to run it, or "
+        "remove it from the queue to run it here."
+    ),
+    QueueState.PAUSED: (
+        "This transfer is paused in the queue. Click Resume under the queue to continue "
+        "it, or remove it from the queue to run it here."
+    ),
+}
 QUEUE_HINT = (
     "Add recordings with Add to queue in the Viewer, or set one up in the form above "
     "and click Add to queue under the preview. Start runs them one after another."
@@ -537,6 +548,9 @@ class TransferTab(QWidget):
         self.result_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.message_label = QLabel()
         self.message_label.setWordWrap(True)
+        self.queued_label = QLabel()  # why Run is off: the queue holds this transfer (D86)
+        self.queued_label.setWordWrap(True)
+        self.queued_label.setVisible(False)
 
         buttons = QHBoxLayout()
         buttons.addWidget(self.preview_button)
@@ -551,6 +565,7 @@ class TransferTab(QWidget):
         layout.addWidget(self.file_list, 1)
         layout.addWidget(QLabel("A copy or an archive never replaces or deletes a file."))
         layout.addLayout(buttons)
+        layout.addWidget(self.queued_label)
         layout.addWidget(self.phase_label)
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
@@ -639,6 +654,7 @@ class TransferTab(QWidget):
             QEvent.Type.ApplicationPaletteChange,
         ) and hasattr(self, "result_label"):
             self._show_result()
+            self._show_queued(self._queued_item())
             self._show_time_errors()
             self._show_laptop()
         super().changeEvent(event)
@@ -715,6 +731,8 @@ class TransferTab(QWidget):
         if load_id != self._load_id or not isinstance(result, viewer.Details):
             return
         same = self._rec is not None and self._rec.id == result.recording.id
+        if self._pending_edit is None and not (keep_form and same):
+            self._edit_position = None  # the form no longer holds an edited queue item
         self._rec = result.recording
         self._transfers = list(result.transfers)
         self._site = result.site_name
@@ -748,6 +766,7 @@ class TransferTab(QWidget):
         self._set_message(ItemState.ERROR, viewer.error_text(exc), str(exc))
 
     def _clear_recording(self) -> None:
+        self._edit_position = None
         self._rec = None
         self._transfers = []
         self._site = ""
@@ -1109,9 +1128,13 @@ class TransferTab(QWidget):
         if preview.request != self._current_request():
             self._invalidate()
             return
+        if self._queued_item() is not None:  # the queue continues it (D86)
+            self._update_buttons()
+            return
         if self.manifests_dir is None:
             self._set_result(ItemState.ERROR, NO_MANIFEST_FOLDER)
             return
+        self._edit_position = None  # an edited queue item runs here instead
         db, manifests = self.config.db_path, self.manifests_dir
         workers, user = self.config.copy_workers, self._performed_by()
         archive = preview.request.operation is Operation.ARCHIVE
@@ -1670,7 +1693,7 @@ class TransferTab(QWidget):
         parts = [f"{counts[s]} {str(s).lower()}" for s in shown_states if counts[s]]
         waiting = counts[QueueState.WAITING] + counts[QueueState.PAUSED]
         if self._pause_requested and waiting:
-            text = f"Queue paused. {waiting} left; Start continues."
+            text = f"Queue paused. {waiting} left; Resume continues."
             state = ItemState.INFO
         else:
             text = "Queue finished."
@@ -1683,6 +1706,9 @@ class TransferTab(QWidget):
         if parts:
             text += " " + "; ".join(parts) + "."
         self._pause_requested = False
+        if self._preview is not None:  # the queue may have copied into its destination (D86)
+            self._preview = None
+            self._show_preview()
         self._set_result(state, text)
         self.status_changed.emit("")
         self.busy_changed.emit(self.is_busy)
@@ -1973,6 +1999,17 @@ class TransferTab(QWidget):
         """Block until every task of the tab has ended. For closing the app and tests."""
         return self.runner.wait(msecs)
 
+    def _queued_item(self) -> QueueItem | None:
+        """The queue item that the form's previewed transfer repeats, or None (D86)."""
+        preview = self._preview
+        return None if preview is None else self._queue.holding(preview.request)
+
+    def _show_queued(self, item: QueueItem | None) -> None:
+        text = "" if item is None else QUEUED_TEXT.get(item.state, "")
+        self.queued_label.setText(f"{MARKS[ItemState.INFO]}  {text}" if text else "")
+        self.queued_label.setStyleSheet(f"color: {self._colours()[ItemState.INFO].name()};")
+        self.queued_label.setVisible(bool(text))
+
     def _set_result(self, state: ItemState, text: str, tooltip: str = "") -> None:
         self._result = (state, text) if text else None
         self.result_label.setToolTip(tooltip)
@@ -2037,11 +2074,14 @@ class TransferTab(QWidget):
             and preview.ok
             and preview.request == self._current_request()
         )
-        self.run_button.setEnabled(runnable)
-        self.add_queue_button.setEnabled(runnable)
+        queued = self._queued_item() if runnable else None
+        self.run_button.setEnabled(runnable and queued is None)
+        self.add_queue_button.setEnabled(runnable and queued is None)
+        self._show_queued(queued)
         self.stop_button.setEnabled(busy and self._task is not None)
         self.stop_button.setVisible(busy and not self._queue_running)
         chosen = self._selected_queue_item()
+        self.start_queue_button.setText("Resume" if self._queue.has_paused() else "Start")
         self.start_queue_button.setEnabled(
             not busy and has_db and self._queue.runnable_count() > 0
         )

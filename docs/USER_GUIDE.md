@@ -273,8 +273,13 @@ The queue runs several archives, copies and Check archive runs one after another
    archive a recording to another NAS folder.
 4. Click **Start**. The items run one after another. Each is checked again just
    before it starts; an item that cannot start is marked and the queue goes on.
-5. **Pause** stops the running item. Files already copied stay. **Start** continues
-   with it and does not copy them again.
+5. **Pause** stops the running item. Files already copied stay. The **Start** button
+   then reads **Resume**: it continues with that item and does not copy them again.
+   A pause during Check before delete stops the check; the item is then marked
+   **ⓘ Archived, check needed** (below).
+6. A transfer that is waiting or paused in the queue runs only from the queue. If you
+   load it into the form, **Run** stays off, and a line under the buttons says so.
+   To run it from the form instead, select it in the queue and click **Remove**.
 
 With **After each archive, run Check before delete** ticked, each archive is checked
 before delete straight away. Delete each laptop copy afterwards with **Delete laptop

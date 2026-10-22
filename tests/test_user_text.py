@@ -58,6 +58,7 @@ from iqdm.gui.transfer_tab import (
     QUEUE_HEADERS,
     QUEUE_HINT,
     QUEUE_NOTE_HINT,
+    QUEUED_TEXT,
     TransferTab,
 )
 from iqdm.gui.viewer_tab import NO_PROJECT_FILTER, NO_PROJECT_TEXT, ViewerTab
@@ -251,6 +252,8 @@ def test_queue_text_is_plain():
     )
     texts = [
         PAUSE_QUEUE_QUESTION,
+        *QUEUED_TEXT.values(),
+        "Resume",
         QUEUE_HINT,
         QUEUE_EDIT_NOTE,
         QUEUE_NOTE_HINT,

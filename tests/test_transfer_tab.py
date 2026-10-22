@@ -18,7 +18,7 @@ from conftest import recording_from
 from iqdm import transferqueue, viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
-from iqdm.db.connection import open_db, write_transaction
+from iqdm.db.connection import DatabaseBusyError, open_db, write_transaction
 from iqdm.entry import ItemState
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
@@ -658,7 +658,8 @@ def test_add_to_queue_from_the_form(env):
     assert tab.queue_table.item(0, 1).text() == "Waiting"
     assert tab.queue_table.item(0, 2).text() == "Archive"
     assert tab.queue_table.item(0, 4).text() == "Whole recording"
-    tab.add_queue_button.click()  # the same recording again
+    assert not tab.add_queue_button.isEnabled()  # the queue holds it (D86)
+    tab.add_current_to_queue()  # the same recording again, called directly
     assert len(tab.queue) == 1
     assert tab.result == (ItemState.ERROR, f"Recording {env.rid} is already in the queue for this.")
     assert env.transfers() == []  # nothing ran
@@ -700,7 +701,8 @@ def test_pause_then_start_finishes_the_item(env, answers, slow_queue, make_recor
     assert answers.texts[-1] == tab_module.PAUSE_QUEUE_QUESTION
     queue_idle(env, tab)
     assert states(tab) == [QueueState.PAUSED]
-    assert tab.result[0] is ItemState.INFO and tab.result[1].startswith("Queue paused. 1 left")
+    assert tab.result == (ItemState.INFO, "Queue paused. 1 left; Resume continues.")
+    assert tab.start_queue_button.text() == "Resume"  # D86
     (stopped,) = tab.unfinished
     assert stopped.operation is Operation.ARCHIVE
 
@@ -709,6 +711,84 @@ def test_pause_then_start_finishes_the_item(env, answers, slow_queue, make_recor
     assert states(tab) == [QueueState.DONE]
     assert env.recording().archive_state is ArchiveState.ARCHIVED
     assert tab.unfinished == []
+    assert tab.start_queue_button.text() == "Start"
+
+
+def paused_from_the_form(env, answers) -> TransferTab:
+    """An archive added from the form, started and paused part-way."""
+    tab = env.loaded(env.tab())
+    tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    env.previewed(tab)
+    tab.add_queue_button.click()
+    tab.start_queue_button.click()
+    env.qtbot.waitUntil(lambda: tab.progress_label.text().startswith("1 of"), timeout=10_000)
+    answers.next = QMessageBox.StandardButton.Yes
+    tab.pause_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.PAUSED]
+    return tab
+
+
+def test_a_paused_item_continues_only_in_the_queue(env, answers, slow_queue):
+    """D86 (review of 1.1.0, finding 10): Run does not finish a paused queue item."""
+    tab = paused_from_the_form(env, answers)
+    assert tab.preview is None  # dropped: the queue copied files since it was made
+    assert not tab.run_button.isEnabled()
+    env.previewed(tab)
+    assert tab.preview.ok
+    assert not tab.run_button.isEnabled() and not tab.add_queue_button.isEnabled()
+    assert not tab.queued_label.isHidden()
+    assert tab.queued_label.text().endswith(tab_module.QUEUED_TEXT[QueueState.PAUSED])
+    tab.start_run()  # refused as well when called directly
+    assert env.recording().archive_state is ArchiveState.LOCAL
+    assert len(env.transfers()) == 1  # only the paused row
+
+    tab.select_queue_row(0)
+    tab.remove_queue_button.click()  # out of the queue: the form may run it
+    assert tab.run_button.isEnabled()
+    assert tab.queued_label.isHidden()
+
+
+def test_resume_from_unfinished_transfers_points_at_the_queue(env, answers, slow_queue):
+    tab = paused_from_the_form(env, answers)
+    tab.select_unfinished(0)
+    tab.resume_selected()
+    env.idle(tab)
+    assert tab.preview is not None and tab.preview.ok
+    assert not tab.run_button.isEnabled()
+    assert tab.queued_label.text().endswith(tab_module.QUEUED_TEXT[QueueState.PAUSED])
+    tab.start_queue_button.click()  # Resume
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE]
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+
+
+def test_a_waiting_item_is_not_run_from_the_form(env):
+    tab = env.loaded(env.tab())
+    tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    env.previewed(tab)
+    tab.add_queue_button.click()
+    assert not tab.run_button.isEnabled()
+    assert tab.queued_label.text().endswith(tab_module.QUEUED_TEXT[QueueState.WAITING])
+    assert tab.start_queue_button.text() == "Start"
+    assert env.transfers() == []
+
+
+def test_a_locked_database_after_a_passed_archive_is_check_needed(env, monkeypatch):
+    """Review of 1.1.0, finding 1: the archive passed, so the item is not Failed."""
+
+    def busy(*_a, **_kw):
+        raise DatabaseBusyError("The database is in use by someone else.")
+
+    monkeypatch.setattr(transferqueue, "check_before_delete", busy)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid)
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.CHECK_NEEDED]
+    assert "in use by someone else" in tab.queue[0].note
+    assert tab.result == (ItemState.INFO, "Queue finished. 1 archived, check needed.")
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
 
 
 def test_a_waiting_item_can_be_removed_while_the_queue_runs(env, slow_queue, make_recording):
@@ -777,6 +857,22 @@ def test_edit_puts_the_item_back_in_its_place(env, make_recording):
         (other, other_destination),
     ]
     assert tab.message_label.text() == ""
+
+
+def test_an_edit_dropped_for_another_recording_frees_its_place(env, make_recording):
+    """Review of 1.1.0, finding 6: a later Add to queue goes to the end."""
+    other = second_recording(env, make_recording)
+    third = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid, other)
+    tab.select_queue_row(0)
+    tab.edit_queue_button.click()
+    env.idle(tab)
+    env.loaded(tab, third)  # the user drops the edit
+    tab.dest_edit.setText(str(env.nas / "2026" / "third"))
+    env.previewed(tab)
+    tab.add_queue_button.click()
+    assert [i.recording_id for i in tab.queue] == [other, third]
 
 
 def test_viewer_items_need_a_nas_folder_and_an_archive_to_check(env):

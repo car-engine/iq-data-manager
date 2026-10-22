@@ -1844,3 +1844,34 @@ archived. The user chose these points on 2026-10-22.
 
 Affects: SPEC section 8, `transferqueue.py`, `gui/transfer_tab.py`, the user guide,
 `docs/STATUS.md` (notes for agents, pending checks).
+
+## D86. A paused queue item continues in the queue only
+
+Amends D81. Found by the user after the review of 1.1.0 (finding 10). The user
+approved the plan on 2026-10-22 and asked for the Resume label.
+
+- In 1.1.0 a paused item could be continued three ways: Start in the queue, Run in
+  the form (its preview stayed when the item came from the form), and Resume under
+  "Unfinished transfers", which loads the item's stopped row into the form. The form
+  did not know about the queue item. An archive finished with Run left the item
+  "Paused"; Start then marked it "✗ Not started: The recording is already archived".
+  A copy finished with Run was copied again by Start, which copied no file and
+  recorded a second transfer. No file was at risk: the copier skips a file already in
+  place with the right size.
+- The form's Run and Add to queue stay disabled while the queue holds a waiting,
+  running or paused item that the form's transfer repeats. "Repeats" follows the
+  queue's own rule (D81): an archive of the same recording, or any transfer to the
+  same destination folder. A line under the buttons, with the information mark,
+  says that the transfer is waiting or paused in the queue, and that Start or Resume
+  runs it, or Remove frees it for the form.
+- Resume under "Unfinished transfers" still loads the transfer and previews it. Run
+  then stays disabled with the same line.
+- While the queue holds a paused item, the queue's Start button reads **Resume**. The
+  pause question, the end-of-queue summary and a paused item's note name Resume.
+- The end of a queue run drops the form's preview, because the queue may have copied
+  into its destination since the preview was made.
+- The pause question also says that a pause during Check before delete stops the
+  check, and the item becomes "Archived, check needed" (D85).
+
+Affects: SPEC section 8, `transferqueue.py` (`TransferQueue.holding()`,
+`has_paused()`), `gui/transfer_tab.py`, the user guide.
