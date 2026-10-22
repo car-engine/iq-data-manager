@@ -211,6 +211,10 @@ Decided items are in `docs/DECISIONS.md` (D1–D90). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
+- **The manual test of 1.2** (2026-10-23): `dev/test-1.2/CHECKLIST.html` with the
+  build `dist/test-1.2`, on the data in `dev/test-1.2/data`. The page exports the
+  results and comments as a text file to send back.
+
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
@@ -315,6 +319,11 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   and `dev/test-1.1.1/` (the checklist `CHECKLIST.html`, its data script and 115.6 MB
   of synthetic data with a scratch database).
 - `dev/o50-probe/` (a script that checks the italic band box offscreen, 2026-10-23).
+- After the manual test of 1.2: `dist/test-1.2/`, `build/work-test-1.2/` and
+  `build/test-1.2-build.log` (built from `ca79895`; it still shows version 1.1.1), and
+  `dev/test-1.2/` (the checklist `CHECKLIST.html`, its harness copy
+  `page-check.html`, `make_test_data.py`, `check_expectations.py`, and 11 MB of
+  synthetic data with a scratch database in `data`).
 - `dev/o51-probe/` (timing, size-check and screenshot scripts, 2026-10-23). Their data
   is in the session's scratch folder under `%TEMP%\claude\`: about 720,000 small
   synthetic files in `o51-size`.
