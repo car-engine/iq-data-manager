@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import entry, recorderlog, templates
+from iqdm import bands, entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
 from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
@@ -61,8 +61,19 @@ NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
+BAND_TOOLTIP = (
+    "Filled in from fc when fc lies in one of these bands: "
+    f"{bands.bands_text()}. Pick or type another band to replace it."
+)
 TEMPLATE_FILTER = "Templates (*.toml)"
 REPLACE_TEMPLATE_TITLE = "Replace the template?"
+
+
+def band_filled_tooltip(band: bands.Band) -> str:
+    return (
+        f"Filled in from fc: {band.name} is {band.range_text}. "
+        "Pick or type another band to replace it."
+    )
 
 
 def replace_template_question(path: Path) -> str:
@@ -156,6 +167,8 @@ class _ChannelRow:
     fs_auto: bool = False  # fs holds the value worked out from the file size (D21)
     fc_log: bool = False  # fc came from the recorder's log (D82)
     fs_log: bool = False  # fs came from the recorder's log (D82)
+    band_auto: bool = False  # the band was filled in from fc (D88); marks the field only
+    fc_before: str = ""  # the fc text the band last followed (D88)
 
 
 class LogTab(QWidget):
@@ -544,6 +557,7 @@ class LogTab(QWidget):
                     fs_inferred=r.fs_auto,
                     fc_from_log=r.fc_log,
                     fs_from_log=r.fs_log,
+                    band_from_fc=r.band_auto,
                 )
                 for r in self._channel_rows
             ],
@@ -603,7 +617,10 @@ class LogTab(QWidget):
         for c in self.current_input().channels:
             if c.band.strip() or c.fc_mhz.strip():
                 self._carried[c.channel_index] = ChannelInput(
-                    channel_index=c.channel_index, band=c.band, fc_mhz=c.fc_mhz
+                    channel_index=c.channel_index,
+                    band=c.band,
+                    fc_mhz=c.fc_mhz,
+                    band_from_fc=c.band_from_fc,
                 )
             else:
                 self._carried.pop(c.channel_index, None)
@@ -725,8 +742,15 @@ class LogTab(QWidget):
             inp = inputs.get(index, ChannelInput(channel_index=index))
             band = QComboBox()
             band.setEditable(True)
-            band.addItems(self._choices.bands)
-            band.setCurrentText(inp.band)
+            band.addItems(entry.band_choices(self._choices.bands))
+            # A new entry's empty band takes the band of a kept or template fc (D88).
+            # Edit mode shows the stored band as it is.
+            filled = (
+                entry.band_for_fc(inp.fc_mhz)
+                if self._original is None and not inp.band.strip()
+                else None
+            )
+            band.setCurrentText(inp.band if filled is None else filled.name)
             fc = QLineEdit(inp.fc_mhz)
             fs = QLineEdit(inp.fs_text)
             fs.setPlaceholderText("e.g. 10M")
@@ -738,11 +762,16 @@ class LogTab(QWidget):
                 fs_auto=inp.fs_inferred,
                 fc_log=inp.fc_from_log,
                 fs_log=inp.fs_from_log,
+                band_auto=inp.band_from_fc or filled is not None,
+                fc_before=inp.fc_mhz,
             )
             _mark_fs(row)
             _mark_fc(row)
+            _mark_band(row)
             band.currentTextChanged.connect(self._schedule_refresh)
-            fc.textChanged.connect(self._schedule_refresh)
+            band.lineEdit().textEdited.connect(lambda _text, r=row: self._band_chosen(r))
+            band.activated.connect(lambda _index, r=row: self._band_chosen(r))
+            fc.textChanged.connect(lambda text, r=row: self._fc_changed(r, text))
             fs.textChanged.connect(self._schedule_refresh)
             fs.textEdited.connect(lambda _text, r=row: self._fs_typed(r))
             fc.textEdited.connect(lambda _text, r=row: self._fc_typed(r))
@@ -780,6 +809,25 @@ class LogTab(QWidget):
         """The user typed in an fc field: it no longer shows as from the log (D82)."""
         row.fc_log = False
         _mark_fc(row)
+
+    def _fc_changed(self, row: _ChannelRow, text: str) -> None:
+        """fc changed, typed or set by the log or a template (D88).
+
+        An empty band, or the band of the previous fc, follows the new fc. A band the
+        user chose that differs from the previous fc's band stays.
+        """
+        new = entry.follow_band(row.band.currentText(), row.fc_before, text)
+        row.fc_before = text
+        if new is not None and new != row.band.currentText().strip():
+            row.band.setCurrentText(new)
+            row.band_auto = bool(new)
+            _mark_band(row)
+        self._schedule_refresh()
+
+    def _band_chosen(self, row: _ChannelRow) -> None:
+        """The user typed or picked a band: it no longer shows as filled in (D88)."""
+        row.band_auto = False
+        _mark_band(row)
 
     def _apply_recorder_log(self) -> None:
         """Fill values from the recorder's log, once per folder of a new entry (D82).
@@ -982,7 +1030,7 @@ class LogTab(QWidget):
             text = row.band.currentText()
             row.band.blockSignals(True)
             row.band.clear()
-            row.band.addItems(choices.bands)
+            row.band.addItems(entry.band_choices(choices.bands))
             row.band.setCurrentText(text)
             row.band.blockSignals(False)
         self.refresh_checklist()
@@ -1514,11 +1562,14 @@ class LogTab(QWidget):
             for row in self._channel_rows:
                 value = applied.channels.get(row.index)
                 if value is not None:
-                    row.band.setCurrentText(value.band)
                     if row.fc.text() != value.fc_mhz:
-                        row.fc.setText(value.fc_mhz)
+                        row.fc.setText(value.fc_mhz)  # the band may follow it (D88)
                         row.fc_log = False  # the template's value, not the log's (D87)
                         _mark_fc(row)
+                    if value.band.strip():  # after the fc, so the template's band wins
+                        row.band.setCurrentText(value.band)
+                        row.band_auto = False
+                        _mark_band(row)
         if tpl.rf_chain is not None:
             self.param_table.set_rows(list(form.params))
 
@@ -1631,6 +1682,13 @@ def _mark_fc(row: _ChannelRow) -> None:
     """Italic text and a tooltip on an fc value from the recorder's log (D82)."""
     row.fc.setStyleSheet("font-style: italic;" if row.fc_log else "")
     row.fc.setToolTip(recorderlog.FROM_LOG_TOOLTIP if row.fc_log else "")
+
+
+def _mark_band(row: _ChannelRow) -> None:
+    """Italic text and a tooltip on a band filled in from fc (D88)."""
+    row.band.setStyleSheet("font-style: italic;" if row.band_auto else "")
+    band = bands.band_named(row.band.currentText()) if row.band_auto else None
+    row.band.setToolTip(BAND_TOOLTIP if band is None else band_filled_tooltip(band))
 
 
 def _cell(text: str) -> QTableWidgetItem:

@@ -140,10 +140,36 @@ The Log recording tab adds a recording folder to the catalogue.
 3. **File format.** Sample type, IQ layout, endianness and header bytes. The defaults
    are `int16`, `interleaved_iq` (I then Q for each sample), `little` (little-endian)
    and 0 header bytes.
-4. **Channels.** For each channel, enter the band, the centre frequency in MHz and the
-   sample rate. The app fills in the sample rate from the file sizes; check it.
+4. **Channels.** For each channel, enter the centre frequency in MHz, the band and the
+   sample rate. The app fills in the band from the centre frequency, and the sample
+   rate from the file sizes; check both. The centre frequency is the frequency on air.
+   For a recording made through a down-converter, type the frequency on air over the
+   frequency the recorder tuned to.
 5. **RF chain.** Rows such as SDR, antenna or LNA, for the whole recording or for one
    channel.
+
+**Band.** When you enter or change a centre frequency, the band follows it, by this
+table. Each band starts at its lower edge and ends just below its upper edge, so
+300 MHz is UHF.
+
+| Band | From | Up to |
+| --- | --- | --- |
+| HF | 3 MHz | 30 MHz |
+| VHF | 30 MHz | 300 MHz |
+| UHF | 300 MHz | 1 GHz |
+| L | 1 GHz | 2 GHz |
+| S | 2 GHz | 4 GHz |
+| C | 4 GHz | 8 GHz |
+| X | 8 GHz | 12 GHz |
+| Ku | 12 GHz | 18 GHz |
+| K | 18 GHz | 27 GHz |
+| Ka | 27 GHz | 40 GHz |
+
+A band filled in this way shows in italics. A band you type or pick yourself stays when
+the frequency changes. If the frequency then lies outside that band, the checklist says
+so; this does not stop you saving. A frequency outside the table clears a band that was
+filled in from the frequency.
+The list also offers the other bands already in the catalogue.
 
 The **Before saving** checklist shows what is still to do and what is wrong. **Save
 entry** is possible when the checklist shows no error and nothing to do. The line under

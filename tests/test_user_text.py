@@ -34,23 +34,28 @@ from iqdm.app import (
     UNSAVED_WRONG_VALUE,
     queue_close_question,
 )
+from iqdm.bands import BANDS
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import write_transaction
 from iqdm.entry import (
+    ChannelInput,
     EntryInput,
     ParamInput,
     changed_text,
+    checklist,
     kept_note,
     missing_channels_text,
 )
 from iqdm.gui.log_tab import (
+    BAND_TOOLTIP,
     CONFLICT_TITLE,
     KEEP_LOG_BUTTON,
     REPLACE_TEMPLATE_TITLE,
     TEMPLATE_FILTER,
     USE_TEMPLATE_BUTTON,
     LogTab,
+    band_filled_tooltip,
     conflict_question,
     replace_template_question,
 )
@@ -351,6 +356,20 @@ def test_kept_fields_text_is_plain():
         missing_channels_text([1], True, 2),
         missing_channels_text([1, 2], False, 1),
     ]
+    assert offending(texts) == []
+
+
+def test_band_text_is_plain(make_recording):
+    """The band box's tooltips and the line for an fc outside its band (D88)."""
+    scan = scan_recording(Path(make_recording().root), 1.0)
+    form = EntryInput(
+        channels=[ChannelInput(channel_index=0, band="UHF", fc_mhz="145.8", fs_text="1k")]
+    )
+    lines = [i.text for i in checklist(form, scan=scan) if "outside" in i.text]
+    assert lines == [
+        "Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check the band."
+    ]
+    texts = [BAND_TOOLTIP, *lines, *(band_filled_tooltip(b) for b in BANDS)]
     assert offending(texts) == []
 
 

@@ -1002,9 +1002,10 @@ def test_new_folder_keeps_format_channels_and_rf_chain(qtbot, make_tab, make_rec
         ("SDR", None),
         ("Antenna", 1),
     ]
-    for index, fc_mhz in ((0, "145.8"), (1, "435")):
+    # Channel 1's band VHF followed its fc to UHF when 435 was typed (D88).
+    for index, band_name, fc_mhz in ((0, "VHF", "145.8"), (1, "UHF", "435")):
         band, fc, fs = tab.channel_widgets(index)
-        assert (band.currentText(), fc.text()) == ("VHF", fc_mhz)
+        assert (band.currentText(), fc.text()) == (band_name, fc_mhz)
         assert fs.text() == "1 kHz"  # filled in again from the scan, for the kept int8
         assert "italic" in fs.styleSheet()
     assert tab.site_combo.currentData() == site_id
@@ -1388,6 +1389,162 @@ def test_no_popup_without_a_conflict_or_before_the_scan(
     scan_folder(qtbot, tab, with_recorder_log(make_recording(), {0: (300.0, 30.0)}))
     assert tab.channel_widgets(0)[1].text() == "300"
     assert asked == []
+
+
+# ---------------------------------------------------------------------------
+# The band from fc (D88)
+# ---------------------------------------------------------------------------
+
+
+def band_text(tab: LogTab, index: int = 0) -> str:
+    return tab.channel_widgets(index)[0].currentText()
+
+
+def is_italic(widget) -> bool:
+    return "italic" in widget.styleSheet()
+
+
+def type_band(qtbot, tab: LogTab, text: str, index: int = 0) -> None:
+    band = tab.channel_widgets(index)[0]
+    band.lineEdit().clear()
+    qtbot.keyClicks(band.lineEdit(), text)
+
+
+def outside_lines(tab: LogTab) -> list[str]:
+    return [t for t in checklist_texts(tab, ItemState.INFO) if "is outside" in t]
+
+
+def test_the_box_lists_the_bands_with_an_empty_catalogue(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    band = tab.channel_widgets(0)[0]
+    assert [band.itemText(i) for i in range(band.count())] == [
+        "HF", "VHF", "UHF", "L", "S", "C", "X", "Ku", "K", "Ka"
+    ]  # fmt: skip
+    assert band.currentText() == ""
+    assert band.toolTip() == log_tab_module.BAND_TOOLTIP
+
+
+def test_typing_fc_fills_the_band_in_italics(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    band, fc, _fs = tab.channel_widgets(0)
+    qtbot.keyClicks(fc, "145.8")
+    assert band.currentText() == "VHF"
+    assert is_italic(band)
+    assert band.toolTip() == (
+        "Filled in from fc: VHF is 30 to 300 MHz. Pick or type another band to replace it."
+    )
+    fc.clear()
+    qtbot.keyClicks(fc, "2")  # 2 MHz is in no band
+    assert band.currentText() == ""
+    assert not is_italic(band)
+
+
+def test_a_band_the_user_chose_stays(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    band, fc, _fs = tab.channel_widgets(0)
+    qtbot.keyClicks(fc, "145.8")
+    type_band(qtbot, tab, "L")
+    assert not is_italic(band)
+    fc.setText("433")
+    assert band.currentText() == "L"
+    assert outside_lines(tab) == [
+        "Channel 0: fc 433 MHz is outside L (1 to 2 GHz). Check the band."
+    ]
+    band.setCurrentIndex(band.findText("UHF"))  # picked from the list
+    band.activated.emit(band.currentIndex())
+    assert not is_italic(band)
+    assert outside_lines(tab) == []
+
+
+def test_the_logs_fc_moves_a_kept_band(qtbot, make_tab, make_recording):
+    """The 1.1.1 manual test: folder B kept UHF from folder A, and its log gave 145.8 MHz."""
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    type_band(qtbot, tab, "UHF")
+    tab.channel_widgets(0)[1].setText("433")
+    folder = with_recorder_log(make_recording(), {0: (145.8, 30.0)})
+    scan_folder(qtbot, tab, folder)
+    band, fc, _fs = tab.channel_widgets(0)
+    assert (band.currentText(), fc.text()) == ("VHF", "145.8")
+    assert is_italic(band)
+    assert outside_lines(tab) == []
+
+
+def test_a_kept_band_that_differs_from_its_fc_stays(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    type_band(qtbot, tab, "L")
+    tab.channel_widgets(0)[1].setText("145.8")  # L was chosen against this fc
+    scan_folder(qtbot, tab, with_recorder_log(make_recording(), {0: (433.0, 30.0)}))
+    assert band_text(tab) == "L"
+    assert outside_lines(tab) == [
+        "Channel 0: fc 433 MHz is outside L (1 to 2 GHz). Check the band."
+    ]
+
+
+def test_a_kept_fc_without_a_band_fills_the_band(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    tab.channel_widgets(0)[1].setText("433")
+    type_band(qtbot, tab, "")
+    scan_folder(qtbot, tab, make_recording().root)
+    assert band_text(tab) == "UHF"
+    assert is_italic(tab.channel_widgets(0)[0])
+
+
+def test_a_down_converted_fc_typed_over_the_logs(qtbot, make_tab, make_recording):
+    """fc is the frequency on air: typed over the tuned frequency, the band follows."""
+    tab = make_tab()
+    scan_folder(qtbot, tab, with_recorder_log(make_recording(), {0: (1200.0, 30.0)}))
+    band, fc, _fs = tab.channel_widgets(0)
+    assert band.currentText() == "L"
+    fc.clear()
+    qtbot.keyClicks(fc, "14250")
+    assert band.currentText() == "Ku"
+    assert not is_italic(fc)  # no longer the log's value
+
+
+def test_a_templates_band_wins(qtbot, make_tab, make_recording, tmp_path):
+    path = tmp_path / "band.toml"
+    templates.write_template(
+        path,
+        templates.LogTemplate(
+            channels=(
+                templates.TemplateChannel(index=0, band="S", fc_mhz="433"),
+                templates.TemplateChannel(index=1, fc_mhz="1575.42"),
+            )
+        ),
+    )
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    tab.import_template(path)
+    assert (band_text(tab, 0), band_text(tab, 1)) == ("S", "L")
+    assert not is_italic(tab.channel_widgets(0)[0])
+    assert is_italic(tab.channel_widgets(1)[0])
+
+
+def test_edit_mode_shows_the_stored_band(qtbot, make_tab, make_recording, site_id, db_path):
+    info = make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, info, site_id)
+    type_band(qtbot, tab, "UHF")  # against fc 145.8, as in the 1.1.1 manual test
+    save_and_wait(qtbot, tab)
+    tab.load_recording(1)
+    wait_idle(qtbot, tab)
+    band, fc, _fs = tab.channel_widgets(0)
+    assert (band.currentText(), fc.text()) == ("UHF", "145.8")
+    assert not is_italic(band)
+    assert outside_lines(tab) == [
+        "Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check the band."
+    ]
+    save_and_wait(qtbot, tab)
+    assert tab.message_text == "No changes to save."
+    type_band(qtbot, tab, "")
+    qtbot.keyClicks(fc, "0")  # 145.80: the empty band follows the typed fc
+    assert band.currentText() == "VHF"
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 
+from iqdm import bands
 from iqdm.db import repository
 from iqdm.db.connection import Connection, open_db, write_transaction
 from iqdm.location import Location, join_location
@@ -74,7 +75,8 @@ class ChannelInput:
     fc is MHz text (D19). fs is text with an optional unit, Hz by default (D25).
     fs_inferred is True while fs holds the value worked out from the file size (D21).
     fc_from_log and fs_from_log are True while the value came from the recorder's log
-    (D82); typing clears them.
+    (D82); typing clears them. band_from_fc is True while the band was filled in from
+    fc (D88); it only marks the field.
     """
 
     channel_index: int
@@ -84,6 +86,7 @@ class ChannelInput:
     fs_inferred: bool = False
     fc_from_log: bool = False
     fs_from_log: bool = False
+    band_from_fc: bool = False
 
 
 @dataclass(kw_only=True)
@@ -253,6 +256,41 @@ def default_logged_by() -> str:
         return getpass.getuser()
     except (OSError, KeyError, ImportError):
         return ""
+
+
+# ---------------------------------------------------------------------------
+# Band from fc (DECISIONS.md D88)
+# ---------------------------------------------------------------------------
+
+
+def band_for_fc(fc_mhz: str) -> bands.Band | None:
+    """The band of an fc typed in MHz, or None for an fc that is empty, wrong or in no band."""
+    try:
+        return bands.band_for(parse_mhz(fc_mhz))
+    except ValueError:
+        return None
+
+
+def follow_band(band: str, old_fc_mhz: str, new_fc_mhz: str) -> str | None:
+    """The band after fc changes from old_fc_mhz to new_fc_mhz, or None if it stays (D88).
+
+    An empty band, or the band of the old fc, follows the new fc: it becomes the new
+    fc's band, or '' when the new fc is in no band. Any other band stays.
+    """
+    current = band.strip()
+    old = band_for_fc(old_fc_mhz)
+    if current and (old is None or current.casefold() != old.name.casefold()):
+        return None
+    new = band_for_fc(new_fc_mhz)
+    return "" if new is None else new.name
+
+
+def band_choices(catalogue_bands: Sequence[str]) -> list[str]:
+    """The band box's list: the defined bands in frequency order, then the catalogue's
+    other bands (D19, D88)."""
+    names = [b.name for b in bands.BANDS]
+    known = {n.casefold() for n in names}
+    return names + [b for b in catalogue_bands if b.strip().casefold() not in known]
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +757,29 @@ def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistI
     return items
 
 
+def _band_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
+    """Information when a channel's fc lies outside its band from the list (D88)."""
+    items = []
+    for index in indices:
+        inp = form.channel(index)
+        band = None if inp is None else bands.band_named(inp.band)
+        if inp is None or band is None:
+            continue
+        try:
+            fc_hz = parse_mhz(inp.fc_mhz)
+        except ValueError:
+            continue
+        if not band.contains(fc_hz):
+            items.append(
+                ChecklistItem(
+                    ItemState.INFO,
+                    f"Channel {index}: fc {format_mhz(fc_hz)} MHz is outside {band.name} "
+                    f"({band.range_text}). Check the band.",
+                )
+            )
+    return items
+
+
 def _param_items(form: EntryInput, indices: Sequence[int] | None) -> list[ChecklistItem]:
     """To-do items for incomplete RF chain rows, and errors for rows on missing channels.
 
@@ -1057,6 +1118,7 @@ def checklist(
         )
     indices = _channel_indices(scan, original)
     items += _required_items(form, indices)
+    items += _band_items(form, indices)
     # Before the first scan of a new entry, the channels are not known yet, so RF chain
     # rows kept from the previous entry are not checked against them (D79).
     known = scan is not None or original is not None

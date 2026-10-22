@@ -1514,3 +1514,71 @@ def test_incomplete_rows_are_left_to_the_to_do_items(make_recording):
 def test_param_spellings():
     params = [ParamInput(param=" sdr ", value="x"), ParamInput(param="Mixer", value="y")]
     assert entry.param_spellings(params, ["SDR"]) == {"sdr": "SDR", "mixer": "Mixer"}
+
+
+# ---------------------------------------------------------------------------
+# Band from fc (DECISIONS.md D88)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("band", "old_fc", "new_fc", "result"),
+    [
+        ("", "", "145.8", "VHF"),  # an empty band takes the new fc's band
+        ("", "", "2", ""),  # 2 MHz is in no band
+        ("UHF", "433", "145.8", "VHF"),  # the band of the old fc follows
+        ("uhf", "433", "145.8", "VHF"),  # in any letter case
+        ("VHF", "145.8", "2", ""),  # and is cleared for an fc in no band
+        ("L", "1200", "14250", "Ku"),  # a down-converted fc typed over the log's
+        ("UHF", "145.8", "146", None),  # a band the user chose stays
+        ("Marine", "157", "433", None),  # a band not in the list stays
+        ("VHF", "", "433", None),  # a band typed before any fc stays
+        ("VHF", "abc", "433", None),
+    ],
+)
+def test_follow_band(band, old_fc, new_fc, result):
+    assert entry.follow_band(band, old_fc, new_fc) == result
+
+
+def test_band_choices_list_the_bands_then_the_catalogue():
+    names = ["HF", "VHF", "UHF", "L", "S", "C", "X", "Ku", "K", "Ka"]
+    assert entry.band_choices([]) == names
+    assert entry.band_choices(["Marine VHF", "uhf", "VHF"]) == [*names, "Marine VHF"]
+
+
+def band_lines(make_recording, band: str, fc_mhz: str) -> list[str]:
+    scan = scan_recording(Path(make_recording().root), 1.0)
+    form = EntryInput(
+        channels=[ChannelInput(channel_index=0, band=band, fc_mhz=fc_mhz, fs_text=FS_TEXT)]
+    )
+    return [t for t in texts(checklist(form, scan=scan), ItemState.INFO) if "outside" in t]
+
+
+def test_an_fc_outside_its_band_is_information(make_recording):
+    assert band_lines(make_recording, "UHF", "1500") == [
+        "Channel 0: fc 1500 MHz is outside UHF (300 to 1000 MHz). Check the band."
+    ]
+    assert band_lines(make_recording, "ka", "26000") == [
+        "Channel 0: fc 26000 MHz is outside Ka (27 to 40 GHz). Check the band."
+    ]
+
+
+@pytest.mark.parametrize(
+    ("band", "fc_mhz"),
+    [("UHF", "433"), ("", "145.8"), ("Marine VHF", "433"), ("UHF", ""), ("UHF", "x")],
+)
+def test_no_band_line_for_a_match_an_empty_band_or_a_band_not_in_the_list(
+    make_recording, band, fc_mhz
+):
+    assert band_lines(make_recording, band, fc_mhz) == []
+
+
+def test_the_band_line_does_not_block_saving(make_recording):
+    info = make_recording()
+    scan = scan_recording(Path(info.root), 1.0)
+    form = EntryInput(
+        logged_by="u",
+        site_id=1,
+        channels=[ChannelInput(channel_index=0, band="UHF", fc_mhz="145.8", fs_text=FS_TEXT)],
+    )
+    assert can_save(ready_items(form, scan, split_location(info.root)))

@@ -36,7 +36,7 @@ Rules for this file:
 | D16 | Edit mode in the Log tab | 2026-10-02, Milestone 3 | Active |
 | D17 | Times in the Log tab | 2026-10-02, Milestone 3 | Replaced by D24 |
 | D18 | Logging any folder | 2026-10-02, Milestone 3 | Active |
-| D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active; fs input replaced by D25 |
+| D19 | Band and frequency input | 2026-10-02, Milestone 3 | Active; fs input replaced by D25; D88 fills the band from fc |
 | D20 | RF chain rows of channels removed by a rescan | 2026-10-02, Milestone 3 | Active |
 | D21 | fs from the file size | 2026-10-02, Milestone 3 | Active |
 | D22 | File duration from the file names; coverage above 100 % | 2026-10-02, Milestone 3 | Active |
@@ -103,6 +103,9 @@ Rules for this file:
 | D83 | The recorder's log files travel with the recording | 2026-10-21, version 1.1 | Active |
 | D84 | The Log tab's message line shows its state | 2026-10-22, version 1.1 | Active |
 | D85 | An archive whose check is still needed | 2026-10-22, version 1.1 | Active; amends D81 |
+| D86 | A paused queue item continues in the queue only | 2026-10-22, version 1.1.1 | Active; amends D81 |
+| D87 | A template imported after the log filled the form | 2026-10-22, version 1.1.1 | Active; amends D80 and D82 |
+| D88 | The band filled in from fc | 2026-10-23, version 1.2 | Active; amends D19 |
 
 ## D1. Sample types
 
@@ -1918,3 +1921,68 @@ pop-up on 2026-10-22.
 
 Affects: SPEC section 6, `recorderlog.py` (`template_conflicts()`, `keep_log_values()`,
 `still_filled()`), `gui/log_tab.py`, the user guide.
+
+## D88. The band filled in from fc
+
+Closes O50. Amends D19. The user asked for it on 2026-10-22 and chose these points on
+2026-10-22 and 2026-10-23: the list lives in the code; the bands HF, VHF, UHF, L, S,
+C, X, Ku and Ka, with UHF ending where L starts; K added between Ku and Ka; short
+names; fc is the frequency on air.
+
+- Band was free text, and the box listed only the bands already in the catalogue. In
+  the manual test of 1.1.1, a new folder kept band UHF from the previous folder while
+  its recorder's log set fc to 145.8 MHz (D79, D82).
+- The list is fixed in `bands.py` and follows IEEE Std 521. Every PC on the same
+  version uses the same list. Settings are per PC (D68), so a list in the settings
+  would differ between PCs. A change to the list comes with a new release.
+
+  | Band | From | Up to |
+  | --- | --- | --- |
+  | HF | 3 MHz | 30 MHz |
+  | VHF | 30 MHz | 300 MHz |
+  | UHF | 300 MHz | 1 GHz |
+  | L | 1 GHz | 2 GHz |
+  | S | 2 GHz | 4 GHz |
+  | C | 4 GHz | 8 GHz |
+  | X | 8 GHz | 12 GHz |
+  | Ku | 12 GHz | 18 GHz |
+  | K | 18 GHz | 27 GHz |
+  | Ka | 27 GHz | 40 GHz |
+
+- A band includes its lower edge and excludes its upper edge, so 300 MHz is UHF. The
+  ITU's UHF runs to 3 GHz and would overlap L and S; IEEE Std 521 ends UHF at 1 GHz.
+  The letter names are the IEEE radar bands. The NATO letter bands use some of the
+  same letters for other ranges.
+- K fills the range between Ku and Ka, so every fc from 3 MHz to 40 GHz has a band.
+  An fc below 3 MHz or from 40 GHz has none.
+- Where bands overlap, the narrowest band that holds fc wins, and a tie goes to the
+  band listed first. The list above has no overlaps. The rule is there for a later
+  band inside another, such as Marine VHF inside VHF.
+- When fc changes, typed or set by the recorder's log or a template, an empty band,
+  or the band of the previous fc, follows the new fc. An fc in no band clears it. A
+  band the user typed or picked that differs from the previous fc's band stays. The
+  rule needs no stored state: a band equal to the previous fc's band follows.
+- A kept band (D79) follows the log's fc by the same rule. A kept UHF band that
+  matched the previous folder's 433 MHz becomes VHF for 145.8 MHz.
+- A template's band is applied after its fc, so the template's band wins. A template
+  channel with an fc and no band leaves the band to the rule. Before D88, such a
+  channel cleared the band.
+- A new entry's empty band takes the band of a kept or template fc when the channel
+  rows appear.
+- Edit mode shows the stored band as it is, so opening an entry changes nothing. The
+  rule applies when fc changes.
+- A band filled in from fc is shown in italics, with a tooltip that names the band's
+  range, until the user types or picks a band.
+- When the band is one of the list and fc lies outside it, an information line says
+  so, for example "Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check
+  the band." It does not block saving. A band not in the list gets no such line.
+- The box lists the bands of the list in frequency order, then the other bands of the
+  catalogue. Stored entries do not change, and the Viewer's band filter does not
+  change.
+- fc is the frequency on air. For a recording made through a down-converter, the
+  recorder's log gives the frequency the USRP tuned to. The user types the frequency
+  on air over it; the fc then loses the log's mark (D82), and the band follows.
+- No schema change.
+
+Affects: SPEC sections 6 and 9, `bands.py`, `entry.py`, `gui/log_tab.py`, the user
+guide.

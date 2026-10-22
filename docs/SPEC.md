@@ -291,7 +291,10 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    default), header bytes (0, at the start of every file).
 4. **Channels**: one row per detected channel with folder, start, end, files and
    coverage from the scan; band, fc and fs from the user. Band is an optional editable
-   dropdown that lists the bands already in the DB. fc is entered in MHz (D19). fs
+   dropdown that lists the bands of D88 in frequency order, then the other bands
+   already in the DB. The app fills it in from fc (below). fc is entered in MHz (D19)
+   and is the frequency on air: for a recording made through a down-converter, the user
+   types it over the tuned frequency from the recorder's log (D88). fs
    takes a number with an optional unit: none or `Hz`, `k` or `kHz`, `M` or `MHz`,
    `G` or `GHz`, with or without a space (D25); the app fills it in after a scan (see
    below). Both are stored in Hz, converted through `Decimal`.
@@ -346,6 +349,19 @@ Values filled in after a scan:
   name what the form still holds from the log, the recorder's verdict, a time taken
   from the PC clock, GPS not locked, restarts, and a file count that differs from the
   recorder's.
+- **The band from fc** (D88), from a fixed list in `bands.py` that follows IEEE Std
+  521: HF 3–30 MHz, VHF 30–300 MHz, UHF 300 MHz–1 GHz, L 1–2 GHz, S 2–4 GHz, C 4–8
+  GHz, X 8–12 GHz, Ku 12–18 GHz, K 18–27 GHz, Ka 27–40 GHz. A band includes its lower
+  edge and excludes its upper edge. Where bands overlap, the narrowest band that holds
+  fc wins, and a tie goes to the band listed first. When fc changes, typed or set by
+  the log or a template, an empty band and the band of the previous fc follow the new
+  fc; an fc in no band clears them. A band the user typed or picked that differs from
+  the previous fc's band stays. A template's band is applied after its fc, so it wins.
+  A new entry's empty band takes the band of a kept or template fc when the channel
+  rows appear. Edit mode shows the stored band and applies the rule only when fc
+  changes. A band filled in from fc is shown in italics until the user types or picks
+  one. When the band is one of the list and fc lies outside it, an information line
+  says so; it does not block saving.
 - **A template imported after the log filled in** (D87): when it holds other values
   for the sample type, the fc of a channel, or the log's RF chain rows, a pop-up lists
   each with both values. "Keep the log's values" (the default) applies the rest of
@@ -677,6 +693,7 @@ iq-data-manager/
     timeutil.py               # UTC ISO 8601 text <-> Unix seconds; display offset (D24)
     location.py               # folder -> storage_root, rel_path, archive state (D14)
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
+    bands.py                  # the band list and the band of an fc (D88)
     viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
     movecopy.py               # Archive / copy tab logic: time input, preview text, states (no Qt)
     legacy.py                 # legacy import: folder rules, grouping, report (D66; no Qt, no SQL)
