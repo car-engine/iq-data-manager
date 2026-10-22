@@ -663,8 +663,9 @@ iq-data-manager/
     STATUS.md                 # progress, open questions, pending checks
     REPORT_TEMPLATE.md        # format of milestone reports
     reports/                  # one report per milestone: M0.md, M1.md, ...
-    KICKOFF.md                # session start-up and resume prompts
-    HANDOFF.md                # state after 1.0, outstanding items, how to proceed
+    KICKOFF.md                # the first message of each new session: ready and template prompts
+    KICKOFF_ARCHIVE.md        # earlier session prompts, kept as a record
+    HANDOFF.md                # current state, outstanding items, how to proceed
     USER_GUIDE.md             # short guide for users, shipped in the build folder
     RELEASE_NOTES.md          # what each release does and its known limits, shipped too
     mockup/                   # exported GUI mockups

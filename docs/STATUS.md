@@ -13,10 +13,9 @@ its report. Last updated: 2026-10-22 (version 1.1.1 released).
   tests pass and 4 skip (three need the symbolic-link privilege, one runs only off
   Windows); `ruff check` is clean. Report: [reports/M8.md](reports/M8.md), parts 1 to
   4.
-- **The next work is fixes and adjustments from the team's feedback.**
-  [HANDOFF.md](HANDOFF.md) describes how such work proceeds, the version and release
-  steps, and the database format after 1.0. Start each piece of work from an open
-  item below.
+- **Work after 1.0 comes from the team's feedback.** [HANDOFF.md](HANDOFF.md)
+  describes how such work proceeds, the version and release steps, and the database
+  format after 1.0. Start each piece of work from an open item below.
 - **Version 1.1.0 is released** (2026-10-22). The tag `v1.1.0` is on `ed1afe8`; `main`
   and the tag are pushed. The plan, approved by the user on 2026-10-20, is in
   [PLAN.md](../PLAN.md): O20, O38, O43, O44 and O45 (with O41). On 2026-10-21 the user
@@ -39,9 +38,11 @@ its report. Last updated: 2026-10-22 (version 1.1.1 released).
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,781 tests pass and 4
   skip; `ruff check` is clean.
-- **The next work is Phase 3, features for 1.2** (user, 2026-10-22): the band chosen
-  from fc, deleting a wrongly added entry (O39, against D41), and logging several
-  recordings with the same set-up at once. Not started; the user asked to wait.
+- **The next work is version 1.2** (user, 2026-10-22), in this order: O50 (the band
+  from fc), O39 (deleting an entry added by mistake, which changes D41), then a plan,
+  discussed first, for O51 (logging several recordings with one set-up). None is
+  started. A new session starts from the prompt "Version 1.2" in
+  [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -136,12 +137,14 @@ Requests, faults, questions and known gaps that are not yet decided or done. The
 default is what an agent proposes unless the user decides otherwise. Raise each item
 in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
-table in [reports/M0.md](reports/M0.md). The next free number is O50.
+table in [reports/M0.md](reports/M0.md). The next free number is O52.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
-| O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
+| O50 | The band is not filled in from fc. The band box lists only the bands already in the catalogue (VHF, UHF). Bands can overlap, such as VHF (30–300 MHz) and Marine VHF (about 155–160 MHz). A band kept from the previous folder (D79) stays when the log changes fc (D82). | Version 1.2 (user, 2026-10-22), first | None yet; to settle in the plan: what "closest" means for overlapping bands, where the band definitions live (settings are per PC, D68), and what happens to a typed, kept or template band when fc changes. | User, 2026-10-22 |
+| O39 | Deleting a catalogue entry that was added by mistake. D41 keeps it out of the GUI and leaves it as "a manual database job"; SPEC section 13 lists it as out of scope. | Version 1.2 (user, 2026-10-22), second | None yet; to settle in the plan. `repository.delete_recording()` removes catalogue rows only and refuses any recording with transfer history, which includes every entry logged in place on the NAS (D2) and every legacy import (D66). Earlier proposal: a procedure for the administrator, or an admin command in `IQDataManager-check.exe`. | Release review, finding 15; user, 2026-10-22 |
+| O51 | Logging several recordings with one set-up at once: the same typed fields for N folders, with the values from each folder's scan and recorder log, a preview of all, and a way to deal with an error in one of them. Today each folder is browsed, scanned and saved on its own. | Version 1.2 (user, 2026-10-22), after O50 and O39, with a full plan discussed first | None yet; the user asked for a proposal: how the user chooses the fields that need input without logging one folder first, what the preview looks like for many folders, and what happens when one folder has an error. | User, 2026-10-22 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
@@ -304,6 +307,7 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
   `build/test-1.1.1-build.log` (built from `48804a2`; it still shows version 1.1.0),
   and `dev/test-1.1.1/` (the checklist `CHECKLIST.html`, its data script and 115.6 MB
   of synthetic data with a scratch database).
+- `dev/kickoff-head.txt` (the old `KICKOFF.md`, used to check its archive copy).
   `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
 - `recorder/` at the repository root: the user's two example recordings of
   2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder
@@ -388,7 +392,21 @@ These come from the safety configuration and from experience in this repository.
   (earlier: Milestone 5), section "Code paths that delete or overwrite a file", with
   the changes in the Milestone 7 report ("Code that creates or overwrites a file")
   and the Milestone 8 report, part 2. A change to such code lists its own changes in
-  its report, as `docs/KICKOFF.md` asked for Milestones 5 and 6.
+  its report, as the milestone prompts asked for Milestones 5 and 6
+  (`docs/KICKOFF_ARCHIVE.md`). The reports of 1.1 and 1.1.1 list their changes the
+  same way.
+- **A manual-test checklist** for the user is an HTML page under `dev/`, with small
+  synthetic data made by a script next to it: `dev/test-1.1.1/` (the user may have
+  removed it) held `CHECKLIST.html`, `make_test_data.py` and `check_expectations.py`.
+  The script refuses an existing output folder. The app runs on the data with
+  `IQDataManager.exe --config <data>\config.toml`, which names a scratch database
+  made from `schema.sql`. Data files of 64,000 bytes (int16, 16 kHz, 1 s) and recorder
+  logs padded to a multiple of 512 bytes let Check before delete pass through a
+  Windows share of the PC (D85). `copy_workers = 1` slows a copy enough to pause it.
+  Read the expected texts from the app offscreen before writing them into the page.
+- **A message box with custom buttons** (such as the template pop-up of D87) is a
+  module-level function, `log_tab.ask_template_conflicts()`. Tests replace that
+  function with `monkeypatch`; `QMessageBox.question` stubs do not reach it.
 - **A test module must not import a class named `Test...`.** Pytest tries to collect
   it, and a dataclass then raises a collection warning, which the configuration
   turns into an error. Tool classes are named accordingly (`SetSizes` in
