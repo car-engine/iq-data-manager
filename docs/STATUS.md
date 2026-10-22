@@ -144,10 +144,11 @@ Requests, faults, questions and known gaps that are not yet decided or done. The
 default is what an agent proposes unless the user decides otherwise. Raise each item
 in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
-table in [reports/M0.md](reports/M0.md). The next free number is O52.
+table in [reports/M0.md](reports/M0.md). The next free number is O53.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
+| O52 | The number of a deleted entry is given to the next new entry when the deleted one was the newest, because `recordings.id` has no `AUTOINCREMENT`. A queue item or a preview made for the old entry would then work on the new one. | Version 1.2.0 (user, 2026-10-23), before the release | Keep the numbering for 1.2: say so in the user guide and D89. A queue item and a transfer check before they start that the entry is the one they were made for (its creation time), and refuse otherwise. `AUTOINCREMENT` waits for the first schema change (HANDOFF.md, section 5). | Agent, preparing the manual test of 1.2, 2026-10-23 (step 3.10) |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
@@ -216,8 +217,9 @@ Things that cannot be tested on the development PC, or were tested only partly.
   results and comments as a text file to send back. The user ran it on 2026-10-23
   and sent the export: 30 of 33 steps passed and none failed, with no comments. Step
   3.1 (switching to Several folders) and step 3.11 (leaving the mode asks first)
-  were not marked. Step 3.16 (Cancel during a long scan, optional) was not run: the
-  test data scans too fast for it.
+  were not marked; the user confirmed that both passed, so 32 of 33 passed. Step 3.16
+  (Cancel during a long scan, optional) was not run: the test data scans too fast for
+  it. The user approved O52 for 1.2.0 and the merge and release preparation.
 
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
