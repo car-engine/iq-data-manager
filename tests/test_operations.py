@@ -152,6 +152,28 @@ def test_a_copy_of_a_recording_deleted_after_the_preview_copies_nothing(env):
     assert not dest.exists()
 
 
+def test_a_preview_does_not_run_for_an_entry_that_took_its_number(env, make_recording):
+    """O52: another PC deleted the entry and logged another folder, which got its number."""
+    dest = env.tmp / "pc" / "rec"
+    preview = env.preview(env.request(Operation.COPY, dest))
+    assert preview.ok, preview.errors
+    other = make_recording(n_slots=3)
+
+    def swap(conn) -> int:
+        repo.delete_recording(conn, env.rid)
+        rid = repo.insert_recording(conn, recording_from(other, site_id=1))
+        conn.execute(
+            "UPDATE recordings SET created_at = '2026-10-23T09:00:00Z' WHERE id = ?", (rid,)
+        )
+        return rid
+
+    assert write_transaction(env.db, swap) == env.rid
+    with pytest.raises(TransferError, match="no longer the entry this preview was made for"):
+        env.run(preview)
+    assert not dest.exists()
+    assert env.transfers() == []
+
+
 def test_copy_of_a_range_and_a_channel(env):
     dest = env.tmp / "pc" / "part"
     request = env.request(

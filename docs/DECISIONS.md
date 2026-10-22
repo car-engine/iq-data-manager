@@ -108,6 +108,7 @@ Rules for this file:
 | D88 | The band filled in from fc | 2026-10-23, version 1.2 | Active; amends D19 |
 | D89 | Deleting an entry added by mistake | 2026-10-23, version 1.2 | Active; replaces D41 |
 | D90 | Logging several folders with one set-up | 2026-10-23, version 1.2 | Active |
+| D91 | A deleted entry's number can be given again | 2026-10-23, version 1.2 | Active; amends D89 |
 
 ## D1. Sample types
 
@@ -2044,6 +2045,9 @@ entry is saved as a file on the PC that deletes it.
   "Recording 12 is no longer in the catalogue. It may have been deleted on another
   PC." before it copies a file. A save in edit mode, and a second delete, of an entry
   deleted on another PC give the same message.
+- **Changed on 2026-10-23** (D91): when the deleted entry was the newest, the next
+  new entry gets its number. Transfers and queue items check that they run for the
+  entry they were made for.
 - **The copy stays on the PC that deleted.** A shared record would need a new table,
   so schema version 2 and a migration (HANDOFF.md, section 5). The user chose the
   file.
@@ -2129,3 +2133,39 @@ up to a couple of hours.
 
 Affects: SPEC sections 6 and 9, `batchlog.py`, `gui/log_tab.py`,
 `gui/widgets/folder_table.py`, `app.py`, the user guide.
+
+## D91. A deleted entry's number can be given again
+
+Closes O52. Amends D89. Found while preparing the manual test of 1.2: step 2.4
+deleted recording 5, the newest entry, and step 3.10 saved recordings 5 to 8. The
+user approved the proposed default on 2026-10-23.
+
+- `recordings.id` is an `INTEGER PRIMARY KEY` without `AUTOINCREMENT`. SQLite gives a
+  new row the highest number plus one, so a deleted newest entry's number goes to the
+  next new entry. Before D89 no entry was ever deleted, so this could not happen.
+- The numbering stays as it is in version 1. `AUTOINCREMENT` needs the `recordings`
+  table rebuilt in a numbered migration, which waits for the first schema change
+  (HANDOFF.md, section 5). The user guide says that a number can be given again.
+- **Risk across PCs.** A queue item or a preview holds the recording's number. If
+  another PC deletes that entry and logs a new folder, the number names the new
+  entry. Before D91 the queue would have archived or copied the new folder to the
+  destination chosen for the old one, and a transfer started from an old preview
+  would have recorded the old folder's files against the new entry. No file was at
+  risk: a transfer copies and checks.
+- **The check.** An entry's `created_at` is set once, when it is logged, and differs
+  between the old and the new entry. A queue item keeps the `created_at` of the entry
+  it was made for. `transferqueue.run_item()` compares it with the stored one before
+  anything runs; a different or missing entry gives "Not started", with "Recording 12
+  is no longer the entry this queue item was made for. That entry was deleted, and a
+  new entry got its number. Remove this item." `run_transfer()` compares the preview's
+  entry in the transaction that writes the transfer's first row, before any file is
+  copied, and stops with the same text for a preview ("Preview it again.").
+- An edit open on another PC was already safe: its save compares the whole stored
+  entry with the one it opened (D76).
+- `created_at` has a resolution of one second. An entry deleted and replaced within
+  the same second is not told apart.
+- No schema change.
+
+Affects: SPEC sections 6 and 8, `db/repository.py` (`created_at()`,
+`reused_text()`), `transferqueue.py` (`QueueItem.created_at`, `entry_problem()`),
+`transfer/operations.py` (`run_transfer()`), `gui/transfer_tab.py`, the user guide.

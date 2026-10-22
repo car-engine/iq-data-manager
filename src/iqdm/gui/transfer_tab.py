@@ -1513,6 +1513,7 @@ class TransferTab(QWidget):
             kind=kind,
             request=request,
             size_bytes=preview.selection.total_bytes,
+            created_at=preview.recording.created_at,  # the entry the preview was made for
         )
         try:
             added = self._queue.add(item, self._edit_position)

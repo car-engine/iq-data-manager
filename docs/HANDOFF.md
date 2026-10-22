@@ -52,7 +52,7 @@ after a release" and "Review of a release". Earlier prompts are in
 a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
-   with the next free number (STATUS.md names it; O52 is next on 2026-10-22), a
+   with the next free number (STATUS.md names it; O53 is next on 2026-10-23), a
    proposed default and its origin.
 2. **Plan.** Propose a plan with its test list in chat, and wait for approval
    (CLAUDE.md, "Workflow"). The safety hook blocks plan files outside the
@@ -60,7 +60,7 @@ a milestone did:
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D91 is next on 2026-10-23),
+5. **Record the decision.** A new entry in DECISIONS.md (D92 is next on 2026-10-23),
    the current requirement in SPEC.md, and the item moved to "Closed items" in
    STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following

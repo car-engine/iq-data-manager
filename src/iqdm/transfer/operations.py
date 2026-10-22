@@ -353,7 +353,16 @@ def run_transfer(
         started_at=now(),
         performed_by=performed_by,
     )
-    tid = write_transaction(db_path, lambda conn: repository.insert_transfer(conn, entry))
+
+    def start(conn: Connection) -> int:
+        # The number of a deleted entry can go to a new entry (O52). The row is written
+        # only for the entry the preview was made for, before any file is copied.
+        stored = repository.created_at(conn, request.recording_id)
+        if stored is not None and stored != preview.recording.created_at:
+            raise TransferError(repository.reused_text(request.recording_id, "preview"))
+        return repository.insert_transfer(conn, entry)
+
+    tid = write_transaction(db_path, start)
     items = preview.items
 
     def outcome(

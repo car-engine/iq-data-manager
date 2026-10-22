@@ -461,6 +461,8 @@ def test_delete_text_is_plain(tmp_path):
         changed_delete_text(12),
         repo.history_text(12),
         repo.gone_text(12),
+        repo.reused_text(12, "preview"),
+        repo.reused_text(12, "queue item"),
         queue_holds_text(12),
         tab_holds_text(12),
         "Recording 12 was deleted from the catalogue.",

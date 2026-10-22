@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from iqdm.config import Config
+from iqdm.db import repository
+from iqdm.db.connection import open_db
 from iqdm.models import ArchiveState, HashMode, Operation, Recording, Verification
 from iqdm.movecopy import default_copy_destination
 from iqdm.scan.scanner import ScanCancelled, ScanError
@@ -71,6 +73,9 @@ class QueueItem:
     note: str = ""  # a problem found when the item was added, or the result
     size_bytes: int | None = None  # from a preview
     transfer_id: int | None = None
+    # When the entry was logged. A deleted entry's number can go to a new entry
+    # (O52); the item runs only for the entry it was made for.
+    created_at: str | None = None
 
     @property
     def destination(self) -> str:
@@ -250,7 +255,12 @@ def item_for_recording(
             raise QueueError(
                 f"Recording {rec.id} is not archived, so it has no NAS folder to check."
             )
-        return QueueItem(recording_id=rec.id, label=label, kind=QueueKind.CHECK_ARCHIVE)
+        return QueueItem(
+            recording_id=rec.id,
+            label=label,
+            kind=QueueKind.CHECK_ARCHIVE,
+            created_at=rec.created_at,
+        )
     if rec.archive_state is ArchiveState.LOCAL:
         if not nas_folder.strip():
             raise QueueError("Choose the NAS folder for archives in the queue first.")
@@ -267,7 +277,9 @@ def item_for_recording(
     request = TransferRequest(
         recording_id=rec.id, operation=operation, destination=destination, hash_mode=hash_mode
     )
-    return QueueItem(recording_id=rec.id, label=label, kind=kind, request=request)
+    return QueueItem(
+        recording_id=rec.id, label=label, kind=kind, request=request, created_at=rec.created_at
+    )
 
 
 def scope_text(item: QueueItem, offset_hours: float) -> str:
@@ -332,6 +344,24 @@ def preview_item(
     return ItemResult(state=QueueState.WAITING, note=note, size_bytes=size)
 
 
+def entry_problem(db_path: Path | str, item: QueueItem) -> str | None:
+    """Why the item must not run for the entry its number names now, or None (O52).
+
+    An entry deleted on another PC (D89) gives its number to the next new entry when
+    it was the newest. The creation time tells them apart. An item made without one
+    is not checked.
+    """
+    if item.created_at is None:
+        return None
+    with open_db(db_path, readonly=True) as conn:
+        stored = repository.created_at(conn, item.recording_id)
+    if stored is None:
+        return repository.gone_text(item.recording_id)
+    if stored != item.created_at:
+        return repository.reused_text(item.recording_id, "queue item")
+    return None
+
+
 def run_item(
     db_path: Path | str,
     item: QueueItem,
@@ -353,6 +383,9 @@ def run_item(
     for a plain reason give FAILED; other exceptions reach the caller. Once an archive
     passed, every error of its Check before delete gives CHECK_NEEDED (D85).
     """
+    problem = entry_problem(db_path, item)
+    if problem is not None:
+        return ItemResult(state=QueueState.NOT_STARTED, note=problem)
     if item.kind is QueueKind.CHECK_ARCHIVE:
         return _run_check_archive(db_path, item, performed_by, report, cancelled)
     request = item.request

@@ -460,7 +460,8 @@ Edit mode (DECISIONS.md D16):
   is cleared, the message names the copy, the Viewer refreshes, and the Archive /
   copy tab drops the recording from its form. A transfer whose recording was deleted
   meanwhile stops before it copies a file, because its first row needs the
-  recording.
+  recording. When the deleted entry was the newest, the next new entry gets its
+  number (D91).
 
 ## 7. Scanner
 
@@ -620,6 +621,10 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   preview.
 - The queue lives in memory. Closing the window asks first while it runs or holds
   items that have not run.
+- An item keeps the creation time of the entry it was made for. Before it runs, an
+  item whose recording number now names another entry, or no entry, gets "Not
+  started" with the reason (D91). A transfer checks its preview's entry the same way
+  when it writes its first row, before any file is copied.
 
 ### Scope
 

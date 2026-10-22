@@ -244,7 +244,9 @@ where they are. Before the delete, the app saves a copy of the entry in the fold
 `deleted-entries` next to the settings file, and the line under the buttons names the
 file. Check results of the entry are deleted with it. An entry that was archived or
 copied cannot be deleted; correct it with **Save entry** instead. Remove a recording
-from the Archive / copy queue before you delete it.
+from the Archive / copy queue before you delete it. If you delete the newest entry,
+the next entry anyone logs gets its number. A queue item made for the deleted entry
+then does not run, and says why.
 
 A folder under a NAS location is logged as archived. The Viewer shows it as "archived,
 not verified" until a comparison with the laptop copy passes (section 5).

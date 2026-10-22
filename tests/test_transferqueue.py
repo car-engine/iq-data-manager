@@ -182,7 +182,7 @@ def test_scope_text():
 
 
 def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
-    rec = recording_from(make_recording(), id=5, site_id=1)
+    rec = recording_from(make_recording(), id=5, site_id=1, created_at="2026-10-23T08:00:00Z")
     got = item_for_recording(
         rec,
         check_archive_only=False,
@@ -198,6 +198,7 @@ def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
         destination=f"D:\\nas\\2026\\{rec.rel_path}",
         hash_mode=HashMode.SAMPLE,
     )
+    assert got.created_at == "2026-10-23T08:00:00Z"  # the entry it was made for (O52)
     with pytest.raises(QueueError, match="Choose the NAS folder"):
         item_for_recording(
             rec,
@@ -452,6 +453,61 @@ def test_a_failed_preview_is_not_started(env):
     assert result.note
     assert env.transfers() == []
     assert not outside.exists()
+
+
+REUSED_AT = "2026-10-23T09:00:00Z"
+
+
+def replace_newest(env: Env, info) -> int:
+    """Another PC deletes the newest entry and logs another folder; the new entry gets
+    the deleted entry's number (O52). The two are logged a second apart."""
+
+    def swap(conn) -> int:
+        repo.delete_recording(conn, env.rids[-1])
+        rid = repo.insert_recording(conn, recording_from(info, site_id=1))
+        conn.execute("UPDATE recordings SET created_at = ? WHERE id = ?", (REUSED_AT, rid))
+        return rid
+
+    return write_transaction(env.db, swap)
+
+
+def test_an_item_does_not_run_for_an_entry_that_took_its_number(env, make_recording):
+    it = env.item(1, created_at=env.recording(1).created_at)
+    assert replace_newest(env, make_recording(n_slots=3)) == env.rids[1]
+    result, seen = env.run(it)
+    assert result.state is QueueState.NOT_STARTED
+    assert result.note == (
+        f"Recording {env.rids[1]} is no longer the entry this queue item was made for. That "
+        "entry was deleted, and a new entry got its number. Remove this item."
+    )
+    assert seen == []
+    assert env.transfers(1) == []
+    assert not (env.nas / Path(env.infos[1].root).name).exists()
+
+
+def test_a_check_archive_item_is_checked_the_same_way(env, make_recording):
+    created = env.recording(1).created_at
+    replace_newest(env, make_recording(n_slots=3))
+    check = QueueItem(
+        recording_id=env.rids[1], label="r", kind=QueueKind.CHECK_ARCHIVE, created_at=created
+    )
+    result, _ = env.run(check)
+    assert result.state is QueueState.NOT_STARTED
+    assert env.transfers(1) == []
+
+
+def test_an_item_for_a_deleted_entry_is_not_started(env):
+    it = env.item(1, created_at=env.recording(1).created_at)
+    write_transaction(env.db, lambda conn: repo.delete_recording(conn, env.rids[1]))
+    result, _ = env.run(it)
+    assert result.state is QueueState.NOT_STARTED
+    assert result.note == repo.gone_text(env.rids[1])
+
+
+def test_an_item_for_its_own_entry_runs(env):
+    result, _ = env.run(env.item(created_at=env.recording().created_at), check_after=False)
+    assert result.state is QueueState.DONE
+    assert transferqueue.entry_problem(env.db, env.item(created_at=None)) is None
 
 
 def test_a_pause_stops_the_item_and_resume_continues_it(env):

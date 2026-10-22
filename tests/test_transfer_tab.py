@@ -667,6 +667,7 @@ def test_add_to_queue_from_the_form(env):
     (item,) = tab.queue
     assert (item.kind, item.state) == (QueueKind.ARCHIVE, QueueState.WAITING)
     assert item.recording_id == env.rid
+    assert item.created_at == env.recording().created_at  # the entry it was made for (O52)
     assert item.size_bytes == tab.preview.selection.total_bytes
     assert tab.result[1].startswith("Added to the queue: Recording")
     assert tab.queue_table.item(0, 1).text() == "Waiting"

@@ -777,6 +777,28 @@ def gone_text(recording_id: int | None) -> str:
     )
 
 
+def reused_text(recording_id: int, made_for: str) -> str:
+    """The message when a recording's number now belongs to another entry (O52).
+
+    made_for names what was made for the old entry: 'preview' or 'queue item'.
+    """
+    again = "Preview it again." if made_for == "preview" else "Remove this item."
+    return (
+        f"Recording {recording_id} is no longer the entry this {made_for} was made for. "
+        f"That entry was deleted, and a new entry got its number. {again}"
+    )
+
+
+def created_at(conn: sqlite3.Connection, recording_id: int) -> str | None:
+    """When the recording was logged, or None when it is not in the catalogue.
+
+    The number of a deleted entry can go to the next new entry, because the schema
+    has no AUTOINCREMENT (O52). The creation time tells the two entries apart.
+    """
+    row = _one(conn, "SELECT created_at FROM recordings WHERE id = ?", (recording_id,))
+    return None if row is None else row["created_at"]
+
+
 def _insert_transfer(conn: sqlite3.Connection, entry: TransferEntry) -> int:
     row = conn.execute(
         "INSERT INTO transfer_log (recording_id, operation, parent_id, source, destination,"
