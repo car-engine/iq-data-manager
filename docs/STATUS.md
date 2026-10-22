@@ -81,6 +81,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O48, Log tab messages show their state (D84) | Done, not merged | `log-message-states`, from `transfer-log-files` | `9f37809` | [2026-10-22-log-message-states](reports/2026-10-22-log-message-states.md) |
 | O49, an archive whose check is needed (D85) | Done, merged | `queue-check-state`, from `log-message-states` | `6ceb7ca`, `7e7bce2` (STATUS) | [2026-10-22-queue-check-state](reports/2026-10-22-queue-check-state.md) |
 | Release 1.1.0 | Released: tag `v1.1.0`, pushed | `release-1.1.0`, from `main` at `7e7bce2` | `ed1afe8`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+| Review of 1.1.0 | Done, not merged: ten findings, three to fix in 1.1.1, and finding 10 from the user | `review-1.1.0`, from `main` at `13af0b1` | `3e8f154`, `2a95784` | [2026-10-22-review-1.1.0](reports/2026-10-22-review-1.1.0.md) |
+| Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, not merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, plus the commit of its report | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
 
 The branches above, from `o20-freeze-schema-v1` to `queue-check-state`, were merged
 into `main` as one fast-forward on 2026-10-22; "Done, not merged" in the rows above
