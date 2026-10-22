@@ -2,7 +2,7 @@
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds after the release, and what is still open. It points to the
-other documents for the detail. Last updated: 2026-10-22, during the work for 1.1.1. The
+other documents for the detail. Last updated: 2026-10-22, at the release of 1.1.1. The
 sections below still describe the handoff after 1.0.0 where they say so; STATUS.md is
 current.
 
@@ -10,10 +10,10 @@ current.
 
 | | |
 | --- | --- |
-| Version | 1.1.0, tag `v1.1.0` on `ed1afe8` (annotated, pushed, 2026-10-22). Earlier: 1.0.0, tag `v1.0.0` on `674434c`. |
-| `main` | `ed1afe8` at the release, pushed to `origin`; later commits record the release |
-| Tests | 1,761 passed, 4 skipped (`pytest`); `ruff check` clean |
-| Release build | `dist/release-1.1.0/IQDataManager/` on the development PC, built from `ed1afe8`. `dist/release-1.0.0/` stays. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Version | 1.1.1, tag `v1.1.1` on `3108c63` (annotated, pushed, 2026-10-22). Earlier: 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
+| `main` | `3108c63` at the release, pushed to `origin`; later commits record the release |
+| Tests | 1,781 passed, 4 skipped (`pytest`); `ruff check` clean |
+| Release build | `dist/release-1.1.1/IQDataManager/` on the development PC, built from `3108c63`. `dist/release-1.1.0/` and `dist/release-1.0.0/` stay. `dist/` is gitignored, so a new PC builds its own with README "Build". |
 | Milestones | 0 to 8 done, then work after 1.0 from open items (STATUS.md, "Work after 1.0"). |
 | In use | Yes: the real catalogue exists and the pilot passed (2026-10-20). The user tests 1.1 in the field. |
 

@@ -2,8 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-22 (review of 1.1.0 and the fixes for 1.1.1, not yet
-merged).
+its report. Last updated: 2026-10-22 (version 1.1.1 released).
 
 ## Current state
 
@@ -29,12 +28,20 @@ merged).
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,761 tests pass and 4
   skip; `ruff check` is clean. The user tests 1.1 in the field (pending checks below).
-- **Version 1.1.1 is in progress** (2026-10-22). The review of 1.1.0
+- **Version 1.1.1 is released** (2026-10-22). The tag `v1.1.1` is on `3108c63`;
+  `main` and the tag are pushed. The review of 1.1.0
   ([reports/2026-10-22-review-1.1.0.md](reports/2026-10-22-review-1.1.0.md)) found ten
-  faults, none a risk to data. The fixes are on `queue-fixes-1.1.1` (D86) and
-  `log-fixes-1.1.1` (D87), chained from `review-1.1.0`, and not merged: 1,781 tests
-  pass and 4 skip; `ruff check` is clean. The user's manual test passed on
-  2026-10-22. Next: the merge and the release (HANDOFF.md, section 4).
+  faults, none a risk to data; all ten are fixed (D86, D87). The user's manual test
+  passed on 2026-10-22. `main` was fast-forwarded to `log-fixes-1.1.1` at `3cedd34`,
+  then `release-1.1.1` set the version and the release notes (`3108c63`). The build
+  is `dist/release-1.1.1` (104 MB), made from `3108c63`: `--smoke-test` passed, both
+  programs print 1.1.1, `IQDataManager-check.exe --help` lists its commands, both
+  declare long-path support, and the shipped user guide, release notes and
+  `defaults.example.toml` match their sources. At the release: 1,781 tests pass and 4
+  skip; `ruff check` is clean.
+- **The next work is Phase 3, features for 1.2** (user, 2026-10-22): the band chosen
+  from fc, deleting a wrongly added entry (O39, against D41), and logging several
+  recordings with the same set-up at once. Not started; the user asked to wait.
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -92,9 +99,15 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O48, Log tab messages show their state (D84) | Done, not merged | `log-message-states`, from `transfer-log-files` | `9f37809` | [2026-10-22-log-message-states](reports/2026-10-22-log-message-states.md) |
 | O49, an archive whose check is needed (D85) | Done, merged | `queue-check-state`, from `log-message-states` | `6ceb7ca`, `7e7bce2` (STATUS) | [2026-10-22-queue-check-state](reports/2026-10-22-queue-check-state.md) |
 | Release 1.1.0 | Released: tag `v1.1.0`, pushed | `release-1.1.0`, from `main` at `7e7bce2` | `ed1afe8`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| Review of 1.1.0 | Done, not merged: ten findings, three to fix in 1.1.1, and finding 10 from the user | `review-1.1.0`, from `main` at `13af0b1` | `3e8f154`, `2a95784` | [2026-10-22-review-1.1.0](reports/2026-10-22-review-1.1.0.md) |
-| Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, not merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, `790177d` (report) | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
-| Log tab fixes for 1.1.1 (D87; review findings 2, 3, 4, 7, 8) | Done, not merged | `log-fixes-1.1.1`, from `queue-fixes-1.1.1` | `a9fa00e`, plus the commit of its report | [2026-10-22-log-fixes-1.1.1](reports/2026-10-22-log-fixes-1.1.1.md) |
+| Review of 1.1.0 | Done, merged: ten findings, three to fix in 1.1.1, and finding 10 from the user | `review-1.1.0`, from `main` at `13af0b1` | `3e8f154`, `2a95784`; part 2 in `48804a2` | [2026-10-22-review-1.1.0](reports/2026-10-22-review-1.1.0.md) |
+| Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, `790177d` (report); `5bccf96` (Open in form, on `log-fixes-1.1.1`) | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
+| Log tab fixes for 1.1.1 (D87; review findings 2, 3, 4, 7, 8) | Done, merged | `log-fixes-1.1.1`, from `queue-fixes-1.1.1` | `a9fa00e`, `58acd99` (report), `48804a2`–`3cedd34` (records and the manual test) | [2026-10-22-log-fixes-1.1.1](reports/2026-10-22-log-fixes-1.1.1.md) |
+| Release 1.1.1 | Released: tag `v1.1.1`, pushed | `release-1.1.1`, from `main` at `3cedd34` | `3108c63`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+
+The four branches of 1.1.1, from `review-1.1.0` to `release-1.1.1`, were merged into
+`main` as fast-forwards on 2026-10-22. With the user's approval they were deleted with
+`git branch -d`, at `2a95784`, `790177d`, `3cedd34` and `3108c63`. None had been
+pushed.
 
 The branches above, from `o20-freeze-schema-v1` to `queue-check-state`, were merged
 into `main` as one fast-forward on 2026-10-22; "Done, not merged" in the rows above
@@ -282,6 +295,8 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
 - `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
   folders, 2026-10-21).
 - `build/work-release-1.1.0/` (PyInstaller's work folder of the 1.1.0 build).
+- `build/work-release-1.1.1/` and `build/release-1.1.1-build.log` (the 1.1.1 build).
+  `dist/release-1.1.1/` stays; `dist/release-1.1.0/` can go once the team runs 1.1.1.
 - After the review of 1.1.0: `dist/review-1.1/`, `build/work-review-1.1/`,
   `build/review-1.1-build.log` and `dev/review-1.1/` (probe tests and reading
   scripts).
