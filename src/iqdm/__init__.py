@@ -1,3 +1,3 @@
 """IQ Data Manager: log RF IQ recordings and run verified copy and archive operations."""
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"

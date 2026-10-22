@@ -1,5 +1,48 @@
 # IQ Data Manager: release notes
 
+## Version 1.2.0 (2026-10-23)
+
+Three additions to the Log recording tab. It uses the same catalogue as version 1.1;
+nothing needs to be upgraded. Install it in a new program folder, and copy
+`defaults.toml` across.
+
+### What is new
+
+- **The band from the centre frequency.** When you enter or change a centre
+  frequency, the band fills in from this table: HF 3–30 MHz, VHF 30–300 MHz, UHF
+  300 MHz–1 GHz, L 1–2 GHz, S 2–4 GHz, C 4–8 GHz, X 8–12 GHz, Ku 12–18 GHz, K
+  18–27 GHz, Ka 27–40 GHz. A band filled in this way shows in italics and follows the
+  frequency, also when the recorder's log of the next folder sets it. A band you type
+  or pick yourself stays; if the frequency lies outside it, the checklist says so.
+  The centre frequency is the frequency on air: for a recording made through a
+  down-converter, type it over the frequency the recorder tuned to.
+- **Deleting an entry added by mistake.** Open the entry with **Edit entry** and click
+  **Delete entry...**. A window asks first. Only the catalogue entry goes; the files
+  in the folder stay where they are. A copy of the entry is saved in the folder
+  `deleted-entries` next to the settings file. An entry that was archived or copied
+  cannot be deleted, nor one waiting in the Archive / copy queue.
+- **Several recordings with one set-up.** Choose **Several folders** at the top of the
+  Log recording tab, then **Add folders...** and the folder that holds the recordings,
+  for example those of one day. Each folder is scanned and takes its times, channels,
+  frequencies and recorder's values from its own scan and log. You fill in the fields
+  they share once, or with a template. The table shows each folder's state, and the
+  checklist names what still stops a save. Click a folder to fix it, for example to
+  type a frequency where a folder has no recorder log. **Save** saves each folder as
+  its own entry; a folder that cannot be saved says why, and the others are saved.
+
+### Known limits
+
+- **A deleted entry's number can be used again.** If you delete the newest entry, the
+  next entry anyone logs gets its number. A queue item or a preview made for the
+  deleted entry then does not run, and says why.
+- **The folder list of Several folders is not kept** when the app closes; the app
+  asks first while folders are not saved.
+- **In Several folders mode, each folder takes its file duration from its file
+  names.** A folder with a single file per channel gets 1 s; log such a folder in One
+  folder mode.
+- The limits of the earlier versions below still apply, except that entries can now
+  be deleted.
+
 ## Version 1.1.1 (2026-10-22)
 
 Fixes for version 1.1.0. It uses the same catalogue; nothing needs to be upgraded.
