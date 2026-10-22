@@ -1,5 +1,6 @@
 """Tests for check_channel() and expected_file_bytes() (SPEC section 6, D3, D11, D12)."""
 
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ import make_fixtures
 from iqdm.models import SampleType
 from iqdm.scan.scanner import (
     ChannelScan,
+    DataFile,
     Finding,
     Severity,
     check_channel,
@@ -254,6 +256,63 @@ def test_files_half_a_duration_apart_are_allowed(tmp_path):
     write_files(tmp_path, ["1790733600.dat", "1790733600.5.dat"], size=4000)
     (ch,) = scan_recording(tmp_path, 1.0).channels
     assert check_channel(ch, fs_hz=1000, dtype="int16", header_bytes=0) == []
+
+
+def channel_of(sizes: list[int]) -> ChannelScan:
+    """A channel of files one second apart with these sizes, built without a scan."""
+    files = tuple(
+        DataFile(name=f"{1790733600 + i}.dat", timestamp=1790733600 + i, size=s)
+        for i, s in enumerate(sizes)
+    )
+    return ChannelScan(channel_index=0, sub_path="", file_duration_s=1.0, files=files)
+
+
+def check_each_file(ch: ChannelScan) -> list[Finding]:
+    """check_channel() without the counts kept on the channel: every file looked at."""
+    full = ChannelScan(
+        channel_index=ch.channel_index,
+        sub_path=ch.sub_path,
+        file_duration_s=ch.file_duration_s,
+        files=ch.files,
+    )
+    full.__dict__["size_counts"] = Counter()  # forces the loop over every file
+    return check_channel(full, fs_hz=1000, dtype="int16", header_bytes=0)
+
+
+@pytest.mark.parametrize(
+    "sizes",
+    [
+        [4000] * 5,
+        [4000] * 4 + [1000],  # a short last file (D3)
+        [4000] * 4 + [5000],  # a long last file
+        [4000, 4000, 3000, 4000, 4000],  # a short file in the middle
+        [4000, 3000, 4000, 4000, 1000],
+        [1000],  # one short file (D11)
+        [4000, 0],  # a last file without IQ data (D13)
+    ],
+)
+def test_the_kept_counts_give_the_same_findings(sizes):
+    """O51: check_channel() may skip files by the size counts kept on the channel."""
+    ch = channel_of(sizes)
+    assert check_channel(ch, fs_hz=1000, dtype="int16", header_bytes=0) == check_each_file(ch)
+
+
+def test_the_counts_kept_on_a_channel():
+    ch = channel_of([4000, 4000, 3000, 1000])
+    assert ch.size_counts == Counter({4000: 2, 3000: 1, 1000: 1})
+    assert ch.body_size_counts == Counter({4000: 2, 3000: 1})  # without the last file (D3)
+    assert channel_of([1000]).body_size_counts == Counter({1000: 1})
+    assert channel_of([]).body_size_counts == Counter()
+    close = ChannelScan(
+        channel_index=0,
+        sub_path="",
+        file_duration_s=1.0,
+        files=(
+            DataFile(name="a.dat", timestamp=0, size=1),
+            DataFile(name="b.dat", timestamp=0.2, size=1),
+        ),
+    )
+    assert close.close_pairs == ("a.dat and b.dat",)
 
 
 def test_wrong_file_duration_is_reported(make_recording):

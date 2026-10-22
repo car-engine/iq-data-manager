@@ -11,6 +11,7 @@ import itertools
 import math
 import os
 import re
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -122,6 +123,31 @@ class ChannelScan:
     def sizes(self) -> frozenset[int]:
         """Distinct file sizes, including the last file's."""
         return frozenset(f.size for f in self.files)
+
+    @cached_property
+    def size_counts(self) -> Counter[int]:
+        """How many files have each size, including the last file."""
+        return Counter(f.size for f in self.files)
+
+    @cached_property
+    def body_size_counts(self) -> Counter[int]:
+        """How many files have each size, leaving out the last file (D3). A channel with
+        one file counts that file."""
+        if len(self.files) <= 1:
+            return Counter(self.size_counts)
+        counts = Counter(self.size_counts)
+        counts[self.files[-1].size] -= 1
+        return +counts  # drops a size whose count fell to 0
+
+    @cached_property
+    def close_pairs(self) -> tuple[str, ...]:
+        """Consecutive files closer together than half the file duration (D12), as text."""
+        dur = self.file_duration_s
+        return tuple(
+            f"{a.name} and {b.name}"
+            for a, b in itertools.pairwise(self.files)
+            if b.timestamp - a.timestamp < CLOSE_FACTOR * dur
+        )
 
     @cached_property
     def gaps(self) -> tuple[Gap, ...]:
@@ -400,9 +426,14 @@ def _size_findings(
 ) -> list[Finding]:
     files = channel.files
     last = len(files) - 1
+    differ = len(files) - channel.size_counts.get(expected, 0)
+    if differ == 0:
+        return []  # every file has the expected size; the counts are kept on the channel
+    # When only the last file differs, only it needs looking at.
+    start = last if differ == 1 and files[last].size != expected else 0
     wrong: list[DataFile] = []
     findings: list[Finding] = []
-    for i, f in enumerate(files):
+    for i, f in enumerate(files[start:], start=start):
         if f.size == expected:
             continue
         # A short last file is information (D3) only if it holds IQ data (D13).
@@ -436,11 +467,7 @@ def _size_findings(
 
 def _spacing_findings(channel: ChannelScan, label: str) -> list[Finding]:
     dur = channel.file_duration_s
-    close = [
-        f"{a.name} and {b.name}"
-        for a, b in itertools.pairwise(channel.files)
-        if b.timestamp - a.timestamp < CLOSE_FACTOR * dur
-    ]
+    close = channel.close_pairs
     if not close:
         return []
     return [

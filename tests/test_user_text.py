@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import make_fixtures
 from conftest import recording_from
-from iqdm import movecopy, recorderlog, templates, transferqueue
+from iqdm import batchlog, movecopy, recorderlog, templates, transferqueue
 from iqdm.app import (
     CLEAR_LOG_TAB_QUESTION,
     CLOSE_QUESTION,
@@ -32,6 +33,7 @@ from iqdm.app import (
     TRANSFER_RUNNING,
     UNSAVED_QUESTION,
     UNSAVED_WRONG_VALUE,
+    folders_close_question,
     queue_close_question,
 )
 from iqdm.bands import BANDS
@@ -53,19 +55,28 @@ from iqdm.entry import (
 )
 from iqdm.gui.log_tab import (
     BAND_TOOLTIP,
+    BATCH_TEMPLATE_CHANNELS_NOTE,
+    BATCH_TEMPLATE_LOG_NOTE,
     CONFLICT_TITLE,
     DELETE_BUTTON,
     DELETE_TITLE,
     DELETE_TOOLTIP,
+    DROP_FOLDERS_TITLE,
     KEEP_LOG_BUTTON,
+    NO_FOLDER_SELECTED,
     NO_RECORDS_FOLDER,
+    PARENT_IS_RECORDING,
     REPLACE_TEMPLATE_TITLE,
+    SAVE_FOLDERS_TITLE,
+    SEVERAL_TOOLTIP,
     TEMPLATE_FILTER,
     USE_TEMPLATE_BUTTON,
     LogTab,
     band_filled_tooltip,
     conflict_question,
+    drop_folders_question,
     replace_template_question,
+    save_button_text,
 )
 from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
@@ -376,10 +387,53 @@ def test_band_text_is_plain(make_recording):
         channels=[ChannelInput(channel_index=0, band="UHF", fc_mhz="145.8", fs_text="1k")]
     )
     lines = [i.text for i in checklist(form, scan=scan) if "outside" in i.text]
-    assert lines == [
-        "Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check the band."
-    ]
+    assert lines == ["Channel 0: fc 145.8 MHz is outside UHF (300 to 1000 MHz). Check the band."]
     texts = [BAND_TOOLTIP, *lines, *(band_filled_tooltip(b) for b in BANDS)]
+    assert offending(texts) == []
+
+
+def test_several_folders_text_is_plain(qtbot, db_path, tmp_path, monkeypatch):
+    """The "Several folders" mode with two scanned folders, its questions and messages (D90)."""
+    parent = tmp_path / "session"
+    for name in ("a", "b"):
+        make_fixtures.make_recording(parent / name, make_fixtures.RecordingSpec())
+    tab = LogTab(Config(db_path=str(db_path)))
+    qtbot.addWidget(tab)
+    qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
+    tab.several_radio.setChecked(True)
+    tab.add_folders(parent)
+    qtbot.waitUntil(lambda: not tab.runner.busy and len(tab.folders) == 2, timeout=10_000)
+    qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
+    tab.refresh_checklist()
+    texts = (
+        visible_texts(tab)
+        + [item.text for item in tab.checklist.items]
+        + [item.text for item in tab.folder_checklist.items]
+    )
+    assert "Several folders" in texts
+    views = tab._views
+    names = {f.key: f.name for f, _ in views}
+    texts += [
+        SEVERAL_TOOLTIP,
+        SAVE_FOLDERS_TITLE,
+        DROP_FOLDERS_TITLE,
+        NO_FOLDER_SELECTED,
+        BATCH_TEMPLATE_CHANNELS_NOTE,
+        BATCH_TEMPLATE_LOG_NOTE,
+        PARENT_IS_RECORDING,
+        drop_folders_question(3),
+        save_button_text(3),
+        folders_close_question(2),
+        batchlog.save_question(views, site="A", project="", logged_by="u", offset_hours=8),
+        batchlog.saved_text(
+            [
+                batchlog.SaveOutcome(views[0][0].key, recording_id=4),
+                batchlog.SaveOutcome(views[1][0].key, error="the database is in use"),
+            ],
+            names,
+        )[1],
+        batchlog.combined_items([])[0].text,
+    ]
     assert offending(texts) == []
 
 

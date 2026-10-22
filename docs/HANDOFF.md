@@ -60,7 +60,7 @@ a milestone did:
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D90 is next on 2026-10-23),
+5. **Record the decision.** A new entry in DECISIONS.md (D91 is next on 2026-10-23),
    the current requirement in SPEC.md, and the item moved to "Closed items" in
    STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following

@@ -7,7 +7,7 @@ Edit mode follows DECISIONS.md D16. Times are shown at the configured offset fro
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSpinBox,
     QTableWidget,
@@ -37,11 +38,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from iqdm import bands, entry, recorderlog, templates
+from iqdm import bands, batchlog, entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
 from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
+from iqdm.gui.widgets.folder_table import FolderRow, FolderTable
 from iqdm.gui.widgets.param_table import ParamTable
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import Task, TaskRunner
@@ -90,6 +92,52 @@ NO_RECORDS_FOLDER = (
     "This entry cannot be deleted here, because the app has no folder for the copy it "
     "saves before a delete."
 )
+
+
+SEVERAL_TOOLTIP = (
+    "Log several recording folders with the same set-up. Type the shared fields once; "
+    "each folder takes its times, channels and recorder's log values from its own scan."
+)
+SAVE_FOLDERS_TITLE = "Save the entries?"
+DROP_FOLDERS_TITLE = "Drop the folder list?"
+NO_FOLDER_SELECTED = "Select a folder in the list to see its checklist."
+BATCH_TEMPLATE_CHANNELS_NOTE = (
+    "The template's band and fc were not used: each folder takes them from its own scan "
+    "and recorder's log."
+)
+BATCH_TEMPLATE_LOG_NOTE = (
+    "Folders whose recorder's log names the sample type, USRP gain, Clock reference or "
+    "USRP keep the log's values."
+)
+PARENT_IS_RECORDING = (
+    "This folder is itself a recording: its numbered subfolders are its channels."
+)
+
+
+def drop_folders_question(count: int) -> str:
+    folders = "1 folder that is" if count == 1 else f"{count:,} folders that are"
+    return f"The list holds {folders} not saved. Drop the list and log one folder?"
+
+
+def save_button_text(ready: int) -> str:
+    """'Save 12 entries': the Save button while several folders are listed."""
+    if ready == 0:
+        return "Save entries"
+    return "Save 1 entry" if ready == 1 else f"Save {ready:,} entries"
+
+
+def confirm_batch_save(parent: QWidget, text: str) -> bool:
+    """Ask before the entries of several folders are saved (D90). Save is the default."""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setWindowTitle(SAVE_FOLDERS_TITLE)
+    box.setText(text)
+    save = box.addButton("Save", QMessageBox.ButtonRole.AcceptRole)
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(save)
+    box.setEscapeButton(cancel)
+    box.exec()
+    return box.clickedButton() is save
 
 
 def confirm_delete(parent: QWidget, text: str) -> bool:
@@ -247,6 +295,13 @@ class LogTab(QWidget):
         self._recorder: recorderlog.RecorderLog | None = None  # the scanned folder's logs
         self._log_values: recorderlog.FormValues | None = None  # what the log filled in
         self._log_applied_for: str | None = None  # the folder the log filled in for
+        # Several folders (D90): the list, the folder shown in section 4, and the work.
+        self._folders: list[batchlog.BatchFolder] = []
+        self._selected_key: int | None = None
+        self._views: list[tuple[batchlog.BatchFolder, batchlog.FolderView]] = []
+        self._checks = batchlog.FolderChecks()
+        self._batch_task: Task | None = None
+        self._parent_recording: Path | None = None  # a parent that is itself a recording
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -281,6 +336,7 @@ class LogTab(QWidget):
 
     def _build_source(self) -> QGroupBox:
         box = QGroupBox("1 · Source folder")
+        self.source_box = box
         self.folder_edit = QLineEdit()
         self.folder_edit.setPlaceholderText("Recording folder, local or on the NAS")
         self.folder_edit.textChanged.connect(self._folder_changed)
@@ -299,10 +355,72 @@ class LogTab(QWidget):
         row.addWidget(self.browse_button)
         row.addWidget(self.scan_button)
         row.addWidget(self.cancel_button)
+        self.one_page = QWidget()
+        one_layout = QVBoxLayout(self.one_page)
+        one_layout.setContentsMargins(0, 0, 0, 0)
+        one_layout.addLayout(row)
+        one_layout.addWidget(self.scan_summary)
+
+        self.one_radio = QRadioButton("One folder")
+        self.one_radio.setChecked(True)
+        self.several_radio = QRadioButton("Several folders")
+        self.several_radio.setToolTip(SEVERAL_TOOLTIP)
+        self.several_radio.toggled.connect(self._mode_toggled)
+        modes = QHBoxLayout()
+        modes.addWidget(self.one_radio)
+        modes.addWidget(self.several_radio)
+        modes.addStretch(1)
+
         layout = QVBoxLayout(box)
-        layout.addLayout(row)
-        layout.addWidget(self.scan_summary)
+        layout.addLayout(modes)
+        layout.addWidget(self.one_page)
+        layout.addWidget(self._build_folders())
         return box
+
+    def _build_folders(self) -> QWidget:
+        """The list of folders for "Several folders" (D90)."""
+        self.several_page = QWidget()
+        self.several_page.setVisible(False)
+        self.add_folders_button = QPushButton("Add folders...")
+        self.add_folders_button.setToolTip(
+            "Choose a folder; the recording folders inside it are added to the list."
+        )
+        self.add_folders_button.clicked.connect(lambda: self.add_folders())
+        self.remove_folder_button = QPushButton("Remove")
+        self.remove_folder_button.setToolTip("Take the selected folder off the list.")
+        self.remove_folder_button.clicked.connect(self.remove_folder)
+        self.scan_folders_button = QPushButton("Scan folders")
+        self.scan_folders_button.setToolTip("Scan again every folder in the list not yet saved.")
+        self.scan_folders_button.clicked.connect(lambda: self.scan_folders())
+        self.cancel_folders_button = QPushButton("Cancel")
+        self.cancel_folders_button.clicked.connect(self._cancel_batch_task)
+        self.folder_table = FolderTable(self._zone)
+        self.folder_table.current_changed.connect(self._select_folder)
+        self.folder_table.tick_changed.connect(self._tick_folder)
+        self.batch_line = QLabel()
+        self.batch_line.setWordWrap(True)
+        self.add_parent_button = QPushButton("Add it as one recording")
+        self.add_parent_button.setVisible(False)
+        self.add_parent_button.clicked.connect(self._add_parent_as_one)
+
+        buttons = QHBoxLayout()
+        for button in (
+            self.add_folders_button,
+            self.remove_folder_button,
+            self.scan_folders_button,
+            self.cancel_folders_button,
+        ):
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        parent_row = QHBoxLayout()
+        parent_row.addWidget(self.batch_line, 1)
+        parent_row.addWidget(self.add_parent_button)
+        layout = QVBoxLayout(self.several_page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(buttons)
+        layout.addWidget(self.folder_table)
+        layout.addLayout(parent_row)
+        return self.several_page
 
     def _build_recording(self) -> QGroupBox:
         box = QGroupBox("2 · Recording")
@@ -420,6 +538,11 @@ class LogTab(QWidget):
         box = QGroupBox("Before saving")
         self.mode_label = QLabel()
         self.checklist = ChecklistView()
+        self.folder_label = QLabel()  # several folders: the selected folder (D90)
+        self.folder_label.setWordWrap(True)
+        self.folder_checklist = ChecklistView()
+        self.folder_label.setVisible(False)
+        self.folder_checklist.setVisible(False)
         self.state_note = QLabel()
         self.state_note.setWordWrap(True)
         self.kept_note = QLabel()  # D79: what a new folder kept from the previous entry
@@ -455,6 +578,8 @@ class LogTab(QWidget):
         layout.addWidget(self.mode_label)
         layout.addWidget(self.kept_note)
         layout.addWidget(self.checklist, 1)
+        layout.addWidget(self.folder_label)
+        layout.addWidget(self.folder_checklist, 1)
         layout.addWidget(self.edit_existing_button)
         layout.addWidget(self.use_parent_button)
         layout.addWidget(self.state_note)
@@ -477,6 +602,19 @@ class LogTab(QWidget):
     def scan(self) -> ScanResult | None:
         """The current scan at the current file duration, or None."""
         return self._scan
+
+    @property
+    def batch_mode(self) -> bool:
+        """True in "Several folders" mode (D90)."""
+        return self.several_radio.isChecked()
+
+    @property
+    def folders(self) -> list[batchlog.BatchFolder]:
+        return list(self._folders)
+
+    def unsaved_folders(self) -> int:
+        """The number of listed folders not yet saved (D90)."""
+        return sum(1 for f in self._folders if not f.saved)
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802  (Qt override)
         """Follow a switch between the light and dark theme."""
@@ -501,11 +639,12 @@ class LogTab(QWidget):
         return self._saving
 
     def has_unsaved_input(self) -> bool:
-        """True in edit mode, or when the form holds a folder, a plan reference,
-        remarks or an RF chain row with text."""
+        """True in edit mode, or when the form holds a folder, a folder not yet saved in
+        the list (D90), a plan reference, remarks or an RF chain row with text."""
         return (
             self._original is not None
             or bool(self.folder_edit.text().strip())
+            or self.unsaved_folders() > 0
             or bool(self.plan_edit.text().strip())
             or bool(self.remarks_edit.toPlainText().strip())
             or any(
@@ -536,7 +675,10 @@ class LogTab(QWidget):
             self._zone = offset_label(self._offset)
             self._label_times()
             self.channel_table.setHorizontalHeaderLabels(channel_headers(self._zone))
-            if self._scan is not None:
+            self.folder_table.set_zone(self._zone)
+            if self.batch_mode:
+                self._show_selected()
+            elif self._scan is not None:
                 self._show_scan()
             elif self._original is not None:
                 self._show_stored_channels(self._original, self._inputs_by_index())
@@ -607,10 +749,11 @@ class LogTab(QWidget):
         return row.band, row.fc, row.fs
 
     def clear_form(self) -> None:
-        """Back to an empty new entry."""
+        """Back to an empty new entry. In "Several folders" mode the list is emptied."""
         self.cancel_scan()
         self._original = None
         self._clear_scan()
+        self._clear_folders()
         _set_read_only(self.folder_edit, False)
         self.browse_button.setEnabled(True)
         self.folder_edit.blockSignals(True)
@@ -755,6 +898,9 @@ class LogTab(QWidget):
 
     def _format_changed(self, *_: object) -> None:
         self._fill_inferred_fs()
+        if self.batch_mode:  # the selected folder's filled-in fs follows (D21)
+            self._sync_selected()
+            self._show_selected()
         self._schedule_refresh()
 
     # =====================================================================
@@ -968,6 +1114,9 @@ class LogTab(QWidget):
 
     def refresh_checklist(self) -> None:
         self._refresh_timer.stop()
+        if self.batch_mode:
+            self._refresh_folders()
+            return
         form = self.current_input()
         filled = (
             () if self._log_values is None else recorderlog.still_filled(self._log_values, form)
@@ -1005,19 +1154,30 @@ class LogTab(QWidget):
         self.kept_note.setStyleSheet(f"color: {colour.name()};")
 
     def _update_buttons(self) -> None:
-        scanning = self._scan_task is not None
+        scanning = self._scan_task is not None or self._batch_task is not None
         self.scan_button.setEnabled(not scanning and not self._saving)
-        self.cancel_button.setEnabled(scanning)
+        self.cancel_button.setEnabled(self._scan_task is not None)
+        if self.batch_mode:
+            ready = sum(1 for f, v in self._views if batchlog.is_ready(f, v.items))
+            self.save_button.setText(save_button_text(ready))
+            can_save = ready > 0
+        else:
+            self.save_button.setText("Save entry")
+            can_save = entry.can_save(self.checklist.items)
         self.save_button.setEnabled(
-            bool(self.config.db_path)
-            and not scanning
-            and not self._saving
-            and entry.can_save(self.checklist.items)
+            bool(self.config.db_path) and not scanning and not self._saving and can_save
         )
         self.delete_button.setVisible(self._original is not None)
         self.delete_button.setEnabled(
             bool(self.config.db_path) and not scanning and not self._saving
         )
+        idle = not scanning and not self._saving
+        for radio in (self.one_radio, self.several_radio):
+            radio.setEnabled(idle and self._original is None)
+        self.add_folders_button.setEnabled(idle)
+        self.remove_folder_button.setEnabled(idle and self._selected_key is not None)
+        self.scan_folders_button.setEnabled(idle and self.unsaved_folders() > 0)
+        self.cancel_folders_button.setEnabled(self._batch_task is not None and not self._saving)
 
     # =====================================================================
     # Database lists
@@ -1255,6 +1415,9 @@ class LogTab(QWidget):
         db = self.config.db_path
         if not db or self._saving or self._scan_task is not None:
             return
+        if self.batch_mode:
+            self._save_folders(db)
+            return
         if not entry.can_save(self.checklist.items):
             self.show_message("Complete or fix the items in the checklist first.", ItemState.TODO)
             return
@@ -1431,7 +1594,7 @@ class LogTab(QWidget):
 
     def _channel_like_parent(self) -> str | None:
         """The parent folder when a new entry's folder is named like a channel (D27)."""
-        if self._original is not None or self._location is None:
+        if self._original is not None or self._location is None or self.batch_mode:
             return None
         return entry.channel_like_parent(self._location)
 
@@ -1468,6 +1631,9 @@ class LogTab(QWidget):
         self, rec: Recording, message: str, message_state: ItemState | None = None
     ) -> None:
         self.cancel_scan()
+        if self.batch_mode:  # the caller asked about unsaved input first (D45)
+            self._set_mode(several=False)
+            self._leave_folders()
         self._original = rec
         self._clear_scan()
         form = entry.input_from_recording(rec)
@@ -1496,6 +1662,423 @@ class LogTab(QWidget):
         self.param_table.set_rows(form.params)
         self.mode_label.setText(f"Editing recording {rec.id}")
         self.show_message(message, message_state)
+        self.refresh_checklist()
+
+    # =====================================================================
+    # Several folders (DECISIONS.md D90)
+    # =====================================================================
+
+    def _set_mode(self, *, several: bool) -> None:
+        """Set the mode buttons without the switch they start."""
+        for radio in (self.one_radio, self.several_radio):
+            radio.blockSignals(True)
+        self.several_radio.setChecked(several)
+        self.one_radio.setChecked(not several)
+        for radio in (self.one_radio, self.several_radio):
+            radio.blockSignals(False)
+
+    def _mode_toggled(self, several: bool) -> None:
+        if several:
+            self._enter_folders()
+            return
+        unsaved = self.unsaved_folders()
+        if unsaved and not self._confirm_drop_folders(unsaved):
+            self._set_mode(several=True)
+            return
+        self._leave_folders()
+
+    def _confirm_drop_folders(self, count: int) -> bool:
+        answer = QMessageBox.question(
+            self,
+            DROP_FOLDERS_TITLE,
+            drop_folders_question(count),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _enter_folders(self) -> None:
+        """Switch to "Several folders". The shared fields stay, as for a new folder (D79)."""
+        self.cancel_scan()
+        self._clear_scan()
+        self.folder_edit.blockSignals(True)
+        self.folder_edit.clear()
+        self.folder_edit.blockSignals(False)
+        self._set_location(None, None)
+        self._reset_scan_fields()
+        self._carried = {}  # each folder takes band and fc from its own log (D88)
+        self._kept = False
+        self._clear_folders()
+        self.one_page.setVisible(False)
+        self.several_page.setVisible(True)
+        self.source_box.setTitle("1 · Source folders")
+        self.duration_spin.setEnabled(False)
+        self.duration_spin.setToolTip("Each folder takes its file duration from its file names.")
+        self.folder_label.setVisible(True)
+        self.folder_checklist.setVisible(True)
+        self._clear_message()
+        self.refresh_checklist()
+
+    def _leave_folders(self) -> None:
+        """Back to "One folder". The list is dropped; the shared fields stay."""
+        self._clear_folders()
+        self._reset_scan_fields()
+        self._set_location(None, None)
+        self.start_edit.clear()
+        self.end_edit.clear()
+        self.several_page.setVisible(False)
+        self.one_page.setVisible(True)
+        self.source_box.setTitle("1 · Source folder")
+        self.duration_spin.setEnabled(True)
+        self.duration_spin.setToolTip("")
+        self.folder_label.setVisible(False)
+        self.folder_checklist.setVisible(False)
+        self.channel_table.setEnabled(True)
+        self._clear_message()
+        self.refresh_checklist()
+
+    def _clear_folders(self) -> None:
+        self._cancel_batch_task()
+        self._folders = []
+        self._selected_key = None
+        self._views = []
+        self._checks.clear()
+        self._parent_recording = None
+        self.folder_table.set_rows([])
+        self.batch_line.clear()
+        self.add_parent_button.setVisible(False)
+        self.folder_checklist.set_items([])
+
+    def _cancel_batch_task(self) -> None:
+        if self._batch_task is not None:
+            self._batch_task.cancel()
+
+    def _folder(self, key: int | None) -> batchlog.BatchFolder | None:
+        return next((f for f in self._folders if f.key == key), None)
+
+    def add_folders(self, parent: Path | None = None) -> None:
+        """Add the recording folders inside `parent`, then scan them. Without `parent`,
+        a folder dialog asks. The listing runs in a worker, as the parent may be on
+        the NAS."""
+        if self._batch_task is not None or self._saving:
+            return
+        if parent is None:
+            chosen = QFileDialog.getExistingDirectory(self, "Folder that holds the recordings")
+            if not chosen:
+                return
+            parent = Path(chosen)
+        folder = parent
+        self.batch_line.setText(f"Looking for recording folders in {folder}...")
+        self._batch_task = self.runner.start(
+            lambda task: batchlog.list_candidates(folder),
+            on_success=self._candidates_listed,
+            on_failure=self._batch_failed,
+        )
+        self._update_buttons()
+
+    def _candidates_listed(self, found: batchlog.Candidates) -> None:
+        self._batch_task = None
+        self._parent_recording = None
+        self.add_parent_button.setVisible(False)
+        added = self._add_paths(found.folders)
+        repeated = len(found.folders) - len(added)
+        if not found.folders and found.parent_is_recording:
+            self._parent_recording = found.parent
+            self.batch_line.setText(PARENT_IS_RECORDING)
+            self.add_parent_button.setVisible(True)
+        elif not found.folders:
+            self.batch_line.setText(f"No recording folders found in {found.parent}.")
+        else:
+            text = f"Added {len(added):,} {'folder' if len(added) == 1 else 'folders'}."
+            if repeated:
+                text += f" {repeated:,} {'was' if repeated == 1 else 'were'} already in the list."
+            self.batch_line.setText(text)
+        self._update_buttons()
+        if added:
+            self.scan_folders([f.key for f in added])
+        else:
+            self.refresh_checklist()
+
+    def _add_paths(self, paths: Sequence[Path]) -> list[batchlog.BatchFolder]:
+        """New list entries for the paths not yet listed."""
+        added = []
+        for path in paths:
+            text = str(path)
+            if any(batchlog.same_folder(text, f.path) for f in self._folders):
+                continue
+            folder = batchlog.BatchFolder(path=text)
+            self._folders.append(folder)
+            added.append(folder)
+        return added
+
+    def _add_parent_as_one(self) -> None:
+        parent = self._parent_recording
+        self.add_parent_button.setVisible(False)
+        self._parent_recording = None
+        if parent is None:
+            return
+        added = self._add_paths([parent])
+        self.batch_line.setText(
+            f"Added {parent}." if added else f"{parent} is already in the list."
+        )
+        if added:
+            self.scan_folders([added[0].key])
+
+    def remove_folder(self) -> None:
+        """Take the selected folder off the list. Nothing is written."""
+        if self._batch_task is not None or self._saving or self._selected_key is None:
+            return
+        self._folders = [f for f in self._folders if f.key != self._selected_key]
+        self._selected_key = None
+        self._show_selected()
+        self.refresh_checklist()
+
+    def scan_folders(self, keys: Sequence[int] | None = None) -> None:
+        """Scan the listed folders not yet saved, one after another (D90).
+
+        Each folder's result reaches the list as soon as it is scanned. A rescan drops
+        what was typed for that folder's channels.
+        """
+        if self._batch_task is not None or self._saving:
+            return
+        todo = [
+            f for f in self._folders if not f.saved and (keys is None or f.key in set(keys))
+        ]
+        if not todo:
+            return
+        nas_roots, resolve, db = self.config.nas_roots, self._resolve_drive, self.config.db_path
+        names = list(self._choices.param_names)
+
+        def work(task: Task) -> int:
+            for n, folder in enumerate(todo):
+                if task.is_cancelled():
+                    break
+                task.report((n, len(todo), 0))
+                try:
+                    done = batchlog.scan_folder(
+                        folder,
+                        nas_roots=nas_roots,
+                        resolve_drive=resolve,
+                        db_path=db,
+                        known_param_names=names,
+                        progress=lambda files, n=n: task.report((n, len(todo), files)),
+                        cancelled=task.is_cancelled,
+                    )
+                except ScanCancelled:
+                    break
+                task.report(done)
+            return len(todo)
+
+        self.batch_line.setText(f"Scanning folder 1 of {len(todo):,}...")
+        self._batch_task = self.runner.start(
+            work,
+            on_success=lambda total: self._folders_scanned(),
+            on_failure=self._batch_failed,
+            on_progress=self._scan_progress,
+        )
+        self._update_buttons()
+
+    def _scan_progress(self, value: object) -> None:
+        if isinstance(value, batchlog.BatchFolder):
+            for position, folder in enumerate(self._folders):
+                if folder.key == value.key:
+                    # An already logged folder starts unticked; otherwise the tick stays.
+                    value.ticked = folder.ticked and value.logged_id is None
+                    self._folders[position] = value
+            if value.key == self._selected_key:
+                self._show_selected()
+            self._schedule_refresh()
+        elif isinstance(value, tuple):
+            n, total, files = value
+            self.batch_line.setText(f"Scanning folder {n + 1} of {total:,}: {files:,} files found")
+
+    def _folders_scanned(self) -> None:
+        self._batch_task = None
+        cancelled = sum(1 for f in self._folders if not f.scanned)
+        self._folders.sort(
+            key=lambda f: (f.start_unix() is None, f.start_unix() or 0.0, f.name.casefold())
+        )
+        scanned = sum(1 for f in self._folders if f.scanned and not f.saved)
+        text = f"Scanned {scanned:,} {'folder' if scanned == 1 else 'folders'}."
+        if cancelled:
+            text += f" {cancelled:,} not scanned."
+        self.batch_line.setText(text)
+        if self._selected_key is None and self._folders:
+            self._selected_key = self._folders[0].key
+        self._show_selected()
+        self.refresh_checklist()
+
+    def _batch_failed(self, exc: Exception) -> None:
+        self._batch_task = None
+        self.batch_line.setText(f"Cannot read the folder: {exc}")
+        self.refresh_checklist()
+
+    def _tick_folder(self, key: int, ticked: bool) -> None:
+        folder = self._folder(key)
+        if folder is not None and not folder.saved:
+            folder.ticked = ticked
+            self._schedule_refresh()
+
+    def _select_folder(self, key: object) -> None:
+        if not isinstance(key, int) or key == self._selected_key:
+            return
+        self._sync_selected()
+        self._selected_key = key
+        self._show_selected()
+        self._schedule_refresh()
+
+    def _sync_selected(self) -> None:
+        """Keep what the channel rows hold for the selected folder (D90)."""
+        folder = self._folder(self._selected_key)
+        if folder is None or not folder.scanned or folder.saved or not self._channel_rows:
+            return
+        rows = {c.channel_index: c for c in self.current_input().channels}
+        if folder.scan is not None and set(rows) == {c.channel_index for c in folder.scan.channels}:
+            folder.channels = rows
+
+    def _show_selected(self) -> None:
+        """Section 2 and the channel rows of the selected folder."""
+        folder = self._folder(self._selected_key)
+        self.folder_table.select_key(self._selected_key)
+        if folder is None or folder.scan is None:
+            self._set_channel_rows([], {})
+            self._set_location(None, None if folder is None else folder.location_error)
+            self.start_edit.clear()
+            self.end_edit.clear()
+            self.channel_table.setEnabled(True)
+            return
+        self._set_location(folder.location, folder.location_error)
+        self._set_duration(folder.file_duration_s)
+        shared = replace(self.current_input(), channels=[])
+        form, _values = batchlog.form_for(shared, folder, self._choices.param_names)
+        scan = folder.scan
+        self._set_channel_rows(
+            [
+                (c.channel_index, c.sub_path, c.start_unix, c.end_unix, c.n_files)
+                for c in scan.channels
+            ],
+            {c.channel_index: c for c in form.channels},
+        )
+        starts = [c.start_unix for c in scan.channels if c.start_unix is not None]
+        ends = [c.end_unix for c in scan.channels if c.end_unix is not None]
+        self.start_edit.setText(time_text(min(starts), self._offset) if starts else "")
+        self.end_edit.setText(time_text(max(ends), self._offset) if ends else "")
+        self.channel_table.setEnabled(not folder.saved)
+
+    def _refresh_folders(self) -> None:
+        """Every folder's checklist, the list's checklist and the folder table (D90)."""
+        self._sync_selected()
+        shared = replace(self.current_input(), channels=[])
+        names = self._choices.param_names
+        self._views = [
+            (f, self._checks.view(shared, f, self._folders, names)) for f in self._folders
+        ]
+        self.checklist.set_items(batchlog.combined_items(self._views))
+        selected = next(((f, v) for f, v in self._views if f.key == self._selected_key), None)
+        if selected is None:
+            self.folder_label.setText(NO_FOLDER_SELECTED)
+            self.folder_checklist.set_items([])
+        else:
+            self.folder_label.setText(f"Selected folder: {selected[0].name}")
+            self.folder_checklist.set_items(selected[1].items)
+        self.folder_table.set_rows([self._folder_row(f, v) for f, v in self._views])
+        self.kept_note.setVisible(False)
+        self.edit_existing_button.setVisible(False)
+        self.use_parent_button.setVisible(False)
+        self.state_note.setText(
+            "" if selected is None else entry.state_note(selected[0].location, None)
+        )
+        self._update_buttons()
+
+    def _folder_row(self, folder: batchlog.BatchFolder, view: batchlog.FolderView) -> FolderRow:
+        state, state_text = batchlog.folder_state(folder, view.items)
+        scan = folder.scan
+        channels = view.form.channels
+        starts = [] if scan is None else [c.start_unix for c in scan.channels if c.start_unix]
+        ends = [] if scan is None else [c.end_unix for c in scan.channels if c.end_unix]
+        bands_shown = list(dict.fromkeys(c.band.strip() for c in channels if c.band.strip()))
+        fs_shown = list(dict.fromkeys(c.fs_text.strip() for c in channels if c.fs_text.strip()))
+        return FolderRow(
+            key=folder.key,
+            ticked=folder.ticked and not folder.saved,
+            can_tick=not folder.saved,
+            folder=folder.name,
+            folder_tooltip=folder.path,
+            start=time_text(min(starts), self._offset) if starts else "",
+            end=time_text(max(ends), self._offset) if ends else "",
+            channels="" if scan is None else str(len(scan.channels)),
+            fc=", ".join(c.fc_mhz.strip() or "?" for c in channels),
+            band=", ".join(bands_shown),
+            fs=", ".join(fs_shown),
+            dtype=str(view.form.dtype) if scan is not None else "",
+            files="" if scan is None else f"{sum(c.n_files for c in scan.channels):,}",
+            size=""
+            if scan is None
+            else entry.format_size(sum(c.total_bytes for c in scan.channels)),
+            state=state,
+            state_text=state_text,
+        )
+
+    def _save_folders(self, db: str) -> None:
+        """Save every ready folder as its own entry, after a question (D90)."""
+        built, failed = batchlog.build_recordings(self._views, self._choices.param_names)
+        if not built and not failed:
+            self.show_message("Complete or fix the items in the checklist first.", ItemState.TODO)
+            return
+        site, project = self._names()
+        question = batchlog.save_question(
+            self._views,
+            site=site,
+            project=project,
+            logged_by=self.logged_by_edit.text().strip(),
+            offset_hours=self._offset,
+        )
+        if not confirm_batch_save(self, question):
+            self.show_message("Nothing saved.", ItemState.INFO)
+            return
+        names = {f.key: f.name for f in self._folders}
+
+        def work(task: Task) -> list[batchlog.SaveOutcome]:
+            return batchlog.save_all(db, built, progress=task.report, cancelled=task.is_cancelled)
+
+        self._saving = True
+        self._update_buttons()
+        self.show_message("Saving...")
+        self._batch_task = self.runner.start(
+            work,
+            on_success=lambda outcomes: self._folders_saved([*failed, *outcomes], names),
+            on_failure=self._save_failed_folders,
+            on_progress=lambda value: self.show_message(
+                f"Saving {value[0] + 1:,} of {value[1]:,}..."
+            ),
+        )
+
+    def _folders_saved(
+        self, outcomes: Sequence[batchlog.SaveOutcome], names: dict[int, str]
+    ) -> None:
+        self._batch_task = None
+        self._saving = False
+        for outcome in outcomes:
+            folder = self._folder(outcome.key)
+            if folder is None:
+                continue
+            folder.saved_id = outcome.recording_id
+            folder.save_error = outcome.error
+            if outcome.recording_id is not None:
+                folder.ticked = False
+        state, text = batchlog.saved_text(outcomes, names)
+        self.show_message(text, state)
+        self._show_selected()
+        self.reload_choices()
+        self.refresh_checklist()
+        ids = [o.recording_id for o in outcomes if o.recording_id is not None]
+        if ids:
+            self.saved.emit(ids[-1])  # one refresh of the Viewer
+
+    def _save_failed_folders(self, exc: Exception) -> None:
+        self._batch_task = None
+        self._saving = False
+        self.show_message(f"Not saved: {exc}", ItemState.ERROR)
         self.refresh_checklist()
 
     # =====================================================================
@@ -1621,6 +2204,9 @@ class LogTab(QWidget):
             self.show_message(f"Template not loaded: {exc}", ItemState.ERROR)
             return
         self._template_folder = str(path.parent)
+        if self.batch_mode:
+            self._import_template_for_folders(tpl)
+            return
         used, note = tpl, ""
         values = self._log_values
         if values is not None and self._original is None:
@@ -1644,6 +2230,28 @@ class LogTab(QWidget):
         notes = [*applied.notes, note] if note else list(applied.notes)
         state = ItemState.INFO if notes else ItemState.OK  # a name not found, or the log
         self.show_message(templates.applied_text(tpl, notes), state)
+        self.refresh_checklist()
+
+    def _import_template_for_folders(self, tpl: templates.LogTemplate) -> None:
+        """A template in "Several folders" mode sets the shared fields only (D90).
+
+        Each folder keeps the values its own scan and recorder's log give, so the
+        template's band and fc are not used, and there is no question as in D87.
+        """
+        shared = replace(tpl, channels=None)
+        applied = templates.apply_template(
+            self.current_input(), shared, self._choices.sites, self._choices.projects
+        )
+        self._set_template_fields(shared, applied)
+        notes = list(applied.notes)
+        if tpl.channels is not None:
+            notes.append(BATCH_TEMPLATE_CHANNELS_NOTE)
+        logs = any(f.recorder is not None and f.recorder.found for f in self._folders)
+        if logs and (tpl.sample_type is not None or tpl.rf_chain is not None):
+            notes.append(BATCH_TEMPLATE_LOG_NOTE)
+        self.show_message(
+            templates.applied_text(tpl, notes), ItemState.INFO if notes else ItemState.OK
+        )
         self.refresh_checklist()
 
     def _set_template_fields(self, tpl: templates.LogTemplate, applied: templates.Applied) -> None:

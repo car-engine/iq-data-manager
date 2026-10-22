@@ -107,6 +107,7 @@ Rules for this file:
 | D87 | A template imported after the log filled the form | 2026-10-22, version 1.1.1 | Active; amends D80 and D82 |
 | D88 | The band filled in from fc | 2026-10-23, version 1.2 | Active; amends D19 |
 | D89 | Deleting an entry added by mistake | 2026-10-23, version 1.2 | Active; replaces D41 |
+| D90 | Logging several folders with one set-up | 2026-10-23, version 1.2 | Active |
 
 ## D1. Sample types
 
@@ -2052,3 +2053,79 @@ Affects: SPEC sections 3, 5, 6, 9 and 13, `db/repository.py` (`blocks_deletion()
 `delete_recording()`, `insert_transfer()`), `entry.py` (`check_deletion()`,
 `delete_entry()`), `deletion_record.py`, `gui/log_tab.py`, `gui/transfer_tab.py`,
 `app.py`, the user guide.
+
+## D90. Logging several folders with one set-up
+
+Closes O51. The user asked for it on 2026-10-22: recordings with one set-up at
+different times and frequencies are common, and logging each folder on its own was
+quick but tedious. The user approved the plan on 2026-10-23 and chose these points:
+a folder is fixed in place in the form; each entry is saved on its own; a template
+sets the shared fields only, and each folder's log wins without a question; the
+folders of a session are subfolders of one folder; 10 to 50 folders in a batch, each
+up to a couple of hours.
+
+- **Mode.** Section 1 of the Log tab offers "One folder" (the form as before) and
+  "Several folders". Switching keeps the shared fields, as a new folder does (D79).
+  Switching back with folders not yet saved asks first, defaulting to No. Edit mode,
+  Delete entry (D89) and "Use parent folder" (D27) belong to "One folder" mode; edit
+  mode opened from the Viewer switches back.
+- **Choosing folders.** "Add folders..." asks for a folder and lists its subfolders
+  that hold a channel folder or a data file at their top, sorted by name. A folder
+  already in the list is not added again. A folder that is itself a recording (its
+  numbered subfolders are channel folders) gives a line and a button "Add it as one
+  recording". The listing runs in a worker, because the folder may be on the NAS.
+- **Scanning.** The added folders are scanned at once, one after another in the
+  worker; "Scan folders" scans every unsaved folder again. Each scan also reads the
+  folder's recorder log and checks the catalogue (already logged, D61). A folder's
+  result reaches the list as soon as it is scanned. The line reads "Scanning folder 3
+  of 12: 12,345 files found". Cancel stops the folder being scanned; the rest stay
+  "Not scanned". A rescan drops what was typed for that folder's channels. After the
+  scan, the list is sorted by start time.
+- **Values per folder.** Each folder's scan and log give its start and end, the
+  channels with fc and fs, the band from fc (D88), the sample type, the RF chain rows
+  "USRP gain", "Clock reference" and "USRP" (D82), and the file duration from its file
+  names (D22). These values win over the shared ones. Where a folder has no log, fs is
+  filled in from the file size with the shared format (D21), and fc is to be typed.
+- **Shared values.** Sections 2, 3 and 5 hold what the user types once: logged by,
+  site, project, plan reference, remarks, the format, and the RF chain rows. The file
+  duration field shows the selected folder's value and cannot be changed in this
+  mode.
+- **Fixing one folder in place.** Selecting a folder in the table shows its times,
+  location and channels in sections 2 and 4. fc, band and fs typed there belong to
+  that folder, with the marks of D21, D82 and D88 kept per folder.
+- **The folder table** is the preview: a tick box "Save", folder, start and end at the
+  display offset, channel count, fc, band, fs, sample type, files, size, and a state
+  with the checklist's mark and colour: ready, ready with notes, to do, errors, not
+  scanned, saved as recording N, not saved with the reason. A folder that is already
+  logged starts unticked.
+- **Checklists.** The side panel shows the checklist of the list: the number of ticked
+  folders ready to save, each to-do item or error that every ticked folder shares once
+  ("Choose a site (all 12 folders)"), and the other to-do items and errors with the
+  folder's name. Below it, the full checklist of the selected folder, as the
+  one-folder form gives it, plus a line for another folder in the list with the same
+  start, end and channels (D61). Each folder's checklist is kept until its inputs
+  change; the remarks and the plan reference are not inputs of any check.
+- **Saving.** "Save 12 entries" is enabled when at least one ticked folder has no
+  to-do item and no error. A question names the number of entries, the site, project
+  and logged-by name, the time span and total size, and the folders left out; Save is
+  the default. Each entry is saved in its own transaction by `entry.save_new()`, one
+  after another, so a folder that fails (for example one logged meanwhile on another
+  PC) does not stop the rest. Saved folders show "Saved as recording N" and cannot be
+  changed; a folder not saved shows its reason, and Save saves only what is left. The
+  message line gives the result, and the Viewer refreshes once.
+- **Templates.** A template sets the shared fields only. Its band and fc are not used,
+  and each folder keeps its log's values without the question of D87. The message line
+  says so.
+- **Closing.** Closing the window and a new database in the Settings tab ask first
+  while the list holds folders not yet saved. The list is not kept. Clear form empties
+  the list without a question, as it clears the form in "One folder" mode.
+- **Size.** On the development PC (local disk), 50 folders of 2 channels by 7,200
+  files scanned in 2.9 s, and the list held 103 MB. A scanned channel keeps its size
+  counts and close file pairs, counted in the scan's worker, so the checklists of all
+  50 folders take about 52 ms on the main thread after a change to a checked field,
+  and 3 ms after a change to the remarks. The report gives the measurements.
+- No schema change. `batchlog.py` holds the logic without Qt; `gui/widgets/folder_table.py`
+  the table.
+
+Affects: SPEC sections 6 and 9, `batchlog.py`, `gui/log_tab.py`,
+`gui/widgets/folder_table.py`, `app.py`, the user guide.

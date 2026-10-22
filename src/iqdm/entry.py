@@ -11,7 +11,6 @@ import itertools
 import math
 import re
 import statistics
-from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
@@ -336,10 +335,9 @@ def typical_file_bytes(channel: ChannelScan) -> int | None:
     A channel with one file uses that file. Ties go to the larger size. None for a
     channel with no files.
     """
-    files = channel.files[:-1] if len(channel.files) > 1 else channel.files
-    if not files:
+    counts = channel.body_size_counts  # counted once per scanned channel
+    if not counts:
         return None
-    counts = Counter(f.size for f in files)
     return max(counts, key=lambda size: (counts[size], size))
 
 

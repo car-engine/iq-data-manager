@@ -389,6 +389,38 @@ not hold is named on the message line and not added.
 A folder named like a channel folder (1 to 3 digits, such as `0`) gets an
 information line and a "Use parent folder" button. It does not block saving (D27).
 
+### Several folders (D90)
+
+Section 1 offers "One folder", the flow above, and "Several folders", which logs many
+folders with one set-up. The logic is in `batchlog.py` (no Qt).
+
+- "Add folders..." lists the subfolders of a chosen folder that hold a channel folder
+  or a data file at their top, and adds those not yet listed. A chosen folder that is
+  itself a recording is offered as one recording. The added folders are scanned at
+  once, one after another in a worker, with their recorder logs and the catalogue
+  checks; "Scan folders" scans the unsaved ones again, and Cancel stops. After the
+  scan the list is sorted by start.
+- Each folder's own scan and log give start and end, channels, fc, fs, band (D88),
+  sample type, the log's RF chain rows (D82) and the file duration (D22); they win
+  over the shared fields. Sections 2, 3 and 5 hold the shared fields; the file
+  duration field cannot be changed in this mode. Selecting a folder shows its times,
+  location and channels; fc, band and fs typed in section 4 belong to that folder.
+- The folder table shows per folder: a "Save" tick box, folder, start, end, channel
+  count, fc, band, fs, sample type, files, size, and a state with mark and colour. An
+  already logged folder starts unticked.
+- The side panel shows the checklist of the list (folders ready, to-do items and
+  errors shared by all ticked folders once, the others with the folder name) and the
+  full checklist of the selected folder, which adds a line for another listed folder
+  with the same start, end and channels (D61).
+- "Save N entries" asks first, then saves each ready, ticked folder as its own entry
+  in its own transaction. A failure is shown at its folder; the rest are saved. Saved
+  folders cannot be changed, and Save saves only what is left.
+- A template sets the shared fields only; each folder keeps its log's values, without
+  the question of D87.
+- Edit mode, Delete entry and "Use parent folder" belong to "One folder" mode.
+  Leaving "Several folders", closing the window or a new database asks first while
+  folders are not saved.
+
 Save writes the recording, channels and params in one transaction and confirms it in a
 pop-up. Edit mode loads an existing recording into the same form and updates it.
 
@@ -714,6 +746,7 @@ iq-data-manager/
     entry.py                  # Log tab logic: form input, checklist, save (no Qt)
     bands.py                  # the band list and the band of an fc (D88)
     deletion_record.py        # the copy of a deleted entry, written once (D89)
+    batchlog.py               # several folders with one set-up: forms, checklists, saves (D90)
     viewer.py                 # Viewer logic: filters, table text, details, gap lines (no Qt)
     movecopy.py               # Archive / copy tab logic: time input, preview text, states (no Qt)
     legacy.py                 # legacy import: folder rules, grouping, report (D66; no Qt, no SQL)

@@ -54,6 +54,15 @@ CLOSE_QUESTION = (
 )
 
 
+def folders_close_question(unsaved: int) -> str:
+    """Closing the app while the Log tab lists folders not yet saved (D90)."""
+    folders = "1 folder" if unsaved == 1 else f"{unsaved} folders"
+    return (
+        f"The Log tab lists {folders} not yet saved.\n\nClose the app? The list is not "
+        "kept; the folders and their files stay as they are."
+    )
+
+
 def queue_close_question(waiting: int) -> str:
     """Closing the app with queue items that have not run (D81)."""
     items = "1 item" if waiting == 1 else f"{waiting} items"
@@ -293,6 +302,17 @@ class MainWindow(QMainWindow):
                 self,
                 "Close with a queue?",
                 queue_close_question(self.transfer_tab.queue_waiting()),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        if self.log_tab.unsaved_folders():
+            answer = QMessageBox.question(
+                self,
+                "Close with unsaved folders?",
+                folders_close_question(self.log_tab.unsaved_folders()),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

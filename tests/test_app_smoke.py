@@ -23,11 +23,13 @@ from iqdm.app import (
     config_path_for,
     defaults_path_for,
     drop_log_input_question,
+    folders_close_question,
     main,
     queue_close_question,
     resolve_config,
     status_text,
 )
+from iqdm.batchlog import BatchFolder
 from iqdm.config import Config, load_config
 from iqdm.db import repository as repo
 from iqdm.db.connection import schema_sql, write_transaction
@@ -704,6 +706,22 @@ def test_closing_with_a_waiting_queue_asks_first(qtbot, tmp_path, db_path, monke
     window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
     assert closed is (answer == QMessageBox.StandardButton.Yes)
     assert asked == [queue_close_question(1)]
+
+
+@pytest.mark.parametrize("answer", [QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes])
+def test_closing_with_unsaved_folders_asks_first(qtbot, tmp_path, db_path, monkeypatch, answer):
+    """D90: the Log tab's list of folders is not kept."""
+    asked: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda parent, title, text, *a: asked.append(text) or answer
+    )
+    window, _rid = window_with_recording(qtbot, tmp_path, db_path)
+    window.log_tab.several_radio.setChecked(True)
+    window.log_tab._folders.append(BatchFolder(path=str(tmp_path / "rec")))
+    closed = window.close()
+    assert closed is (answer == QMessageBox.StandardButton.Yes)
+    assert asked == [folders_close_question(1)]
+    window.log_tab._folders.clear()  # the teardown closes without a question
 
 
 def test_closing_when_idle_asks_nothing(qtbot, tmp_path, db_path, questions):

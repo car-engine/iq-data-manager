@@ -176,7 +176,7 @@ entry** is possible when the checklist shows no error and nothing to do. The lin
 the buttons shows the result of what you did last, with the same marks: ✓ done, ⓘ
 done with something to check, ✗ not done.
 
-**Logging several folders.** When you choose the next folder, the form keeps what you
+**The next folder.** When you choose the next folder, the form keeps what you
 typed for the last one: the recording fields, the file format, the band and centre
 frequency of each channel, and the RF chain. The scan fills in the start and end, the
 sample rate and the file duration again. A note above the checklist names what was
@@ -192,6 +192,31 @@ USRP-2954 from an X310 with UBX boards. These values show in italics; type over 
 of them to change it. Lines in the checklist name what was filled in, and warn when
 the times came from the PC clock, GPS was not locked, or the folder holds fewer files
 than the recorder wrote. These lines do not stop you saving.
+
+**Several recordings with one set-up.** Choose **Several folders** at the top of the
+tab.
+
+1. Click **Add folders...** and choose the folder that holds the recordings, for
+   example the folder of one day. The recording folders inside it are listed and
+   scanned, one after another. If the folder you chose is itself a recording, click
+   **Add it as one recording**.
+2. Fill in the fields that are the same for all of them once: logged by, site,
+   project, plan reference, remarks, the file format and the RF chain. A template
+   fills these too.
+3. Each folder takes its times, channels, centre frequencies, sample rates, band and
+   the recorder's values from its own scan and log. The table lists them, with a
+   state for each folder.
+4. The checklist names what still stops a save, once for all folders where it is the
+   same. Click a folder to see its own checklist and its channels; type a missing
+   centre frequency there, for example for a folder without a recorder log.
+5. Untick a folder to leave it out. A folder that is already logged starts unticked.
+6. Click **Save N entries**. Each folder is saved as its own entry. If one cannot be
+   saved, the table says why, and the others are saved. Saved folders stay in the
+   list, marked with their recording number; the save button then saves only the
+   folders left.
+
+Edit mode and **Delete entry...** work in **One folder** mode only. The list is not
+kept when you close the app; the app asks first while folders are not saved.
 
 **Templates.** A template file holds fields you use often, such as the USRP, the
 antennas and the band and frequency of each channel.
