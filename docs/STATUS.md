@@ -213,7 +213,11 @@ Things that cannot be tested on the development PC, or were tested only partly.
 
 - **The manual test of 1.2** (2026-10-23): `dev/test-1.2/CHECKLIST.html` with the
   build `dist/test-1.2`, on the data in `dev/test-1.2/data`. The page exports the
-  results and comments as a text file to send back.
+  results and comments as a text file to send back. The user ran it on 2026-10-23
+  and sent the export: 30 of 33 steps passed and none failed, with no comments. Step
+  3.1 (switching to Several folders) and step 3.11 (leaving the mode asks first)
+  were not marked. Step 3.16 (Cancel during a long scan, optional) was not run: the
+  test data scans too fast for it.
 
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
