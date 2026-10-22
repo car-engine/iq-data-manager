@@ -298,11 +298,17 @@ click **Check before delete**. **Clear finished** leaves these items in the queu
 The queue is not kept when the app closes. A paused copy or archive stays under
 **Unfinished transfers**.
 
+The queue's **Resume** and **Open in form** under Unfinished transfers do different
+things. **Resume** runs the queue again: the paused item, then every waiting item.
+**Open in form** loads one stopped transfer into the form, where **Run** continues it
+on its own. While the queue still holds that transfer, use **Resume**.
+
 ### Stopping and resuming
 
 **Stop** asks first. Files already copied stay. A stopped copy or archive appears
-under **Unfinished transfers**. Select it and click **Resume** to fill in the form
-again; the preview then names the files already in place, which are not copied again.
+under **Unfinished transfers**. Select it and click **Open in form** to fill in the
+form again; the preview then names the files already in place, which are not copied
+again. Click **Run** to continue it.
 **Forget...** removes a row from the list and leaves the files.
 
 ## 6. When something goes wrong

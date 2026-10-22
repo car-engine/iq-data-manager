@@ -751,8 +751,10 @@ def test_a_paused_item_continues_only_in_the_queue(env, answers, slow_queue):
 
 def test_resume_from_unfinished_transfers_points_at_the_queue(env, answers, slow_queue):
     tab = paused_from_the_form(env, answers)
+    assert tab.start_queue_button.text() == "Resume"
+    assert tab.resume_button.text() == "Open in form"  # one button per name (D86)
     tab.select_unfinished(0)
-    tab.resume_selected()
+    tab.resume_button.click()
     env.idle(tab)
     assert tab.preview is not None and tab.preview.ok
     assert not tab.run_button.isEnabled()

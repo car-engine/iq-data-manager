@@ -1869,8 +1869,12 @@ approved the plan on 2026-10-22 and asked for the Resume label.
   same destination folder. A line under the buttons, with the information mark,
   says that the transfer is waiting or paused in the queue, and that Start or Resume
   runs it, or Remove frees it for the form.
-- Resume under "Unfinished transfers" still loads the transfer and previews it. Run
-  then stays disabled with the same line.
+- The button under "Unfinished transfers" that loads a stopped transfer into the form
+  is renamed from Resume to **Open in form**, so that it does not share a name with
+  the queue's Resume (the user's choice after the manual test of 2026-10-22). The two
+  differ: the queue's Resume runs the queue, the paused item first; Open in form only
+  loads one transfer and previews it, and Run in the form continues it. For a
+  transfer the queue still holds, Run then stays disabled with the same line.
 - While the queue holds a paused item, the queue's Start button reads **Resume**. The
   pause question, the end-of-queue summary and a paused item's note name Resume.
 - The end of a queue run drops the form's preview, because the queue may have copied

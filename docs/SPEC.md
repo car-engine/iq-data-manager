@@ -511,7 +511,8 @@ queue (below) runs its items one after another, each as one such operation.
   for the current user or, on request, for
   all users. A later run of the same recording, destination, range and channels
   replaces an earlier one in the list. An archive leaves the list once its recording
-  is archived. Resume fills in the form from the row and runs the preview; files
+  is archived. Open in form (named Resume before D86) fills in the form from the row
+  and runs the preview; files
   already in place with the right size are not copied again (D51, D63). Forget asks
   first and sets `transfer_log.dismissed_at`; the row and the copied files stay.
 - **Delete laptop copy** is enabled only when a check before delete of the current

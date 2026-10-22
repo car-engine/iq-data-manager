@@ -113,8 +113,8 @@ NO_MANIFEST_FOLDER = (
     "cannot copy. Start the app from your own Windows account."
 )
 STOP_COPY_QUESTION = (
-    "Stop the {what}?\n\nFiles already copied stay in the destination. You can resume "
-    'the {what} later from "Unfinished transfers".'
+    "Stop the {what}?\n\nFiles already copied stay in the destination. To continue the "
+    '{what} later, select it under "Unfinished transfers" and click Open in form.'
 )
 
 
@@ -485,10 +485,10 @@ class TransferTab(QWidget):
         self.unfinished_hint = QLabel()
         self.others_check = QCheckBox("Show other users")
         self.others_check.toggled.connect(self.refresh_unfinished)
-        self.resume_button = QPushButton("Resume")
+        self.resume_button = QPushButton("Open in form")  # not "Resume": the queue has one
         self.resume_button.setToolTip(
-            "Fills in the form from this transfer and runs the preview. Files already in "
-            "place are not copied again."
+            "Load this transfer into the form to check it and continue it with Run. Files "
+            "already in place are not copied again."
         )
         self.resume_button.clicked.connect(self.resume_selected)
         self.forget_button = QPushButton("Forget...")
@@ -1237,7 +1237,8 @@ class TransferTab(QWidget):
         elif result.verification is Verification.SKIPPED:
             self._set_result(
                 ItemState.TODO,
-                f'{result.notes} Resume it from "Unfinished transfers".',
+                f'{result.notes} To continue it, select it under "Unfinished transfers" '
+                "and click Open in form.",
             )
         else:
             self._set_result(ItemState.ERROR, f"The {what} failed. {result.notes or ''}")

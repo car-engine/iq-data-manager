@@ -48,7 +48,8 @@ TRANSFER_BUSY = (
 )
 CLOSE_QUESTION = (
     "An operation is running in the Archive / copy tab.\n\nStop it and close the app? A "
-    "stopped copy or archive can be resumed later. The queue is not kept."
+    'stopped copy or archive stays under "Unfinished transfers", where Open in form '
+    "continues it later. The queue is not kept."
 )
 
 
@@ -57,8 +58,8 @@ def queue_close_question(waiting: int) -> str:
     items = "1 item" if waiting == 1 else f"{waiting} items"
     return (
         f"The queue in the Archive / copy tab holds {items} that have not run.\n\nClose "
-        "the app? The queue is not kept. A paused copy or archive can be resumed later "
-        'from "Unfinished transfers".'
+        "the app? The queue is not kept. A paused copy or archive stays under "
+        '"Unfinished transfers", where Open in form continues it later.'
     )
 TRANSFER_TAB = "Archive / copy"
 SETTINGS_TAB = "Settings"
