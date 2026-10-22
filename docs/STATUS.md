@@ -2,8 +2,8 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-20 (O20 done on branch `o20-freeze-schema-v1`; work
-for version 1.1 started).
+its report. Last updated: 2026-10-22 (review of 1.1.0 and the fixes for 1.1.1, not yet
+merged).
 
 ## Current state
 
@@ -29,12 +29,23 @@ for version 1.1 started).
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,761 tests pass and 4
   skip; `ruff check` is clean. The user tests 1.1 in the field (pending checks below).
+- **Version 1.1.1 is in progress** (2026-10-22). The review of 1.1.0
+  ([reports/2026-10-22-review-1.1.0.md](reports/2026-10-22-review-1.1.0.md)) found ten
+  faults, none a risk to data. The fixes are on `queue-fixes-1.1.1` (D86) and
+  `log-fixes-1.1.1` (D87), chained from `review-1.1.0`, and not merged: 1,781 tests
+  pass and 4 skip; `ruff check` is clean. Next: the user's manual test, then the
+  release (HANDOFF.md, section 4).
+- **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
+  and Start, a recorder recording logged, archived with its logs, checked and deleted
+  from the laptop, several folders with a shared template, and the Viewer's filters
+  and dark mode. The catalogue backup runs (O22 closed), and the team no longer uses
+  the legacy logging scripts.
 - **The version 1 schema is frozen** (O20 closed by D77). A change to `schema.sql`
   needs a numbered migration (HANDOFF.md, section 5).
 - **The pilot passed** (user, 2026-10-20): the real catalogue exists, made with the
   1.0.0 build, and a real archive, its Check before delete and the delete of the
-  laptop copy passed, with the D75 checks on the NAS. Still the user's: O22 and the
-  cut-over from the legacy logging scripts, if not yet done.
+  laptop copy passed, with the D75 checks on the NAS. O22 and the cut-over from the
+  legacy logging scripts are done (user, 2026-10-22).
 - **Databases made before D73** (the trial catalogue of the second NAS visit, the
   scratch databases on the NAS, and `dev/test.db` and `dev/m3.db`) count as an older
   version, and the app refuses them. Make a new one with `tools/db_check.py create`
@@ -120,11 +131,10 @@ table in [reports/M0.md](reports/M0.md). The next free number is O50.
 | O39 | No document says how to correct or remove a catalogue entry by hand. D41 leaves it as "a manual database job" on the shared catalogue. | User's decision | A short procedure in a document for the administrator: close every app, copy the catalogue first, then the SQL for the case. Or an admin command in `IQDataManager-check.exe` that removes an entry without transfer history (`repository.delete_recording()` already refuses one with history). | Release review, finding 15 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
-| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | User, before rollout (D72) | None yet; for example a NAS snapshot or a scheduled copy | M0 review 24 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D87). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -172,19 +182,17 @@ Decided items are in `docs/DECISIONS.md` (D1–D76). The M0 review table in
 | O47 | Copy and archive the recorder's log files with the recording | D83 (2026-10-21) |
 | O48 | The Log tab's message line shows no state (user's manual test, 2026-10-22) | D84 (2026-10-22) |
 | O49 | A queue archive whose check did not pass showed as Failed (user's manual test, 2026-10-22) | D85 (2026-10-22) |
+| O22 | SQLite on SMB: scheduled backup of the catalogue outside the app | Closed by the user on 2026-10-22: a backup runs outside the app |
 
 ## Pending checks for the user
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **Version 1.1 with the 1.1 build:** the queue against the real NAS, with Pause and
-  Start part-way through a large archive (D81); logging several real folders in a
-  row (D79); a template exported and imported on a real set-up, kept in a shared
-  folder (D80); the Viewer's tick-box filters (D78); each by eye in dark mode.
-- **Recorder logs on the real NAS (D82, D83):** log a real recording made by the
-  recorder, archive it with its log files, run Check before delete and delete the
-  laptop copy. The log files have any size; the NAS read files of sizes that are not
-  multiples of 512 bytes in the field test, so this should pass.
+- **Version 1.1.1, manual test on this PC:** the queue's Resume label and the line
+  under Run for a transfer the queue holds (D86); the pop-up for a template imported
+  after the log filled the form, with each of its three buttons (D87); no spelling
+  line for "USRP gain" on a real recorder folder against the real catalogue; each by
+  eye in light and dark mode.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
@@ -193,6 +201,13 @@ Things that cannot be tested on the development PC, or were tested only partly.
   2026-10-22). M8.md, part 2 recorded that every file failed; the manual test of
   2026-10-22 read 64,000-byte files and failed 4,000-byte files. A limit of such a
   share; the real NAS read 1,000,000-byte files.
+
+On 2026-10-22 the user reported that the field checks of version 1.1 passed with the
+1.1.0 build: the queue against the real NAS with Pause and Start part-way through a
+large archive (D81), several real folders in a row (D79), a template in a shared
+folder (D80), the Viewer's tick-box filters (D78), each in dark mode, and a recorder
+recording logged, archived with its log files, checked before delete and deleted from
+the laptop (D82, D83).
 
 On 2026-10-20 the user reported that the pilot passed. These two checks are closed
 on that report:
@@ -268,6 +283,9 @@ user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48
 - `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
   folders, 2026-10-21).
 - `build/work-release-1.1.0/` (PyInstaller's work folder of the 1.1.0 build).
+- After the review of 1.1.0: `dist/review-1.1/`, `build/work-review-1.1/`,
+  `build/review-1.1-build.log` and `dev/review-1.1/` (probe tests and reading
+  scripts).
   `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
 - `recorder/` at the repository root: the user's two example recordings of
   2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder

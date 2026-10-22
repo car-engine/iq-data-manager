@@ -2,7 +2,7 @@
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds after the release, and what is still open. It points to the
-other documents for the detail. Last updated: 2026-10-22, at the release of 1.1.0. The
+other documents for the detail. Last updated: 2026-10-22, during the work for 1.1.1. The
 sections below still describe the handoff after 1.0.0 where they say so; STATUS.md is
 current.
 
@@ -30,7 +30,7 @@ with verification. The team uses the packaged build; the laptops have no Python.
    this repository. Read the notes before the first shell command.
 4. [SPEC.md](SPEC.md): the current requirements. Read the sections your change
    touches.
-5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D76. Every SPEC rule names its
+5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D87. Every SPEC rule names its
    decision.
 6. [reports/M8.md](reports/M8.md) and
    [reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md): the
@@ -53,7 +53,7 @@ apply. The user starts such a session with the prompt in [KICKOFF.md](KICKOFF.md
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D86 is next on 2026-10-22), the current
+5. **Record the decision.** A new entry in DECISIONS.md (D88 is next on 2026-10-22), the current
    requirement in SPEC.md, and the item moved to "Closed items" in STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
    [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md). Update STATUS.md in the same commit.
@@ -108,9 +108,12 @@ in its report. KICKOFF.md asked this for Milestones 5 and 6, and it still applie
 
 ## 6. Outstanding items
 
-Everything open is listed in STATUS.md. This is the summary at handoff. Since then,
-on 2026-10-20, O20 and O42 closed, the pilot passed, and O43 to O45 opened for
-version 1.1; STATUS.md holds the current list.
+Everything open is listed in STATUS.md. The tables below are the summary at the
+handoff after 1.0.0 and are out of date. Since then: on 2026-10-20, O20 and O42
+closed and the pilot passed; version 1.1 closed O38 and O41 and O43 to O49; on
+2026-10-22 the user closed O22 and reported that the 1.1 field checks passed, and the
+D75 and D76 checks below were closed earlier, with the pilot. STATUS.md holds the
+current list: O19, O37, O39 and O40 are open.
 
 ### Open items (STATUS.md, "Open items")
 
