@@ -1,21 +1,22 @@
-# Handoff: IQ Data Manager after release 1.1.1
+# Handoff: IQ Data Manager after release 1.2.0
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds, and what is still open. It points to the other documents
-for the detail. Last updated: 2026-10-22, at the handoff for version 1.2.
+for the detail. Last updated: 2026-10-23, at the release of version 1.2.0.
 [STATUS.md](STATUS.md) is updated after every piece of work and is the current record.
 
 ## 1. State
 
 | | |
 | --- | --- |
-| Version | 1.1.1, tag `v1.1.1` on `3108c63` (annotated, pushed, 2026-10-22). Earlier: 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
-| `main` | `3108c63` at the release, pushed to `origin`; later commits record the release and this handoff |
-| Tests | 1,781 passed, 4 skipped (`pytest`); `ruff check` clean |
-| Release build | `dist/release-1.1.1/IQDataManager/` on the development PC, built from `3108c63`. `dist/release-1.1.0/` and `dist/release-1.0.0/` stay. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Version | 1.2.0, tag `v1.2.0` on `616b18c` (annotated, pushed, 2026-10-23). Earlier: 1.1.1 (`v1.1.1` on `3108c63`), 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
+| `main` | `616b18c` at the release, pushed to `origin`; a later commit records the release |
+| Tests | 1,925 passed, 4 skipped (`pytest`); `ruff check` clean |
+| Release build | `dist/release-1.2.0/IQDataManager/` on the development PC, built from `616b18c`. The older `dist/release-*` folders stay until the team runs 1.2.0. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Schema | Version 1, unchanged since 1.0.0 (section 5) |
 | Milestones | 0 to 8 done, then work after 1.0 from open items (STATUS.md, "Work after 1.0"). |
-| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). |
-| Next | Version 1.2: O50, O39, then O51 (section 6). The prompt is "Version 1.2" in [KICKOFF.md](KICKOFF.md). |
+| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). The user's manual test of 1.2 passed (2026-10-23). |
+| Next | The team's feedback on 1.2, and the field checks of 1.2 (section 6). The prompt is "Work after a release" in [KICKOFF.md](KICKOFF.md). |
 
 The app is a Windows desktop tool (Python 3.12, PySide6) that logs RF IQ recordings
 into a shared SQLite catalogue on the NAS, and copies, archives and deletes recordings
@@ -30,15 +31,17 @@ with verification. The team uses the packaged build; the laptops have no Python.
    this repository. Read the notes before the first shell command.
 4. [SPEC.md](SPEC.md): the current requirements. Read the sections your change
    touches.
-5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D87. Every SPEC rule names its
+5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D91. Every SPEC rule names its
    decision.
-6. The latest reports:
-   [reports/2026-10-22-review-1.1.0.md](reports/2026-10-22-review-1.1.0.md) (the review
-   of 1.1.0, parts 1 and 2), with
-   [reports/2026-10-22-queue-fixes-1.1.1.md](reports/2026-10-22-queue-fixes-1.1.1.md)
-   and [reports/2026-10-22-log-fixes-1.1.1.md](reports/2026-10-22-log-fixes-1.1.1.md).
-   They describe the Log tab and the queue as they stand, and what was tested. For
-   the history before 1.1: [reports/M8.md](reports/M8.md) and
+6. The latest reports, of version 1.2:
+   [reports/2026-10-23-band-from-fc.md](reports/2026-10-23-band-from-fc.md),
+   [reports/2026-10-23-delete-entry.md](reports/2026-10-23-delete-entry.md),
+   [reports/2026-10-23-log-several-folders.md](reports/2026-10-23-log-several-folders.md)
+   and [reports/2026-10-23-queue-entry-check.md](reports/2026-10-23-queue-entry-check.md).
+   They describe the Log tab as it stands, and what was tested. For 1.1:
+   [reports/2026-10-22-review-1.1.0.md](reports/2026-10-22-review-1.1.0.md) and the two
+   1.1.1 reports it links to. For the history before 1.1:
+   [reports/M8.md](reports/M8.md) and
    [reports/2026-10-11-release-review.md](reports/2026-10-11-release-review.md).
 7. For a user-facing change: [USER_GUIDE.md](USER_GUIDE.md) and
    [RELEASE_NOTES.md](RELEASE_NOTES.md), which ship in the program folder.
@@ -127,18 +130,15 @@ lists them the same way.
 
 STATUS.md, "Open items", is the current list. At this handoff:
 
-### Version 1.2 (the user's order, 2026-10-22)
+### Done in version 1.2.0
 
-| ID | Item | Notes |
-| --- | --- | --- |
-| O50 | The band filled in from fc | Small; first. Bands overlap (VHF and Marine VHF); settings are per PC (D68); a kept band goes stale when the log changes fc (D79, D82). |
-| O39 | Deleting an entry added by mistake | Small; second. Reverses D41 and SPEC section 13. `repository.delete_recording()` refuses every entry with transfer history, which includes all entries logged in place on the NAS (D2) and all legacy imports (D66). |
-| O51 | Logging several recordings with one set-up | Last, after a full plan discussed with the user. The user's questions are in the prompt "Version 1.2" in KICKOFF.md. |
+O50 (the band from fc, D88), O39 (deleting an entry added by mistake, D89), O51
+(several folders with one set-up, D90) and O52 (a deleted entry's number given
+again, D91). The reports are in `docs/reports/2026-10-23-*.md`; STATUS.md, "Work
+after 1.0", lists them. `AUTOINCREMENT` for `recordings.id` (O52) waits for the first
+schema change; D91 holds the reason.
 
-The prompt "Version 1.2" holds the user's own words for each item and what is known
-so far.
-
-### Other open items
+### Open items
 
 | ID | Item | When |
 | --- | --- | --- |
@@ -153,6 +153,7 @@ so far.
 | The cost on the NAS of the D73 check per connection and of the D75 identity check per file | Not measured. Locally neither is measurable. | When O37 is measured |
 | Check before delete through a Windows share of the same PC | Fails with WinError 87 for files whose size is not a multiple of 512 bytes, most likely (D85). The real NAS passed. | Known limit; manual tests use file sizes that are multiples of 512 |
 | The GUI by eye in dark mode on Windows | Offscreen renders and the user's checks only | User, with each build |
+| Version 1.2 on the NAS: several real folders of a day (scan time, Cancel during a long scan), and a delete while a second PC works on the catalogue | The manual test used local synthetic data on one PC | User, in the field |
 
 The checks of 1.1 on the NAS and in the field passed (STATUS.md, "Pending checks for
 the user"). The user's rollout steps after 1.0 are done: the real catalogue, the
@@ -161,8 +162,8 @@ backup (O22), the pilot and the cut-over from the legacy scripts.
 ### Out of scope for version 1
 
 SPEC section 13: a Linux build, transfer scripts (D48), gap storage in the database,
-user accounts, RF chain templates, and deleting catalogue entries in the GUI (D41,
-which O39 revisits for 1.2). The business logic imports no Qt. Its Windows-specific
+user accounts, RF chain templates, and deleting an entry with an archive, a copy or
+a delete in its history (D89). The business logic imports no Qt. Its Windows-specific
 parts are few: `location.mapped_drive_unc()`, `transfer/uncached.py`,
 `transfer/power.py`, `pathcheck.long_paths_enabled()` and the `%APPDATA%` settings
 path in `config.py`. The first four check the platform and fall back elsewhere. The
@@ -174,12 +175,13 @@ settings path needs `APPDATA`, so a Linux build would need another settings loca
 | --- | --- | --- |
 | Entry points | `app.py` (window, `--config`, `--db`, `--smoke-test`), `check_main.py` (console program) | |
 | Database | `db/schema.sql`, `db/connection.py`, `db/version.py`, `db/repository.py`, `db/migrations.py`, `db/legacy.py` | All SQL lives in `db/`; only `db/` imports `sqlite3` |
-| Logic without Qt | `entry.py` (Log tab), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81, D86), `recorderlog.py` (values from the recorder's log, D82; a template after the log, D87), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
+| Logic without Qt | `entry.py` (Log tab; deleting an entry, D89), `bands.py` (the band list, D88), `batchlog.py` (several folders, D90), `deletion_record.py` (the copy of a deleted entry, D89), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81, D86), `recorderlog.py` (values from the recorder's log, D82; a template after the log, D87), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
 | Transfers | `transfer/selection.py`, `pathcheck.py`, `copier.py`, `verify.py`, `uncached.py`, `manifest.py`, `delete.py`, `operations.py` | `delete.py` is the only module that deletes files (`tests/test_architecture.py`, ruff TID251) |
 | GUI | `gui/viewer_tab.py`, `log_tab.py`, `transfer_tab.py`, `settings_tab.py`, `workers.py` (`TaskRunner`), `widgets/` | Work over about 100 ms runs in the `TaskRunner` |
 | Diagnostics | `diagnostics/`, wrapped by `tools/` and `IQDataManager-check.exe` | `diagnostics/fixtures.py` makes synthetic recordings for tests and manual tests |
 | Viewer filter | `models.RecordingFilter`, `viewer.parse_filter()`, `repository._filter_sql()`, `gui/widgets/check_combo.py` in `gui/viewer_tab.py` | Several sites, projects (with "No project") and bands since D78 |
-| Log tab state | `gui/log_tab.py`: `_carried` (kept band and fc, D79), `_log_values` and `_log_applied_for` (the recorder's log, D82, D87), `_ChannelRow.fc_log` and `fs_log` (the italic mark) | Code that sets a field without `textEdited` must set or clear these flags itself |
+| Log tab state | `gui/log_tab.py`: `_carried` (kept band and fc, D79), `_log_values` and `_log_applied_for` (the recorder's log, D82, D87), `_ChannelRow.fc_log`, `fs_log` and `band_auto` (the italic marks), `_ChannelRow.fc_before` (the fc the band last followed, D88) | Code that sets a field without `textEdited` must set or clear these flags itself |
+| Several folders | `gui/log_tab.py`: `_folders`, `_selected_key`, `_views`, `_checks` (D90); `gui/widgets/folder_table.py` | Section 4 shows the selected folder's channels; `_sync_selected()` keeps what was typed there with that folder. A scanned channel keeps its size counts (`ChannelScan.size_counts`), so a refresh of 50 folders stays near 50 ms |
 
 ## 8. Traps that cost time before
 

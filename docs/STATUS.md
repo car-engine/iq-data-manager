@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-23 (O50, O39 and O51 done on their branches, not merged).
+its report. Last updated: 2026-10-23 (version 1.2.0 released).
 
 ## Current state
 
@@ -38,15 +38,23 @@ its report. Last updated: 2026-10-23 (O50, O39 and O51 done on their branches, n
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,781 tests pass and 4
   skip; `ruff check` is clean.
-- **The next work is version 1.2** (user, 2026-10-22), in this order: O50 (the band
-  from fc), O39 (deleting an entry added by mistake, which changes D41), then a plan,
-  discussed first, for O51 (logging several recordings with one set-up). The user
-  approved the plan for O50 and O39 on 2026-10-23, and asked to discuss O51 again
-  before any code for it. O50 is done on `band-from-fc` (D88) and O39 on
-  `delete-entry` (D89). The user approved the plan for O51 on 2026-10-23; it is done
-  on `log-several-folders` (D90). None is merged; the manual test of 1.2 comes
-  first. A new
-  session starts from the prompt "Version 1.2" in [KICKOFF.md](KICKOFF.md).
+- **Version 1.2.0 is released** (2026-10-23). The tag `v1.2.0` is on `616b18c`;
+  `main` and the tag are pushed. It holds O50 (the band from fc, D88), O39 (deleting
+  an entry added by mistake, D89, replacing D41), O51 (several folders with one
+  set-up, D90) and O52 (a deleted entry's number given again, D91), found while
+  preparing the manual test. The user approved the plans on 2026-10-23; O51's plan
+  was discussed twice first. The user's manual test of 2026-10-23 passed 32 of 33
+  steps, with none failed; the optional step 3.16 was not run. `main` was
+  fast-forwarded to `queue-entry-check` at `fc64422`, then `release-1.2.0` set the
+  version and the release notes (`616b18c`). The build is `dist/release-1.2.0`
+  (104 MB), made from `616b18c`: `--smoke-test` passed, both programs print 1.2.0,
+  `IQDataManager-check.exe --help` lists its commands, both declare long-path
+  support, and the shipped user guide, release notes and `defaults.example.toml`
+  match their sources. At the release: 1,925 tests pass and 4 skip; `ruff check` is
+  clean. The schema is unchanged (version 1).
+- **The next work** comes from the team's feedback on 1.2, or from the open items
+  below. A new session starts from the prompt "Work after a release" in
+  [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -108,10 +116,16 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Queue fixes for 1.1.1 (D86; review findings 1, 5, 6, 10) | Done, merged | `queue-fixes-1.1.1`, from `review-1.1.0` | `1f736ea`, `790177d` (report); `5bccf96` (Open in form, on `log-fixes-1.1.1`) | [2026-10-22-queue-fixes-1.1.1](reports/2026-10-22-queue-fixes-1.1.1.md) |
 | Log tab fixes for 1.1.1 (D87; review findings 2, 3, 4, 7, 8) | Done, merged | `log-fixes-1.1.1`, from `queue-fixes-1.1.1` | `a9fa00e`, `58acd99` (report), `48804a2`–`3cedd34` (records and the manual test) | [2026-10-22-log-fixes-1.1.1](reports/2026-10-22-log-fixes-1.1.1.md) |
 | Release 1.1.1 | Released: tag `v1.1.1`, pushed | `release-1.1.1`, from `main` at `3cedd34` | `3108c63`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| O50, the band filled in from fc (D88) | Done, not merged | `band-from-fc`, from `main` at `9403f46` | `9bfba8c`, `12ae30a` (report) | [2026-10-23-band-from-fc](reports/2026-10-23-band-from-fc.md) |
-| O39, deleting an entry added by mistake (D89) | Done, not merged | `delete-entry`, from `band-from-fc` at `12ae30a` | `9cad0d3` (with its report) | [2026-10-23-delete-entry](reports/2026-10-23-delete-entry.md) |
-| O51, logging several folders with one set-up (D90) | Done, not merged | `log-several-folders`, from `delete-entry` at `9cad0d3` | `ca79895` (with its report), `7948de3`–`f7ab319` (the manual test in STATUS) | [2026-10-23-log-several-folders](reports/2026-10-23-log-several-folders.md) |
-| O52, a deleted entry's number given again (D91) | Done, not merged | `queue-entry-check`, from `log-several-folders` at `f7ab319` | One commit with its report | [2026-10-23-queue-entry-check](reports/2026-10-23-queue-entry-check.md) |
+| O50, the band filled in from fc (D88) | Done, merged | `band-from-fc`, from `main` at `9403f46` | `9bfba8c`, `12ae30a` (report) | [2026-10-23-band-from-fc](reports/2026-10-23-band-from-fc.md) |
+| O39, deleting an entry added by mistake (D89) | Done, merged | `delete-entry`, from `band-from-fc` at `12ae30a` | `9cad0d3` (with its report) | [2026-10-23-delete-entry](reports/2026-10-23-delete-entry.md) |
+| O51, logging several folders with one set-up (D90) | Done, merged | `log-several-folders`, from `delete-entry` at `9cad0d3` | `ca79895` (with its report), `7948de3`–`f7ab319` (the manual test in STATUS) | [2026-10-23-log-several-folders](reports/2026-10-23-log-several-folders.md) |
+| O52, a deleted entry's number given again (D91) | Done, merged | `queue-entry-check`, from `log-several-folders` at `f7ab319` | `fc64422` (with its report) | [2026-10-23-queue-entry-check](reports/2026-10-23-queue-entry-check.md) |
+| Release 1.2.0 | Released: tag `v1.2.0`, pushed | `release-1.2.0`, from `main` at `fc64422` | `616b18c`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+
+The five branches of 1.2.0, from `band-from-fc` to `release-1.2.0`, were merged into
+`main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
+`git branch -d`, at `12ae30a`, `9cad0d3`, `f7ab319`, `fc64422` and `616b18c`. None had
+been pushed.
 
 The four branches of 1.1.1, from `review-1.1.0` to `release-1.1.1`, were merged into
 `main` as fast-forwards on 2026-10-22. With the user's approval they were deleted with
@@ -213,15 +227,9 @@ Decided items are in `docs/DECISIONS.md` (D1–D91). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **The manual test of 1.2** (2026-10-23): `dev/test-1.2/CHECKLIST.html` with the
-  build `dist/test-1.2`, on the data in `dev/test-1.2/data`. The page exports the
-  results and comments as a text file to send back. The user ran it on 2026-10-23
-  and sent the export: 30 of 33 steps passed and none failed, with no comments. Step
-  3.1 (switching to Several folders) and step 3.11 (leaving the mode asks first)
-  were not marked; the user confirmed that both passed, so 32 of 33 passed. Step 3.16
-  (Cancel during a long scan, optional) was not run: the test data scans too fast for
-  it. The user approved O52 for 1.2.0 and the merge and release preparation.
-
+- **Version 1.2 in the field:** several real folders of one day on the NAS (scan
+  time over the network, and Cancel during a long scan, step 3.16 of the manual
+  test), and a delete with a second PC working on the catalogue.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
@@ -230,6 +238,13 @@ Things that cannot be tested on the development PC, or were tested only partly.
   2026-10-22). M8.md, part 2 recorded that every file failed; the manual test of
   2026-10-22 read 64,000-byte files and failed 4,000-byte files. A limit of such a
   share; the real NAS read 1,000,000-byte files.
+
+On 2026-10-23 the user ran the manual test of 1.2 (`dev/test-1.2/CHECKLIST.html`,
+build `dist/test-1.2` from `ca79895`, synthetic data) and sent the page's exported
+results: 32 of 33 steps passed and none failed. Steps 3.1 and 3.11 were not marked in
+the export; the user confirmed that both passed. Step 3.16 (Cancel during a long scan,
+optional) was not run, because the test data scans too fast for it. The page's export
+button wrote every step's result and comment to one text file (the user's request).
 
 On 2026-10-22 the user ran the manual test of 1.1.1 (`dev/test-1.1.1/CHECKLIST.html`,
 build `dist/test-1.1.1`): every check passed. After it, the button under "Unfinished
@@ -262,88 +277,36 @@ The checks of D73, D75 and D76 with `dist/m8-2` passed on this PC on 2026-10-12
 
 Agents may not delete files. These are gitignored and safe to remove by hand. The
 user removed `src/iqdm/transfer/scripts/`, an empty package left from before D48, on
-2026-10-12; its removal was committed.
+2026-10-12; its removal was committed. On 2026-10-23 the user removed the files of the
+1.2 work (the test build, its data and checklist, the probes) and every `build/work-*`
+folder and `build/pyinstaller-cache`. This list names what was still there after
+that (checked on 2026-10-23).
 
-- `dist/smoke-1/`, `dist/smoke-2/`
-- `build/work-smoke-1/`, `build/work-smoke-2/`
-- `build/smoke-1-build.log`, `build/smoke-2-build.log`
-- `build/spec-removed-sections.md`
-- `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/`
-- `dev/test.db` and `dev/m3.db`. Both were made before D64 and D73, so the app
-  refuses them as older versions. O21 is closed.
-- After the Milestone 3 manual tests: `fixtures_out/m3-manual/`.
-- `dev/m3a-shots/` (Settings tab screenshots), and `dev/m3a-manual/` after the
-  Milestone 3a manual tests.
-- `dev/m4-bench/` (timing script and two synthetic databases, 2.5 MB and 25.5 MB),
-  `dev/m4-shots/` (Viewer and Settings screenshots), and `dev/m4-manual/` after the
-  Milestone 4 manual tests.
-- `dev/m5-copy-check/` (local copy timings and the fsync probe, about 4.8 GB).
-- `dev/m5-testset-quick/` (the quick test set, 67.8 MB).
-- `dist/m6-1/`, `dist/m6-2/` (103 MB each, superseded by `dist/m6-3`),
-  `build/work-m6-1/`, `build/work-m6-2/`, `build/m6-1-build.log`,
-  `build/m6-2-build.log`; after the NAS field test also `dist/m6-3/`,
-  `build/work-m6-3/` and `build/m6-3-build.log`.
-- `dev/m6-shots/` (screenshots and `shots.py`, 1.3 MB) and `dev/m6-exe-check/`
-  (output of the packaged diagnostics, 81 MB).
-- `dev/m6-manual/` (the manual test on this PC passed on 2026-10-04).
-- `dist/m7-1/`, `build/work-m7-1/` and `build/m7-1-build.log`, and `dev/m7-legacy/`
-  (the synthetic legacy file, its import, the script that made it, an Edge profile
-  and a screenshot) and `dev/m7-checklist/` (failed render attempts).
-- `dist/m7-2/`, `build/work-m7-2/` and `build/m7-2-build.log`. Keep
-  `dist/m7-2/IQDataManager/field-test/` elsewhere if the logs are wanted; they hold
-  the NAS address, so they stay out of the repository.
-- `dist/m7-3/`, `build/work-m7-3/` and `build/m7-3-build.log` (superseded by
-  `dist/m7-4`, built from `main`).
-- `dist/m7-4/`, `build/work-m7-4/` and `build/m7-4-build.log`, after the second NAS
-  visit, which used them (superseded by `dist/m8-1`).
-- `dist/m8-1/`, `build/work-m8-1/` and `build/m8-1-build.log` (superseded by
-  `dist/m8-2`), and `dist/m8-2/`, `build/work-m8-2/` and `build/m8-2-build.log`
-  (superseded by `dist/release-1.0.0`, which stays).
-- After the release review (2026-10-11): `dist/review-1/`, `build/work-review-1/`,
-  `build/review-1-build.log` and `dev/review/` (reproductions, screenshots and a
-  scratch database). The pytest folders under `%TEMP%\pytest-of-Perry\` hold
-  directory junctions from the review and from the D75 tests. Remove each as a link,
-  so that its target is not touched.
-- `dev/scratch.db`, made to check the README's run commands.
-- `dev/o38-shots/` (Viewer filter screenshots, their script and two scratch
-  databases, 2026-10-20).
-- `dev/o43-shots/` (Log tab screenshots, their script, and synthetic recordings and
-  scratch databases in its `run-*` folders, 2026-10-20).
-- `dev/o44-shots/` (template dialog screenshots, their script and two scratch
-  databases, 2026-10-20).
-- `dev/o45-shots/` (queue screenshots, their script and scratch databases,
-  2026-10-20).
-- `dev/o46-shots/` (Log tab screenshots with a recorder log, their script and `run-*`
-  folders, 2026-10-21).
-- `build/work-release-1.1.0/` (PyInstaller's work folder of the 1.1.0 build).
-- `build/work-release-1.1.1/` and `build/release-1.1.1-build.log` (the 1.1.1 build).
-  `dist/release-1.1.1/` stays; `dist/release-1.1.0/` can go once the team runs 1.1.1.
-- After the review of 1.1.0: `dist/review-1.1/`, `build/work-review-1.1/`,
-  `build/review-1.1-build.log` and `dev/review-1.1/` (probe tests and reading
-  scripts).
-- After the manual test of 1.1.1: `dist/test-1.1.1/`, `build/work-test-1.1.1/` and
-  `build/test-1.1.1-build.log` (built from `48804a2`; it still shows version 1.1.0),
-  and `dev/test-1.1.1/` (the checklist `CHECKLIST.html`, its data script and 115.6 MB
-  of synthetic data with a scratch database).
-- `dev/o50-probe/` (a script that checks the italic band box offscreen, 2026-10-23).
-- After the manual test of 1.2: `dist/test-1.2/`, `build/work-test-1.2/` and
-  `build/test-1.2-build.log` (built from `ca79895`; it still shows version 1.1.1), and
-  `dev/test-1.2/` (the checklist `CHECKLIST.html`, its harness copy
-  `page-check.html`, `make_test_data.py`, `check_expectations.py`, and 11 MB of
-  synthetic data with a scratch database in `data`).
-- `dev/o51-probe/` (timing, size-check and screenshot scripts, 2026-10-23). Their data
-  is in the session's scratch folder under `%TEMP%\claude\`: about 720,000 small
-  synthetic files in `o51-size`.
-- `dev/kickoff-head.txt` (the old `KICKOFF.md`, used to check its archive copy).
-  `dist/release-1.1.0/` stays; `dist/release-1.0.0/` can go once the team runs 1.1.0.
+- Old builds: `dist/smoke-1/`, `dist/smoke-2/`, `dist/m7-4/`, `dist/m8-1/`,
+  `dist/m8-2/`, `dist/review-1/` and `dist/review-1.1/`. Keep the `release-*`
+  folders the team may still use: `dist/release-1.2.0/` stays; `dist/release-1.1.1/`,
+  `dist/release-1.1.0/` and `dist/release-1.0.0/` can go once the team runs 1.2.0.
+- `build/spec-removed-sections.md` and `build/release-1.2.0-build.log`.
+- `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/` and
+  `fixtures_out/m3-manual/`.
+- Under `dev/`: `test.db`, `m3.db` and `scratch.db` (scratch databases; the first two
+  are older versions the app refuses), `kickoff-head.txt`, and the folders
+  `m3a-manual`, `m3a-shots`, `m4-bench`, `m4-manual`, `m4-shots`, `m5-copy-check`
+  (about 4.8 GB), `m5-testset-quick`, `m6-3-testset`, `m6-exe-check`, `m6-manual`,
+  `m6-shots`, `m7-checklist`, `m7-legacy`, `o38-shots`, `o43-shots`, `o44-shots`,
+  `o45-shots`, `o46-shots` and `review` (screenshots, probes, timings and synthetic
+  data of earlier milestones and versions).
+- The pytest folders under `%TEMP%\pytest-of-Perry\` hold directory junctions from
+  the release review and the D75 tests. Remove each as a link, so that its target is
+  not touched.
 - `recorder/` at the repository root: the user's two example recordings of
   2026-10-12. Cleaned copies of their logs are in `tests/data/recorder/`. The folder
   is not tracked; keep or remove it as you wish.
 - After the NAS field test: the test set on the laptop and the folders the test
   writes on the NAS.
-- Outside the repository: `claude_pw.py` in `%TEMP%`, and the session's scratch
-  folders under `%TEMP%\claude\` (Milestone 3 report, issue 5).
-- `build/pyinstaller-cache/` can stay; it speeds up later builds.
+- Outside the repository: `claude_pw.py` in `%TEMP%`, and the sessions' scratch
+  folders under `%TEMP%\claude\`. The 1.2 session's folder holds about 720,000 small
+  synthetic files of the O51 size check in `o51-size`.
 
 ## Notes for agents
 
@@ -423,9 +386,15 @@ These come from the safety configuration and from experience in this repository.
   (`docs/KICKOFF_ARCHIVE.md`). The reports of 1.1 and 1.1.1 list their changes the
   same way.
 - **A manual-test checklist** for the user is an HTML page under `dev/`, with small
-  synthetic data made by a script next to it: `dev/test-1.1.1/` (the user may have
-  removed it) held `CHECKLIST.html`, `make_test_data.py` and `check_expectations.py`.
-  The script refuses an existing output folder. The app runs on the data with
+  synthetic data made by a script next to it: `dev/test-1.2/` (removed by the user on
+  2026-10-23; the scripts are not kept) held `CHECKLIST.html`, `make_test_data.py`
+  and `check_expectations.py`. Since 1.2 the page has, as the user asked, a bar at the
+  top with a tester field and **Export results (.txt)** (plus **Copy results**): one
+  text file with every step's result (Pass, Fail, Not run, Not marked) and comment,
+  which the user pastes back. Each step has radio buttons and a comment box, kept in
+  the browser's local storage. A copy of the page with a small harness script, run in
+  headless Edge with `--screenshot` (`--dump-dom` printed nothing from Git Bash),
+  checks the export. The data script refuses an existing output folder. The app runs on the data with
   `IQDataManager.exe --config <data>\config.toml`, which names a scratch database
   made from `schema.sql`. Data files of 64,000 bytes (int16, 16 kHz, 1 s) and recorder
   logs padded to a multiple of 512 bytes let Check before delete pass through a
