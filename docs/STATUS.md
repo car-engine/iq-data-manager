@@ -33,8 +33,8 @@ merged).
   ([reports/2026-10-22-review-1.1.0.md](reports/2026-10-22-review-1.1.0.md)) found ten
   faults, none a risk to data. The fixes are on `queue-fixes-1.1.1` (D86) and
   `log-fixes-1.1.1` (D87), chained from `review-1.1.0`, and not merged: 1,781 tests
-  pass and 4 skip; `ruff check` is clean. Next: the user's manual test, then the
-  release (HANDOFF.md, section 4).
+  pass and 4 skip; `ruff check` is clean. The user's manual test passed on
+  2026-10-22. Next: the merge and the release (HANDOFF.md, section 4).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -188,11 +188,6 @@ Decided items are in `docs/DECISIONS.md` (D1–D87). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **Version 1.1.1, manual test on this PC:** the queue's Resume label and the line
-  under Run for a transfer the queue holds (D86); the pop-up for a template imported
-  after the log filled the form, with each of its three buttons (D87); no spelling
-  line for "USRP gain" on a real recorder folder against the real catalogue; each by
-  eye in light and dark mode.
 - **The cost on the NAS** of the D73 check on each connection and of the D75 identity
   check on each file. Neither was measured; locally neither is measurable. Measure
   with O37.
@@ -201,6 +196,10 @@ Things that cannot be tested on the development PC, or were tested only partly.
   2026-10-22). M8.md, part 2 recorded that every file failed; the manual test of
   2026-10-22 read 64,000-byte files and failed 4,000-byte files. A limit of such a
   share; the real NAS read 1,000,000-byte files.
+
+On 2026-10-22 the user ran the manual test of 1.1.1 (`dev/test-1.1.1/CHECKLIST.html`,
+build `dist/test-1.1.1`): every check passed. After it, the button under "Unfinished
+transfers" was renamed Open in form (D86).
 
 On 2026-10-22 the user reported that the field checks of version 1.1 passed with the
 1.1.0 build: the queue against the real NAS with Pause and Start part-way through a
