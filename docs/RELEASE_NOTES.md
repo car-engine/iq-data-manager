@@ -1,5 +1,39 @@
 # IQ Data Manager: release notes
 
+## Version 1.1.1 (2026-10-22)
+
+Fixes for version 1.1.0. It uses the same catalogue; nothing needs to be upgraded.
+Install it in a new program folder, and copy `defaults.toml` across.
+
+### What changed
+
+- **USRP gain.** Values from the recorder's log fill the RF chain row "USRP gain",
+  spelled as in the catalogue. The checklist no longer reports on every scan that the
+  spelling will change.
+- **A template after the scan.** If you import a template after scanning a recorder
+  folder, and the template holds other values than the log filled in, a window lists
+  both. **Keep the log's values** fills in the rest of the template. **Use the
+  template's values** fills in all of it. **Cancel** changes nothing. Before, the
+  template replaced the log's values without a word, and they still showed as from
+  the log.
+- **Resume in the queue.** While a queue item is paused, the **Start** button reads
+  **Resume**. A transfer that is waiting or paused in the queue runs only from the
+  queue: in the form, **Run** stays off, and a line says why. Before, Run could finish
+  a paused archive, and the queue then marked it "Not started".
+- **Open in form.** The button under **Unfinished transfers** that loads a stopped
+  transfer into the form is now called **Open in form**, so it is not confused with
+  the queue's Resume.
+- **A busy catalogue after an archive.** If the catalogue is in use by someone else
+  when the queue runs Check before delete after an archive, the item shows "ⓘ
+  Archived, check needed". Before, it showed "✗ Failed", although the archive had
+  passed.
+- **Smaller fixes.** The Pause question says what a pause during Check before delete
+  does. An item taken out of the queue with Edit and then dropped no longer keeps its
+  place for the next item. "The recorder restarted 1 time." Template export refuses to
+  overwrite a file named like `<name>.toml.new` that someone else left in the folder.
+  A USRP row kept from a channel the next folder lacks no longer stops the log's USRP
+  row.
+
 ## Version 1.1.0 (2026-10-22)
 
 Faster logging of many folders, and archives of many recordings in one go. It uses the
