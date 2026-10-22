@@ -458,7 +458,8 @@ def write_template(path: Path, tpl: LogTemplate) -> None:
 
     The text is read back before anything is written. It goes to `<name>.new` in the
     same folder, which then replaces `path`. A failure before that last step leaves an
-    existing file at `path` unchanged.
+    existing file at `path` unchanged. An existing `<name>.new` is refused, so no file
+    but the chosen one is replaced.
     """
     if not tpl.fields():
         raise TemplateError("Choose at least one field to save.")
@@ -466,6 +467,11 @@ def write_template(path: Path, tpl: LogTemplate) -> None:
     if from_toml_data(tomllib.loads(text)) != tpl:
         raise TemplateError("The template does not read back the same. Nothing was saved.")
     new_path = path.with_name(path.name + NEW_SUFFIX)
+    if new_path.exists():
+        raise TemplateError(
+            f"The folder already holds a file named {new_path.name}. Rename or move that "
+            "file, then save the template again."
+        )
     try:
         new_path.write_text(text, encoding="utf-8")
         new_path.replace(path)

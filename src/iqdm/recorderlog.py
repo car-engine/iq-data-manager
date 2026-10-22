@@ -16,20 +16,29 @@ Nothing here is required: an unreadable or missing log fills nothing. No Qt here
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from pathlib import Path
 
-from iqdm.entry import ChecklistItem, ItemState, ParamInput, format_frequency, format_mhz
+from iqdm.entry import (
+    ChecklistItem,
+    EntryInput,
+    ItemState,
+    ParamInput,
+    format_frequency,
+    format_mhz,
+    parse_mhz,
+)
 from iqdm.models import SampleType
 from iqdm.scan.scanner import ScanResult
+from iqdm.templates import LogTemplate
 
 MAIN_LOG_RE = re.compile(r"^recorder_.*\.log$", re.IGNORECASE)
 COMMAND_FILE = "log.txt"
 CHECK_FILE = "check_quick.txt"
 MAX_LOG_BYTES = 20_000_000  # a log larger than this is not read
 
-GAIN_PARAM = "USRP Gain"
+GAIN_PARAM = "USRP gain"  # the catalogue's spelling (review of 1.1.0, finding 3)
 CLOCK_PARAM = "Clock reference"
 DEVICE_PARAM = "USRP"
 SAMPLE_TYPES = {"sc16": SampleType.INT16, "sc8": SampleType.INT8, "fc32": SampleType.FLOAT32}
@@ -247,7 +256,7 @@ class FormValues:
     dtype: SampleType | None = None
     fc_mhz: dict[int, str] = field(default_factory=dict)  # by channel folder number
     fs_text: dict[int, str] = field(default_factory=dict)
-    params: tuple[ParamInput, ...] = ()  # USRP Gain, Clock reference, and USRP if none
+    params: tuple[ParamInput, ...] = ()  # USRP gain, Clock reference, and USRP if none
     filled: tuple[str, ...] = ()  # what was filled, for the checklist line
 
 
@@ -256,14 +265,28 @@ def _number_text(value: float) -> str:
     return format(Decimal(repr(value)).normalize(), "f")
 
 
+def _spelling(name: str, known_names: Sequence[str]) -> str:
+    """The catalogue's spelling of a parameter name, or `name` when it holds none (D28)."""
+    wanted = name.casefold()
+    return next((k.strip() for k in known_names if k.strip().casefold() == wanted), name)
+
+
 def form_values(
-    log: RecorderLog, channel_indices: Sequence[int], params: Sequence[ParamInput]
+    log: RecorderLog,
+    channel_indices: Sequence[int],
+    params: Sequence[ParamInput],
+    known_names: Sequence[str] = (),
 ) -> FormValues:
     """The values to fill for the scanned channels. `params` are the form's RF chain rows.
 
     A "USRP" row comes from the log only when the form has none, so a template's
     "USRP-2954" stays: the log cannot tell that unit from an X310 with UBX boards.
+    The rows take the spelling of `known_names`, the names already in the catalogue,
+    so the checklist does not report a spelling the save would change (D28).
     """
+    gain_param = _spelling(GAIN_PARAM, known_names)
+    clock_param = _spelling(CLOCK_PARAM, known_names)
+    device_param = _spelling(DEVICE_PARAM, known_names)
     channels = [log.channels[i] for i in channel_indices if i in log.channels]
     filled: list[str] = []
     dtype = SAMPLE_TYPES.get(log.sample_format or "")
@@ -280,23 +303,23 @@ def form_values(
     if gains:
         if len(set(gains.values())) == 1:
             value = _number_text(next(iter(gains.values())))
-            rows.append(ParamInput(param=GAIN_PARAM, value=value, unit="dB"))
+            rows.append(ParamInput(param=gain_param, value=value, unit="dB"))
         else:
             rows += [
-                ParamInput(channel_index=i, param=GAIN_PARAM, value=_number_text(g), unit="dB")
+                ParamInput(channel_index=i, param=gain_param, value=_number_text(g), unit="dB")
                 for i, g in sorted(gains.items())
             ]
-        filled.append(GAIN_PARAM)
+        filled.append(gain_param)
     if log.clock_source:
         name = CLOCK_NAMES.get(log.clock_source, log.clock_source)
-        rows.append(ParamInput(param=CLOCK_PARAM, value=name))
-        filled.append(CLOCK_PARAM)
+        rows.append(ParamInput(param=clock_param, value=name))
+        filled.append(clock_param)
     has_device = any(p.param.strip().casefold() == DEVICE_PARAM.casefold() for p in params)
     if log.mboard and not has_device:
         boards = sorted({c.daughterboard for c in channels if c.daughterboard})
         value = log.mboard + (f" + {'/'.join(boards)}" if boards else "")
-        rows.append(ParamInput(param=DEVICE_PARAM, value=value))
-        filled.append(DEVICE_PARAM)
+        rows.append(ParamInput(param=device_param, value=value))
+        filled.append(device_param)
     return FormValues(dtype=dtype, fc_mhz=fc, fs_text=fs, params=tuple(rows), filled=tuple(filled))
 
 
@@ -316,6 +339,139 @@ def merge_params(current: Sequence[ParamInput], from_log: Sequence[ParamInput]) 
     names = {p.param.casefold() for p in from_log}
     kept = [p for p in current if p.param.strip().casefold() not in names]
     return kept + list(from_log)
+
+
+# ---------------------------------------------------------------------------
+# A template imported after the log filled the form (DECISIONS.md D87)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Conflict:
+    """A value the log filled in that a template holds otherwise. The texts are for the user."""
+
+    what: str  # 'fc of channel 0', 'sample type', 'USRP gain'
+    log_text: str
+    template_text: str
+
+
+def _row_key(p: ParamInput) -> tuple[int | None, str, str, str]:
+    """An RF chain row without letter case and surrounding spaces, as D28 compares."""
+    return (
+        p.channel_index,
+        p.param.strip().casefold(),
+        p.value.strip().casefold(),
+        p.unit.strip().casefold(),
+    )
+
+
+def _row_name(p: ParamInput) -> str:
+    return p.param.strip() + ("" if p.channel_index is None else f" (Ch {p.channel_index})")
+
+
+def _value_text(p: ParamInput) -> str:
+    return f"{p.value.strip()} {p.unit.strip()}".strip()
+
+
+def log_rows_in_form(values: FormValues, form: EntryInput) -> list[ParamInput]:
+    """The RF chain rows the log filled in that the form still holds unchanged."""
+    present = {_row_key(p) for p in form.params}
+    return [p for p in values.params if _row_key(p) in present]
+
+
+def _same_mhz(a: str, b: str) -> bool:
+    try:
+        return parse_mhz(a) == parse_mhz(b)
+    except ValueError:
+        return a.strip() == b.strip()
+
+
+def template_conflicts(values: FormValues, form: EntryInput, tpl: LogTemplate) -> list[Conflict]:
+    """The values from the log, still in the form, that importing `tpl` would replace.
+
+    A value the user typed over no longer counts as from the log. A template value equal
+    to the log's is no conflict.
+    """
+    conflicts: list[Conflict] = []
+    if (
+        tpl.sample_type is not None
+        and values.dtype is not None
+        and form.dtype == values.dtype
+        and tpl.sample_type != values.dtype
+    ):
+        conflicts.append(Conflict("sample type", str(values.dtype), str(tpl.sample_type)))
+    if tpl.channels is not None:
+        by_index = {c.index: c for c in tpl.channels}
+        for c in form.channels:
+            t = by_index.get(c.channel_index)
+            if t is None or not c.fc_from_log or _same_mhz(c.fc_mhz, t.fc_mhz):
+                continue
+            conflicts.append(
+                Conflict(
+                    f"fc of channel {c.channel_index}",
+                    f"{c.fc_mhz.strip()} MHz",
+                    f"{t.fc_mhz.strip()} MHz" if t.fc_mhz.strip() else "empty",
+                )
+            )
+    if tpl.rf_chain is not None:
+        in_template = {_row_key(p) for p in tpl.rf_chain}
+        for p in log_rows_in_form(values, form):
+            if _row_key(p) in in_template:
+                continue
+            name = p.param.strip().casefold()
+            others = [q for q in tpl.rf_chain if q.param.strip().casefold() == name]
+            conflicts.append(
+                Conflict(
+                    _row_name(p),
+                    _value_text(p),
+                    ", ".join(_value_text(q) for q in others) or "no row",
+                )
+            )
+    return conflicts
+
+
+def keep_log_values(tpl: LogTemplate, values: FormValues, form: EntryInput) -> LogTemplate:
+    """`tpl` changed so that importing it keeps the values from the log in the form.
+
+    The template's sample type is left out, the fc of channels filled from the log is
+    the form's, and the log's RF chain rows replace the template's rows of those names.
+    """
+    out = tpl
+    if values.dtype is not None and form.dtype == values.dtype:
+        out = replace(out, sample_type=None)
+    if out.channels is not None:
+        log_fc = {c.channel_index: c.fc_mhz for c in form.channels if c.fc_from_log}
+        out = replace(
+            out,
+            channels=tuple(
+                replace(c, fc_mhz=log_fc[c.index]) if c.index in log_fc else c
+                for c in out.channels
+            ),
+        )
+    if out.rf_chain is not None:
+        rows = merge_params(out.rf_chain, log_rows_in_form(values, form))
+        out = replace(out, rf_chain=tuple(rows))
+    return out
+
+
+def still_filled(values: FormValues, form: EntryInput) -> tuple[str, ...]:
+    """What the form still holds from the log, for the checklist line.
+
+    A value typed over, or replaced by a template, drops out (D87).
+    """
+    filled: list[str] = []
+    if values.dtype is not None and form.dtype == values.dtype:
+        filled.append(f"sample type {values.dtype}")
+    fc = {c.channel_index: "" for c in form.channels if c.fc_from_log}
+    fs = {c.channel_index: "" for c in form.channels if c.fs_from_log}
+    if fc:
+        filled.append(f"fc of {_channel_words(fc)}")
+    if fs:
+        filled.append(f"fs of {_channel_words(fs)}")
+    for p in log_rows_in_form(values, form):
+        if p.param not in filled:
+            filled.append(p.param)
+    return tuple(filled)
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +517,10 @@ def checklist_items(
     if log.gps_locked is False:
         items.append(ChecklistItem(ItemState.INFO, "The recorder's log says GPS was not locked."))
     if log.restarts:
-        items.append(ChecklistItem(ItemState.INFO, f"The recorder restarted {log.restarts} times."))
+        times = "time" if log.restarts == 1 else "times"
+        items.append(
+            ChecklistItem(ItemState.INFO, f"The recorder restarted {log.restarts} {times}.")
+        )
     if log.stop_reason and log.stop_reason != "normal":
         items.append(
             ChecklistItem(

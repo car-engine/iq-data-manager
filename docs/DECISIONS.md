@@ -1757,6 +1757,11 @@ count that differs from the recorder's is information only.
 - A log that cannot be read or chosen (several `recorder_*.log` and none named after
   the folder) fills nothing and gives one information line.
 - `recorderlog.py` holds the reading, without Qt.
+- **Changed on 2026-10-22** (review of 1.1.0, finding 3): the gain row is named "USRP
+  gain", the spelling of the real catalogue. "USRP Gain" made the checklist report
+  on every scan that the save would change the spelling. Each of the three names
+  takes the catalogue's spelling when the catalogue holds the name in another
+  letter case (D28). D87 covers a template imported after the log filled the form.
 
 Affects: SPEC sections 6 and 7, `recorderlog.py`, `scan/scanner.py`, `entry.py`,
 `gui/log_tab.py`, `diagnostics/fixtures.py` (its junk file is now `notes.md`), the
@@ -1875,3 +1880,37 @@ approved the plan on 2026-10-22 and asked for the Resume label.
 
 Affects: SPEC section 8, `transferqueue.py` (`TransferQueue.holding()`,
 `has_paused()`), `gui/transfer_tab.py`, the user guide.
+
+## D87. A template imported after the log filled the form
+
+Amends D80 and D82. Found in the review of 1.1.0 (finding 2). The user chose the
+pop-up on 2026-10-22.
+
+- In 1.1.0, a template imported after the scan replaced values that the recorder's
+  log had filled in for the folder. The fc kept the log's italics and tooltip, the
+  log's RF chain rows were removed, and the checklist still named them as filled
+  from the log. D82 says the log's values win, which held only for a template
+  imported before the scan.
+- When a template holds other values for fields the log filled in and the form still
+  holds, a pop-up lists each one with both values, for example "fc of channel 0: log
+  300 MHz, template 145.8 MHz". The fields are the sample type, the fc of each
+  channel, and the log's RF chain rows ("USRP gain", "Clock reference", "USRP"). A
+  template without one of those rows counts as a different value, because its RF
+  chain replaces the form's rows.
+- **Keep the log's values** (the default): the template fills in its other fields.
+  Its band of a channel is used with the log's fc. Its RF chain rows join the log's
+  rows; a template row with the name of a log row is left out.
+- **Use the template's values:** the template fills in every field it holds. Its fc
+  loses the log's italics and tooltip.
+- **Cancel** (or Esc) changes nothing. The message line says "Template not loaded."
+- The message line after an import names the fields kept from the log, or replaced
+  by the template.
+- The checklist line "Filled in from the recorder's log" names only what the form
+  still holds from the log. A value typed over or replaced drops out of it.
+- A value the user typed over no longer counts as from the log, so it gives no
+  pop-up. A template imported before the scan gives none either: the log fills in
+  afterwards and wins, as before. Edit mode never fills from the log, so it gives
+  none.
+
+Affects: SPEC section 6, `recorderlog.py` (`template_conflicts()`, `keep_log_values()`,
+`still_filled()`), `gui/log_tab.py`, the user guide.

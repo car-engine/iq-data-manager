@@ -160,7 +160,7 @@ starts again from empty fields.
 
 **Recorder logs.** A folder made by the recording task holds the recorder's log
 files. The scan reads them and fills in the centre frequency and sample rate of each
-channel, the sample type, and the RF chain rows USRP Gain and Clock reference. It
+channel, the sample type, and the RF chain rows USRP gain and Clock reference. It
 fills in USRP only when the form has no USRP row, because the log cannot tell a
 USRP-2954 from an X310 with UBX boards. These values show in italics; type over any
 of them to change it. Lines in the checklist name what was filled in, and warn when
@@ -174,6 +174,10 @@ antennas and the band and frequency of each channel.
   Then choose a file name. Keep shared templates in a common folder.
 - **Import template...** fills in the fields the file holds and leaves the others.
   The sample rate, the times and the file duration always come from the scan.
+- If you import a template after the scan, and it holds other values than the ones
+  the recorder's log filled in, a window lists both. **Keep the log's values** fills
+  in the rest of the template; the log describes this recording. **Use the
+  template's values** fills in all of it. **Cancel** changes nothing.
 - A site or project that is not in the catalogue is named under the buttons and not
   chosen. Choose it, or add it with **Add site** or **Add project**.
 

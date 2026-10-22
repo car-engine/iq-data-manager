@@ -8,6 +8,7 @@ Edit mode follows DECISIONS.md D16. Times are shown at the configured offset fro
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -66,6 +67,52 @@ REPLACE_TEMPLATE_TITLE = "Replace the template?"
 
 def replace_template_question(path: Path) -> str:
     return f"{path} already exists. Replace it with the fields you chose?"
+
+
+CONFLICT_TITLE = "Template and recorder's log differ"
+KEEP_LOG_BUTTON = "Keep the log's values"
+USE_TEMPLATE_BUTTON = "Use the template's values"
+
+
+class ConflictChoice(StrEnum):
+    """The answer to a template that differs from values the log filled in (D87)."""
+
+    KEEP_LOG = "keep log"
+    USE_TEMPLATE = "use template"
+    CANCEL = "cancel"
+
+
+def conflict_question(conflicts: Sequence[recorderlog.Conflict]) -> str:
+    lines = "\n".join(
+        f"\N{BULLET} {c.what}: log {c.log_text}, template {c.template_text}" for c in conflicts
+    )
+    return (
+        "The recorder's log filled in these values for this folder. The template holds "
+        f"other values for them:\n\n{lines}\n\nKeep the log's values, or use the "
+        "template's? Either way, the template fills in its other fields."
+    )
+
+
+def ask_template_conflicts(
+    parent: QWidget, conflicts: Sequence[recorderlog.Conflict]
+) -> ConflictChoice:
+    """Ask which values win. Keep the log's values is the default; Esc cancels."""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setWindowTitle(CONFLICT_TITLE)
+    box.setText(conflict_question(conflicts))
+    keep = box.addButton(KEEP_LOG_BUTTON, QMessageBox.ButtonRole.AcceptRole)
+    use = box.addButton(USE_TEMPLATE_BUTTON, QMessageBox.ButtonRole.AcceptRole)
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(keep)
+    box.setEscapeButton(cancel)
+    box.exec()
+    clicked = box.clickedButton()
+    if clicked is keep:
+        return ConflictChoice.KEEP_LOG
+    if clicked is use:
+        return ConflictChoice.USE_TEMPLATE
+    return ConflictChoice.CANCEL
 
 
 def channel_headers(zone: str) -> tuple[str, ...]:
@@ -152,7 +199,7 @@ class LogTab(QWidget):
         self._template_folder = ""  # the folder of the last template file, this session
         self._message: tuple[ItemState | None, str] = (None, "")  # the line under the buttons
         self._recorder: recorderlog.RecorderLog | None = None  # the scanned folder's logs
-        self._log_filled: tuple[str, ...] = ()  # what the log filled in, for the checklist
+        self._log_values: recorderlog.FormValues | None = None  # what the log filled in
         self._log_applied_for: str | None = None  # the folder the log filled in for
 
         self._refresh_timer = QTimer(self)
@@ -593,7 +640,7 @@ class LogTab(QWidget):
         self._raw_scan = None
         self._scan = None
         self._recorder = None  # D82
-        self._log_filled: tuple[str, ...] = ()
+        self._log_values: recorderlog.FormValues | None = None
         self._log_applied_for: str | None = None
         self._logged_id = None
         self._duplicate_checked = False
@@ -749,7 +796,10 @@ class LogTab(QWidget):
             return
         self._log_applied_for = folder
         values = recorderlog.form_values(
-            log, [r.index for r in self._channel_rows], self.param_table.rows()
+            log,
+            [r.index for r in self._channel_rows],
+            self.param_table.rows(),
+            self._choices.param_names,
         )
         if values.dtype is not None:
             self.dtype_combo.setCurrentIndex(self.dtype_combo.findData(values.dtype))
@@ -767,7 +817,7 @@ class LogTab(QWidget):
             self.param_table.set_rows(
                 recorderlog.merge_params(self.param_table.rows(), values.params)
             )
-        self._log_filled = values.filled
+        self._log_values = values
 
     def _fill_inferred_fs(self) -> None:
         """Fill fs from the file size where the field is empty or was filled in (D21)."""
@@ -833,8 +883,12 @@ class LogTab(QWidget):
 
     def refresh_checklist(self) -> None:
         self._refresh_timer.stop()
+        form = self.current_input()
+        filled = (
+            () if self._log_values is None else recorderlog.still_filled(self._log_values, form)
+        )
         items = entry.checklist(
-            self.current_input(),
+            form,
             scan=self._scan,
             location=self._location,
             location_error=self._location_error,
@@ -844,7 +898,7 @@ class LogTab(QWidget):
             scan_problems=self._scan_problems,
             known_param_names=self._choices.param_names,
             same_start=self._same_start,
-            extra_items=recorderlog.checklist_items(self._recorder, self._scan, self._log_filled),
+            extra_items=recorderlog.checklist_items(self._recorder, self._scan, filled),
         )
         self.checklist.set_items(items)
         self._show_kept_note()
@@ -1040,9 +1094,11 @@ class LogTab(QWidget):
         self._same_start = outcome.same_start
         self._recorder = outcome.recorder
         self._show_scan()
-        self._apply_recorder_log()
         if self._original is None:
+            # Before the log fills in, so a kept row of a missing channel, such as a
+            # "USRP" row, does not stop the log's row (review of 1.1.0, finding 8).
             self._drop_settings_of_missing_channels(outcome.scan)
+        self._apply_recorder_log()
         if outcome.db_error is not None:
             self.show_message(
                 f"Cannot check the database for this folder: {outcome.db_error}", ItemState.ERROR
@@ -1406,12 +1462,29 @@ class LogTab(QWidget):
             self.show_message(f"Template not loaded: {exc}", ItemState.ERROR)
             return
         self._template_folder = str(path.parent)
+        used, note = tpl, ""
+        values = self._log_values
+        if values is not None and self._original is None:
+            form = self.current_input()
+            conflicts = recorderlog.template_conflicts(values, form, tpl)
+            if conflicts:
+                choice = ask_template_conflicts(self, conflicts)
+                fields = ", ".join(c.what for c in conflicts)
+                if choice is ConflictChoice.CANCEL:
+                    self.show_message("Template not loaded.", ItemState.INFO)
+                    return
+                if choice is ConflictChoice.KEEP_LOG:
+                    used = recorderlog.keep_log_values(tpl, values, form)
+                    note = f"Kept from the recorder's log: {fields}."
+                else:
+                    note = f"The template replaced the values from the recorder's log: {fields}."
         applied = templates.apply_template(
-            self.current_input(), tpl, self._choices.sites, self._choices.projects
+            self.current_input(), used, self._choices.sites, self._choices.projects
         )
-        self._set_template_fields(tpl, applied)
-        state = ItemState.INFO if applied.notes else ItemState.OK  # a name not found
-        self.show_message(templates.applied_text(tpl, applied.notes), state)
+        self._set_template_fields(used, applied)
+        notes = [*applied.notes, note] if note else list(applied.notes)
+        state = ItemState.INFO if notes else ItemState.OK  # a name not found, or the log
+        self.show_message(templates.applied_text(tpl, notes), state)
         self.refresh_checklist()
 
     def _set_template_fields(self, tpl: templates.LogTemplate, applied: templates.Applied) -> None:
@@ -1442,7 +1515,10 @@ class LogTab(QWidget):
                 value = applied.channels.get(row.index)
                 if value is not None:
                     row.band.setCurrentText(value.band)
-                    row.fc.setText(value.fc_mhz)
+                    if row.fc.text() != value.fc_mhz:
+                        row.fc.setText(value.fc_mhz)
+                        row.fc_log = False  # the template's value, not the log's (D87)
+                        _mark_fc(row)
         if tpl.rf_chain is not None:
             self.param_table.set_rows(list(form.params))
 

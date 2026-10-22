@@ -263,6 +263,18 @@ def test_export_replaces_an_existing_template(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["usrp.toml"]
 
 
+def test_a_file_in_the_way_of_the_new_file_is_kept(tmp_path):
+    """Review of 1.1.0, finding 7: only the chosen file is ever replaced."""
+    path = tmp_path / "usrp.toml"
+    write_template(path, LogTemplate(site="Lab"))
+    other = tmp_path / "usrp.toml.new"
+    other.write_text("someone else's file", encoding="utf-8")
+    with pytest.raises(TemplateError, match=r"already holds a file named usrp\.toml\.new"):
+        write_template(path, LogTemplate(site="Rooftop A"))
+    assert other.read_text(encoding="utf-8") == "someone else's file"
+    assert read_template(path) == LogTemplate(site="Lab")
+
+
 def test_an_empty_template_is_not_written(tmp_path):
     with pytest.raises(TemplateError, match="at least one field"):
         write_template(tmp_path / "empty.toml", LogTemplate())

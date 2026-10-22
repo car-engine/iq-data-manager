@@ -75,7 +75,7 @@ def test_form_values_of_the_two_channel_example(tmp_path):
     assert values.fc_mhz == {0: "300", 1: "433"}
     assert values.fs_text == {0: "50 MHz", 1: "50 MHz"}
     assert [(p.channel_index, p.param, p.value, p.unit) for p in values.params] == [
-        (None, "USRP Gain", "30", "dB"),
+        (None, "USRP gain", "30", "dB"),
         (None, "Clock reference", "GPSDO", ""),
         (None, "USRP", "X310 + UBX", ""),
     ]
@@ -83,7 +83,7 @@ def test_form_values_of_the_two_channel_example(tmp_path):
         "sample type int16",
         "fc of channels 0, 1",
         "fs of channels 0, 1",
-        "USRP Gain",
+        "USRP gain",
         "Clock reference",
         "USRP",
     )
@@ -96,15 +96,33 @@ def test_a_usrp_row_already_in_the_form_stays():
     rows = [ParamInput(param="usrp", value="USRP-2954")]
     values = form_values(log, [0], rows)
     assert "USRP" not in values.filled
-    assert [p.param for p in values.params] == ["USRP Gain", "Clock reference"]
+    assert [p.param for p in values.params] == ["USRP gain", "Clock reference"]
 
 
 def test_different_gains_give_a_row_per_channel():
     log = RecorderLog(files=["x"])
     parse_main_log(recorder_log_text({0: (300.0, 30.0), 2: (433.0, 31.5)}), log)
     values = form_values(log, [0, 2], [])
-    gains = [(p.channel_index, p.value) for p in values.params if p.param == "USRP Gain"]
+    gains = [(p.channel_index, p.value) for p in values.params if p.param == "USRP gain"]
     assert gains == [(0, "30"), (2, "31.5")]
+
+
+def test_the_rows_take_the_catalogue_spelling():
+    """Review of 1.1.0, finding 3: no line about a spelling the save would change."""
+    log = RecorderLog(files=["x"])
+    parse_main_log(recorder_log_text({0: (300.0, 30.0)}), log)
+    values = form_values(log, [0], [], ["Antenna", "clock Reference", "USRP GAIN", "usrp"])
+    assert [p.param for p in values.params] == ["USRP GAIN", "clock Reference", "usrp"]
+    assert values.filled[-3:] == ("USRP GAIN", "clock Reference", "usrp")
+    plain = form_values(log, [0], [], ["Antenna"])
+    assert [p.param for p in plain.params] == ["USRP gain", "Clock reference", "USRP"]
+
+
+def test_one_restart_is_one_time():
+    log = RecorderLog(files=["x"], restarts=1)
+    assert "The recorder restarted 1 time." in [i.text for i in checklist_items(log, None)]
+    log.restarts = 2
+    assert "The recorder restarted 2 times." in [i.text for i in checklist_items(log, None)]
 
 
 def test_only_the_scanned_channels_are_filled():

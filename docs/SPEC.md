@@ -336,14 +336,21 @@ Values filled in after a scan:
 - **From the recorder's log** (D82), when the folder holds one, once per folder of a
   new entry: fc and fs per channel ("Using channel N" is channel folder N), the
   sample type (`sc16` int16, `sc8` int8, `fc32` float32), the RF chain rows "USRP
-  Gain" (one Recording row when all channels match) and "Clock reference", and
-  "USRP" only when the form has none. The main log is `recorder_*.log`; `log.txt`
-  gives requested values it lacks. Log values replace kept and template values. fc
-  and fs from the log are shown in italics until the user types in them; an fs from
-  the log does not follow the format fields. Edit mode never fills. Information lines,
-  which do not block saving, name what was filled, the recorder's verdict, a time
-  taken from the PC clock, GPS not locked, restarts, and a file count that differs
-  from the recorder's.
+  gain" (one Recording row when all channels match) and "Clock reference", and
+  "USRP" only when the form has none. Each name takes the catalogue's spelling when
+  the catalogue holds it in another letter case. The main log is `recorder_*.log`;
+  `log.txt` gives requested values it lacks. Log values replace kept values, and
+  template values imported before the scan. fc and fs from the log are shown in
+  italics until the user types in them; an fs from the log does not follow the
+  format fields. Edit mode never fills. Information lines, which do not block saving,
+  name what the form still holds from the log, the recorder's verdict, a time taken
+  from the PC clock, GPS not locked, restarts, and a file count that differs from the
+  recorder's.
+- **A template imported after the log filled in** (D87): when it holds other values
+  for the sample type, the fc of a channel, or the log's RF chain rows, a pop-up lists
+  each with both values. "Keep the log's values" (the default) applies the rest of
+  the template, with its RF chain rows added to the log's rows. "Use the template's
+  values" applies all of it, and its fc loses the log's mark. Cancel changes nothing.
 
 Choosing another folder for a new entry resets only the values that come from the
 scan: start and end, the channel rows, fs and the file duration (D79). Every other

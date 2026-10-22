@@ -44,13 +44,17 @@ from iqdm.entry import (
     kept_note,
     missing_channels_text,
 )
-from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.log_tab import (
+    CONFLICT_TITLE,
+    KEEP_LOG_BUTTON,
     REPLACE_TEMPLATE_TITLE,
     TEMPLATE_FILTER,
+    USE_TEMPLATE_BUTTON,
     LogTab,
+    conflict_question,
     replace_template_question,
 )
+from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
 from iqdm.gui.transfer_tab import (
     PAUSE_QUEUE_QUESTION,
@@ -227,7 +231,23 @@ def test_template_text_is_plain(qtbot, db_path, tmp_path):
         replace_template_question(tmp_path / "usrp.toml"),
         templates.applied_text(tpl, applied.notes),
         TEMPLATE_FILTER,
+        CONFLICT_TITLE,
+        KEEP_LOG_BUTTON,
+        USE_TEMPLATE_BUTTON,
+        conflict_question(
+            [
+                recorderlog.Conflict("fc of channel 0", "300 MHz", "145.8 MHz"),
+                recorderlog.Conflict("USRP gain", "30 dB", "no row"),
+            ]
+        ),
+        "Template not loaded.",
     ]
+    try:
+        templates.write_template(tmp_path / "usrp.toml", tpl)
+        (tmp_path / "usrp.toml.new").write_text("x", encoding="utf-8")
+        templates.write_template(tmp_path / "usrp.toml", tpl)
+    except templates.TemplateError as exc:
+        texts.append(str(exc))
     for data in (
         {"site": "x"},
         {"format_version": 1},

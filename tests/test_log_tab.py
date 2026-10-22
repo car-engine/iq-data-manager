@@ -12,6 +12,7 @@ import pytest
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
+import iqdm.gui.log_tab as log_tab_module
 from conftest import recorder_log_text
 from iqdm import entry, recorderlog, templates
 from iqdm.config import Config
@@ -1127,7 +1128,7 @@ def test_a_scan_fills_values_from_the_recorder_log(qtbot, make_tab, make_recordi
         assert fc.toolTip() == recorderlog.FROM_LOG_TOOLTIP
     assert tab.dtype_combo.currentData() == SampleType.INT16
     assert rows_of(tab) == [
-        (None, "USRP Gain", "30", "dB"),
+        (None, "USRP gain", "30", "dB"),
         (None, "Clock reference", "GPSDO", ""),
         (None, "USRP", "X310 + UBX", ""),
     ]
@@ -1159,7 +1160,7 @@ def test_the_log_replaces_kept_values_but_not_a_usrp_row(qtbot, make_tab, make_r
     assert rows_of(tab) == [
         (None, "USRP", "USRP-2954", ""),
         (None, "Antenna", "Yagi", ""),
-        (None, "USRP Gain", "30", "dB"),
+        (None, "USRP gain", "30", "dB"),  # replaces the kept "USRP Gain" row
         (None, "Clock reference", "Internal", ""),
     ]
     assert any("from the PC clock" in t for t in checklist_texts(tab, ItemState.INFO))
@@ -1225,9 +1226,168 @@ def test_the_command_line_file_alone_fills_fc_and_fs(qtbot, make_tab, make_recor
     assert [tab.channel_widgets(i)[1].text() for i in (0, 1)] == ["145.8", "435"]
     assert tab.channel_widgets(0)[2].text() == "1 kHz"
     assert rows_of(tab) == [
-        (None, "USRP Gain", "25", "dB"),
+        (None, "USRP gain", "25", "dB"),
         (None, "Clock reference", "External", ""),
     ]
+
+
+def test_log_rows_take_the_catalogue_spelling(qtbot, make_tab, make_recording, site_id):
+    """Review of 1.1.0, finding 3: no line about a spelling the save would change."""
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, first, site_id)
+    tab.param_table.add_row(entry.ParamInput(param="usrp GAIN", value="20", unit="dB"))
+    save_and_wait(qtbot, tab)
+    assert "usrp GAIN" in tab._choices.param_names
+    tab.param_table.set_rows([])
+    scan_folder(qtbot, tab, with_recorder_log(second, {0: (300.0, 30.0)}))
+    assert (None, "usrp GAIN", "30", "dB") in rows_of(tab)
+    assert not any("will be saved as" in t for t in checklist_texts(tab))
+
+
+def test_a_kept_row_of_a_missing_channel_does_not_stop_the_log(qtbot, make_tab, make_recording):
+    """Review of 1.1.0, finding 8: kept rows of missing channels go before the log fills."""
+    first, second = make_recording(n_channels=3), make_recording(n_channels=2)
+    tab = make_tab()
+    scan_folder(qtbot, tab, first.root)
+    tab.param_table.add_row(entry.ParamInput(param="USRP", value="B210", channel_index=2))
+    scan_folder(qtbot, tab, with_recorder_log(second, {0: (300.0, 30.0), 1: (433.0, 30.0)}))
+    assert (None, "USRP", "X310 + UBX", "") in rows_of(tab)
+    assert all(row[0] != 2 for row in rows_of(tab))
+
+
+# ---------------------------------------------------------------------------
+# A template imported after the log filled the form (D87)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def conflict_answer(monkeypatch):
+    """Replace the pop-up: record the conflicts it shows and give a set answer."""
+    asked: list[list[recorderlog.Conflict]] = []
+    answer = {"choice": log_tab_module.ConflictChoice.KEEP_LOG}
+
+    def ask(parent, conflicts):
+        asked.append(list(conflicts))
+        return answer["choice"]
+
+    monkeypatch.setattr(log_tab_module, "ask_template_conflicts", ask)
+    return asked, answer
+
+
+def log_scanned_tab(qtbot, make_tab, make_recording) -> LogTab:
+    """A one-channel folder at 300 MHz, 30 dB, GPSDO, X310 + UBX, filled from its log."""
+    tab = make_tab()
+    scan_folder(qtbot, tab, with_recorder_log(make_recording(), {0: (300.0, 30.0)}))
+    return tab
+
+
+def set_up_template(tmp_path: Path) -> Path:
+    path = tmp_path / "set-up.toml"
+    templates.write_template(
+        path,
+        templates.LogTemplate(
+            remarks="Hilltop mast",
+            sample_type=SampleType.INT8,
+            channels=(templates.TemplateChannel(index=0, band="VHF", fc_mhz="145.8"),),
+            rf_chain=(
+                entry.ParamInput(param="Antenna", value="Yagi"),
+                entry.ParamInput(param="USRP gain", value="10", unit="dB"),
+            ),
+        ),
+    )
+    return path
+
+
+def test_the_popup_names_each_log_value_the_template_replaces(
+    qtbot, make_tab, make_recording, tmp_path, conflict_answer
+):
+    asked, _ = conflict_answer
+    tab = log_scanned_tab(qtbot, make_tab, make_recording)
+    tab.import_template(set_up_template(tmp_path))
+    (conflicts,) = asked
+    assert [(c.what, c.log_text, c.template_text) for c in conflicts] == [
+        ("sample type", "int16", "int8"),
+        ("fc of channel 0", "300 MHz", "145.8 MHz"),
+        ("USRP gain", "30 dB", "10 dB"),
+        ("Clock reference", "GPSDO", "no row"),
+        ("USRP", "X310 + UBX", "no row"),
+    ]
+
+
+def test_keep_the_log_values(qtbot, make_tab, make_recording, tmp_path, conflict_answer):
+    tab = log_scanned_tab(qtbot, make_tab, make_recording)
+    tab.import_template(set_up_template(tmp_path))
+    band, fc, _fs = tab.channel_widgets(0)
+    assert (band.currentText(), fc.text()) == ("VHF", "300")  # the template's band
+    assert fc.toolTip() == recorderlog.FROM_LOG_TOOLTIP
+    assert tab.dtype_combo.currentData() == SampleType.INT16
+    assert tab.remarks_edit.toPlainText() == "Hilltop mast"
+    assert rows_of(tab) == [
+        (None, "Antenna", "Yagi", ""),
+        (None, "USRP gain", "30", "dB"),
+        (None, "Clock reference", "GPSDO", ""),
+        (None, "USRP", "X310 + UBX", ""),
+    ]
+    assert tab.message_state is ItemState.INFO
+    assert tab.message_text.endswith(
+        "Kept from the recorder's log: sample type, fc of channel 0, USRP gain, "
+        "Clock reference, USRP."
+    )
+    filled = [t for t in checklist_texts(tab, ItemState.INFO) if t.startswith("Filled in")]
+    assert filled[0].startswith(
+        "Filled in from the recorder's log: sample type int16, fc of channel 0, fs of "
+        "channel 0, USRP gain, Clock reference, USRP."
+    )
+
+
+def test_use_the_template_values(qtbot, make_tab, make_recording, tmp_path, conflict_answer):
+    _, answer = conflict_answer
+    answer["choice"] = log_tab_module.ConflictChoice.USE_TEMPLATE
+    tab = log_scanned_tab(qtbot, make_tab, make_recording)
+    tab.import_template(set_up_template(tmp_path))
+    _band, fc, fs = tab.channel_widgets(0)
+    assert fc.text() == "145.8"
+    assert fc.styleSheet() == "" and fc.toolTip() == ""  # no longer marked as from the log
+    assert "italic" in fs.styleSheet()  # fs is still the log's
+    assert tab.dtype_combo.currentData() == SampleType.INT8
+    assert rows_of(tab) == [(None, "Antenna", "Yagi", ""), (None, "USRP gain", "10", "dB")]
+    assert "The template replaced the values from the recorder's log" in tab.message_text
+    filled = [t for t in checklist_texts(tab, ItemState.INFO) if t.startswith("Filled in")]
+    assert filled[0].startswith("Filled in from the recorder's log: fs of channel 0.")
+
+
+def test_cancel_leaves_the_form(qtbot, make_tab, make_recording, tmp_path, conflict_answer):
+    _, answer = conflict_answer
+    answer["choice"] = log_tab_module.ConflictChoice.CANCEL
+    tab = log_scanned_tab(qtbot, make_tab, make_recording)
+    before = (typed_fields(tab), tab.channel_widgets(0)[1].styleSheet())
+    tab.import_template(set_up_template(tmp_path))
+    assert (typed_fields(tab), tab.channel_widgets(0)[1].styleSheet()) == before
+    assert (tab.message_state, tab.message_text) == (ItemState.INFO, "Template not loaded.")
+
+
+def test_no_popup_without_a_conflict_or_before_the_scan(
+    qtbot, make_tab, make_recording, tmp_path, conflict_answer
+):
+    asked, _ = conflict_answer
+    same = tmp_path / "same.toml"
+    templates.write_template(
+        same,
+        templates.LogTemplate(
+            sample_type=SampleType.INT16,
+            channels=(templates.TemplateChannel(index=0, band="VHF", fc_mhz="300.0"),),
+        ),
+    )
+    tab = log_scanned_tab(qtbot, make_tab, make_recording)
+    tab.import_template(same)  # the same values as the log
+    assert tab.channel_widgets(0)[0].currentText() == "VHF"
+    assert tab.message_state is ItemState.OK
+    tab.clear_form()
+    tab.import_template(set_up_template(tmp_path))  # before the scan: the log wins later
+    scan_folder(qtbot, tab, with_recorder_log(make_recording(), {0: (300.0, 30.0)}))
+    assert tab.channel_widgets(0)[1].text() == "300"
+    assert asked == []
 
 
 # ---------------------------------------------------------------------------
