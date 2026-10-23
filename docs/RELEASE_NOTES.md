@@ -1,5 +1,38 @@
 # IQ Data Manager: release notes
 
+## Version 1.2.1 (2026-10-23)
+
+Fixes from the team's feedback on version 1.2. It uses the same catalogue; nothing
+needs to be upgraded. Install it in a new program folder, and copy `defaults.toml`
+across.
+
+### What changed
+
+- **The mouse wheel no longer changes fields.** Turning the wheel over a dropdown or
+  a number field scrolls the page and leaves the field as it was, in every tab. To
+  change a field, click it and pick from its list, or use its arrows or the arrow
+  keys. An open list still scrolls with the wheel.
+- **Logged by is your name.** The field starts empty, and you type your name; before,
+  it held the Windows login, which on a shared laptop names the laptop. Your name
+  stays for the next folder until you click **Clear form** or close the app.
+- **Fields to fill in are marked.** In the Log recording tab, a field you still have
+  to fill in has an amber frame and reads "Required" while it is empty. A field with
+  a wrong value has a red frame; point at it to see why. The **Before saving**
+  checklist lists the same items, and the **Save** button's tooltip says what to do
+  while it is disabled.
+- **Several folders shows each folder's recorder values.** Below the RF chain, a
+  table lists the rows the selected folder takes from its recorder's log, such as
+  the USRP gain, the clock reference and the USRP. These rows were saved before too,
+  but were not shown. A line under the table names any row typed above that they
+  replace for that folder. To change one of these values for one folder, untick the
+  folder and log it with **One folder**.
+
+### Known limits
+
+- Transfers, checks and deletes still record the Windows login under "By", as
+  before.
+- The limits of version 1.2.0 below still apply.
+
 ## Version 1.2.0 (2026-10-23)
 
 Three additions to the Log recording tab. It uses the same catalogue as version 1.1;
