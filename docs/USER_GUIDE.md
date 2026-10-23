@@ -136,8 +136,10 @@ The Log recording tab adds a recording folder to the catalogue.
 1. **Source folder.** Click **Browse...** and choose the recording folder. A folder
    with channel folders `0`, `1` and so on is one recording with several channels.
    Click **Scan folder**.
-2. **Recording.** Start and end come from the scan. Check the file duration, choose
-   the site (or **Add site**), and fill in the plan reference and remarks. Choose the
+2. **Recording.** Start and end come from the scan. Check the file duration, type
+   your name in **Logged by**, choose the site (or **Add site**), and fill in the plan
+   reference and remarks. Your name stays for the next folder until you click
+   **Clear form** or close the app. Choose the
    project the recording belongs to, or **Add project**. A project is optional; leave
    "No project" if none applies.
 3. **File format.** Sample type, IQ layout, endianness and header bytes. The defaults

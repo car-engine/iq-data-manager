@@ -62,6 +62,7 @@ FS_FILLED_TOOLTIP = (
 )
 NO_DATABASE = "No database configured. Set the database path in the Settings tab."
 NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
+LOGGED_BY_PLACEHOLDER = "Your name"
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
@@ -463,6 +464,7 @@ class LogTab(QWidget):
         self.duration_spin.setSuffix(" s")
         self.duration_spin.valueChanged.connect(self._duration_changed)
         self.logged_by_edit = QLineEdit()
+        self.logged_by_edit.setPlaceholderText(LOGGED_BY_PLACEHOLDER)
         self.logged_by_edit.textChanged.connect(self._schedule_refresh)
         self.site_combo = QComboBox()
         self.site_combo.currentIndexChanged.connect(self._schedule_refresh)
@@ -820,7 +822,7 @@ class LogTab(QWidget):
         self.folder_edit.clear()
         self.folder_edit.blockSignals(False)
         self._set_location(None, None)
-        self.logged_by_edit.setText(entry.default_logged_by())
+        self.logged_by_edit.clear()  # typed by the user; the Windows login may name nobody (D94)
         self.site_combo.setCurrentIndex(-1)
         self.project_combo.setCurrentIndex(0)  # no project
         self.plan_edit.clear()

@@ -243,6 +243,7 @@ def test_log_tab_text_is_plain(qtbot, db_path):
     qtbot.addWidget(tab)
     qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
     texts = visible_texts(tab) + [item.text for item in tab.checklist.items]
+    assert "Your name" in texts  # the placeholder of Logged by (D94)
     assert offending(texts) == []
 
 

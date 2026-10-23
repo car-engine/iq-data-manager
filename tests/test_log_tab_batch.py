@@ -152,7 +152,10 @@ def test_folders_are_added_scanned_and_sorted_by_start(qtbot, tab, tmp_path):
     assert table_column(tab, "band") == ["VHF", "UHF"]
     assert table_column(tab, "dtype") == ["int16", "int16"]
     assert tab.batch_line.text() == "Scanned 2 folders."
-    assert texts(tab.checklist.items, ItemState.TODO) == ["Choose a site (all 2 folders)"]
+    assert texts(tab.checklist.items, ItemState.TODO) == [
+        "Enter the logged-by name (all 2 folders)",
+        "Choose a site (all 2 folders)",
+    ]
 
 
 LOG_ROWS_20 = [

@@ -157,9 +157,35 @@ def test_loads_sites_parameter_names_and_bands(make_tab, db_path, site_id, make_
     assert tab._choices.bands == ["UHF"]
 
 
-def test_logged_by_defaults_to_the_login_name(make_tab, monkeypatch):
-    monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "userA")
+def test_logged_by_starts_empty_for_the_user_to_type(make_tab, monkeypatch):
+    """D94: the Windows login may name a shared laptop account, so the user types a name."""
+    monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "lab-laptop")
     tab = make_tab()
+    assert tab.logged_by_edit.text() == ""
+    assert tab.logged_by_edit.placeholderText() == "Your name"
+    assert "Enter the logged-by name" in checklist_texts(tab, ItemState.TODO)
+
+
+def test_a_typed_name_stays_for_the_next_folder_and_after_a_save(
+    qtbot, make_tab, make_recording, site_id
+):
+    first, second = make_recording(), make_recording()
+    tab = make_tab()
+    logged_ready(qtbot, tab, first, site_id)
+    assert tab.logged_by_edit.text() == "userA"
+    save_and_wait(qtbot, tab)
+    assert tab.logged_by_edit.text() == "userA"
+    scan_folder(qtbot, tab, second.root)
+    assert tab.logged_by_edit.text() == "userA"
+    assert "Enter the logged-by name" not in checklist_texts(tab, ItemState.TODO)
+
+
+def test_a_typed_name_stays_across_the_mode_switch(make_tab):
+    tab = make_tab()
+    tab.logged_by_edit.setText("userA")
+    tab.several_radio.setChecked(True)
+    assert tab.logged_by_edit.text() == "userA"
+    tab.one_radio.setChecked(True)  # no folders listed, so no question
     assert tab.logged_by_edit.text() == "userA"
 
 
@@ -501,7 +527,7 @@ def test_edit_changes_the_project_without_a_rescan(
 
 
 def test_clear_form_resets_every_field(qtbot, make_tab, make_recording, site_id, monkeypatch):
-    monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "userA")
+    monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "lab-laptop")
     info = make_recording()
     tab = make_tab()
     logged_ready(qtbot, tab, info, site_id)
@@ -516,7 +542,7 @@ def test_clear_form_resets_every_field(qtbot, make_tab, make_recording, site_id,
     assert tab.scan is None
     assert tab.channel_table.rowCount() == 0
     assert tab.param_table.rows() == []
-    assert tab.logged_by_edit.text() == "userA"
+    assert tab.logged_by_edit.text() == ""  # D94: empty, not the Windows login
     assert (tab.plan_edit.text(), tab.remarks_edit.toPlainText()) == ("", "")
     assert tab.duration_spin.value() == 1.0
     assert tab.header_spin.value() == 0
@@ -768,6 +794,7 @@ def test_scan_fills_in_fs_and_leaves_fc_and_site_to_do(qtbot, make_tab, make_rec
         assert "italic" in fs.styleSheet()
         assert fs.toolTip().startswith("Filled in from the file size")
     assert checklist_texts(tab, ItemState.TODO) == [
+        "Enter the logged-by name",
         "Choose a site",
         "Enter fc (MHz) for channel 0, 1, 2, 3",
     ]

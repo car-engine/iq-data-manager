@@ -274,8 +274,10 @@ Flow: choose folder, scan, review and complete fields, validate, save.
    D18). "Scan folder" runs the scanner (section 7) in a worker thread. The tab shows
    the number of files found so far and has a Cancel button.
 2. **Recording fields**: start and end (from scan, read-only, at the display offset,
-   UTC+8 by default; D24), file duration (default 1.0 s), logged by (pre-filled with
-   the Windows login name, editable), site (dropdown plus "Add site"), project
+   UTC+8 by default; D24), file duration (default 1.0 s), logged by (typed by the
+   user: empty when the app starts and after Clear form, with the placeholder "Your
+   name"; a typed name stays across folders, saves and the switch between "One
+   folder" and "Several folders"; D94), site (dropdown plus "Add site"), project
    (optional dropdown with an empty choice, plus "Add project"; D73), recording plan
    reference, storage root and relative path (derived from the folder, read-only),
    archive state (derived: `local` unless the folder is under a configured NAS root,

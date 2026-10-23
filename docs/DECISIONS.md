@@ -111,6 +111,7 @@ Rules for this file:
 | D91 | A deleted entry's number can be given again | 2026-10-23, version 1.2 | Active; amends D89 |
 | D92 | The mouse wheel never changes a field | 2026-10-23, version 1.2.1 | Active |
 | D93 | "Several folders" shows each folder's log rows | 2026-10-23, version 1.2.1 | Active; amends D90 |
+| D94 | Logged by is typed by the user | 2026-10-23, version 1.2.1 | Active |
 
 ## D1. Sample types
 
@@ -2220,3 +2221,25 @@ entries held them. The user chose read-only rows (2026-10-23).
 
 Affects: SPEC section 6, "Several folders", `batchlog.py` (`LogShown`, `log_shown()`),
 `gui/log_tab.py`, the user guide.
+
+## D94. Logged by is typed by the user
+
+Closes O53. Team feedback on 1.2 (2026-10-23): "Logged by" was filled in with the
+Windows login name, which on a shared laptop names the laptop's account and not the
+person. The user approved the proposed default on 2026-10-23 and chose that Clear
+form empties the field.
+
+- The field starts empty, with the placeholder "Your name". The checklist's to-do
+  item "Enter the logged-by name" (D23) blocks the save until a name is typed, as it
+  did before for an empty field.
+- A typed name stays across folders (as D79 keeps it), after a save, and
+  across the switch between "One folder" and "Several folders". Clear form empties
+  it. A template can still fill it (D80). Edit mode shows the stored name.
+- Transfers, checks and the delete record keep the Windows login as "By"
+  (`transfer_log.performed_by`, the copy of a deleted entry), because "Unfinished
+  transfers" lists the current login's rows (the user's choice, 2026-10-23). A
+  folder logged in place on the NAS takes the typed name for its check row, as D2
+  says.
+- Entries logged before version 1.2.1 keep their stored names.
+
+Affects: SPEC section 6, `gui/log_tab.py`, the user guide.

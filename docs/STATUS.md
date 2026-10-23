@@ -123,7 +123,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O52, a deleted entry's number given again (D91) | Done, merged | `queue-entry-check`, from `log-several-folders` at `f7ab319` | `fc64422` (with its report) | [2026-10-23-queue-entry-check](reports/2026-10-23-queue-entry-check.md) |
 | Release 1.2.0 | Released: tag `v1.2.0`, pushed | `release-1.2.0`, from `main` at `fc64422` | `616b18c`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 | O56, the mouse wheel never changes a field (D92) | Done, not merged | `wheel-guard`, from `main` at `f22bc20` | `e9977e6` (with its report) | [2026-10-23-wheel-guard](reports/2026-10-23-wheel-guard.md) |
-| O55, "Several folders" shows each folder's log rows (D93) | Done, not merged | `batch-log-rf-rows`, from `wheel-guard` at `e9977e6` | The commit of the code and its report | [2026-10-23-batch-log-rf-rows](reports/2026-10-23-batch-log-rf-rows.md) |
+| O55, "Several folders" shows each folder's log rows (D93) | Done, not merged | `batch-log-rf-rows`, from `wheel-guard` at `e9977e6` | `b5aaa55` (with its report) | [2026-10-23-batch-log-rf-rows](reports/2026-10-23-batch-log-rf-rows.md) |
+| O53, Logged by is typed by the user (D94) | Done, not merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | The commit of the code and its report | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
 
 The five branches of 1.2.0, from `band-from-fc` to `release-1.2.0`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -172,7 +173,6 @@ user's answers so far are in the "Proposed default" column.
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
-| O53 | The Log tab fills "Logged by" with the Windows login, which may name a shared laptop account and not the person | 1.2.1 | The field starts empty, with the placeholder "Your name", and Clear form empties it. A typed name stays across folders, saves and mode switches. Transfers, checks and deletes keep the Windows login as "By" (the user's choice, 2026-10-23). | Team feedback on 1.2, 2026-10-23 |
 | O54 | An empty or wrong required field in the Log tab is not marked on the field; only the checklist and the disabled Save button show it | 1.2.1 | An empty required field gets an amber frame and the placeholder "Required"; a wrong value gets a red frame with the reason as its tooltip (the user's choice, 2026-10-23). | Team feedback on 1.2, 2026-10-23 |
 | O57 | Run archive in the form runs no Check before delete afterwards. The user's case was a queue run, with Compare at hashes of 0.5 % of the files; the box "After each archive, run Check before delete" may not have been ticked. | 1.3.0 | Check before delete runs straight after each archive, from the form and from the queue. The user chose this over one check pass at the end of the queue, and asked that the check-after box be removed (2026-10-23). Still to decide: an archive with "Sizes only", for which the check cannot run (D55). | Team feedback on 1.2, 2026-10-23 |
 | O58 | The Archive / copy tab shows the controls for copies, archives and checks at once | 1.3.0 | Pages Archive, Check and Copy under a shared recording row, with the preview at the right and the queue and unfinished transfers in two tabs below. The user found this layout fine for now (2026-10-23); the mock-up and the plan notes are in [reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md), "Notes for version 1.3.0". Still to decide: where Check before delete and Delete laptop copy go, which page the Viewer's "Archive / copy" button opens, and the tab's name. | Team feedback on 1.2, 2026-10-23 |
@@ -181,7 +181,7 @@ user's answers so far are in the "Proposed default" column.
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D93). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D94). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -236,6 +236,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D93). The M0 review table in
 | O52 | A deleted newest entry's number is given to the next new entry | D91 (2026-10-23): kept, with a check in the queue and at the start of a transfer; `AUTOINCREMENT` waits for the first schema change |
 | O56 | The mouse wheel changes a dropdown or number field while the user scrolls the page | D92 (2026-10-23) |
 | O55 | "Several folders" saves but does not show each folder's RF chain rows and sample type from its log | D93 (2026-10-23) |
+| O53 | "Logged by" is filled in with the Windows login | D94 (2026-10-23) |
 
 ## Pending checks for the user
 
