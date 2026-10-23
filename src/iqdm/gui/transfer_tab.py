@@ -1879,9 +1879,9 @@ class TransferTab(QWidget):
 
     def _ask_for_folder(self, waiting: Mapping[QueueState, int]) -> None:
         """Show the page whose folder new items wait for, with the cursor in the field
-        (D98). While an operation runs the pages stay as they are; the result line and
-        the line under the queue name the page."""
-        if self.is_busy:
+        (D98). While an operation from the form runs, the pages are locked and stay as
+        they are; the result line and the line under the queue name the page."""
+        if self.is_busy and not self._queue_running:
             return
         if waiting.get(QueueState.NEEDS_NAS_FOLDER):
             self.show_page(Page.ARCHIVE)
@@ -2434,9 +2434,11 @@ class TransferTab(QWidget):
         loaded = self._rec is not None
         page = self.page()
         self.run_button.setText("Run archive" if page is Page.ARCHIVE else "Run copy")
-        # The pages are locked while an operation runs (D96). The two folder fields stay
-        # usable, so recordings added from the Viewer meanwhile can get their folder (D98).
-        self.pages.tabBar().setEnabled(not busy)
+        # The pages are locked while an operation from the form runs (D96). During a
+        # queue run the form runs nothing, so the pages and the two folder fields stay
+        # usable, and recordings added from the Viewer meanwhile can get their folder
+        # (D98).
+        self.pages.tabBar().setEnabled(not busy or self._queue_running)
         for widget in (
             self.id_spin,
             self.load_button,

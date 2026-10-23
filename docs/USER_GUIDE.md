@@ -298,7 +298,8 @@ The tab works on recordings that are already logged. Load one with the Viewer's
 The tab has three pages under the recording: **Archive**, **Check** and **Copy**. The
 page you choose sets what **Preview** and **Run** do. The preview is on the right. The
 queue and the unfinished transfers are two tabs at the bottom; drag the bar above
-them to give them more room. While an operation runs, the pages are locked.
+them to give them more room. While a preview, transfer or check started on a page
+runs, the pages are locked. While the queue runs, you can change pages.
 
 The Viewer's **Archive / copy** button opens the Archive page for a recording on the
 laptop, and for an archived recording whose laptop copy is still to be checked or

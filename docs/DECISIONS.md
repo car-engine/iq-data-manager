@@ -113,9 +113,9 @@ Rules for this file:
 | D93 | "Several folders" shows each folder's log rows | 2026-10-23, version 1.2.1 | Active; amends D90 |
 | D94 | Logged by is typed by the user | 2026-10-23, version 1.2.1 | Active |
 | D95 | Fields to fill in or correct are framed | 2026-10-23, version 1.2.1 | Active; amends D23 |
-| D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active |
+| D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active; D98 keeps the pages usable during a queue run |
 | D97 | Check before delete straight after each archive | 2026-10-23, version 1.3 | Active; amends D81 and D85 |
-| D98 | Queue items from the Viewer wait for their folder | 2026-10-23, version 1.3 | Active; amends D81 |
+| D98 | Queue items from the Viewer wait for their folder | 2026-10-23, version 1.3 | Active; amends D81 and D96 |
 
 ## D1. Sample types
 
@@ -2330,7 +2330,8 @@ archives and checks at once. The user found the layout of the mock-up fine on
   upper part.
 - The pages are locked while an operation runs. The NAS folder field stays usable, as
   it was in the queue group, so recordings added from the Viewer meanwhile can use
-  it. It changes the form's destination only when no operation runs.
+  it. It changes the form's destination only when no operation runs. (D98 keeps the
+  pages usable during a queue run.)
 - "After each archive, run Check before delete" moved from the queue group to the
   Archive page. D97 removes it.
 - **Where Check before delete and Delete laptop copy go:** on the Archive page.
@@ -2399,7 +2400,7 @@ Affects: SPEC section 8, `movecopy.py` (`check_after_archive()`, `ArchiveCheck`,
 
 ## D98. Queue items from the Viewer wait for their folder
 
-Closes O59. Amends D81. Team feedback on 1.2 (2026-10-23): Add to queue in the Viewer
+Closes O59. Amends D81 and D96. Team feedback on 1.2 (2026-10-23): Add to queue in the Viewer
 refused a laptop recording while no NAS folder for archives was chosen, and an
 archived recording while no copy folder was set. The user then had to choose the
 folder and add the recordings again, which every overnight batch met. The user
@@ -2410,8 +2411,8 @@ questions 5 to 7.
   folder" or ○ "Needs a copy folder", in the to-do colour. The item keeps the
   recording's relative path.
 - The tab then shows the page with the missing folder, Archive or Copy, and puts the
-  cursor in the field. While an operation runs the pages are locked, so the page stays
-  as it is; the result line names the page.
+  cursor in the field. While an operation started from the form runs, the pages are
+  locked, so the page stays as it is; the result line names the page.
 - Each folder field that items wait for has the amber frame of a required field
   (D95), and its placeholder reads "Required for the items that wait in the queue". A
   line under the queue says how many items wait for which folder and where to choose
@@ -2435,6 +2436,12 @@ questions 5 to 7.
 - Both folder fields stay usable while an operation runs, so recordings added during
   a queue run can get their folder. A change there leaves a running form's destination
   as it is (D96).
+- **The pages during a queue run** (amends D96): the pages stay usable while the queue
+  runs, and the tab shows the page of a missing folder then too. With the pages locked,
+  the NAS folder field on the Archive page could not be reached from the Copy page
+  during a run (found while writing the manual test). The form runs nothing during a
+  queue run, so a change of page there drops no running transfer. While an operation
+  started from the form runs, the pages stay locked.
 - An item that waits for its folder holds its recording like a waiting item: the Log
   tab cannot delete the entry (D89), the form's Run stays disabled for the same
   archive (D86), and closing the window asks first (D81). Two copies of one recording

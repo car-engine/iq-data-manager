@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | Branch | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` |
-| Commits | The commit of this work and report |
+| Commits | `85e7d7d` |
 | Tests | 1,996 passed, 4 skipped (`pytest`); `ruff check` clean |
 | Report date | 2026-10-23 |
 | Merge status | Not merged. The last of three branches of version 1.3.0; it holds all of it. |
@@ -85,7 +85,14 @@ The whole version, for the table "Code paths that delete or overwrite a file"
    folder and clicked Start would have seen nothing happen. Fixed: Start is enabled
    once each folder that items wait for holds text, and Start fills the items in
    before it runs. `test_start_takes_a_folder_typed_without_enter`.
-2. **The NAS folder field cleared by the program** (not by typing) leaves the form's
+2. **The pages were locked during a queue run.** Found while writing step 3.6 of the
+   manual test: with the Copy page shown, an item added during a run that waited for
+   the NAS folder could not get it, because the field is on the Archive page. Fixed:
+   the pages stay usable while the queue runs, and the tab shows the page of the
+   missing folder then too (D98, amending D96). They stay locked while an operation
+   started from the form runs. `test_items_added_while_the_queue_runs_get_their_folder_meanwhile`
+   now starts on the Copy page.
+3. **The NAS folder field cleared by the program** (not by typing) leaves the form's
    archive destination as it was. Typing in the field, or Browse, refills it. This
    matters only to scripts, such as the screenshot script.
 

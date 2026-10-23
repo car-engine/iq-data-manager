@@ -146,9 +146,9 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O53, Logged by is typed by the user (D94) | Done, merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
 | O54, fields to fill in or correct are framed (D95) | Done, merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | `b29c497` (with its report), `0de5087` (the manual test), `808b97b` (the tooltip), `101ac99` (the dropdown frame), `b3b3bec` (STATUS) | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
 | Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `0a5b3cd` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
+| O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `10fa5d2` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
 | O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
-| O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | The commit of this work, with its report and USER_GUIDE.md section 5 | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
+| O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | `85e7d7d` (with its report and USER_GUIDE.md section 5), plus the commit of the manual checklist's record | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with

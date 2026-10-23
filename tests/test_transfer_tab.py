@@ -1179,12 +1179,15 @@ def test_items_added_while_the_queue_runs_get_their_folder_meanwhile(
     other = second_recording(env, make_recording)
     tab = env.tab()
     queued_from_viewer(env, tab, env.rid)
+    tab.show_page(Page.COPY)
     tab.start_queue_button.click()
     env.qtbot.waitUntil(lambda: tab.progress_label.text().startswith("1 of"), timeout=10_000)
+    assert tab.pages.tabBar().isEnabled()  # the form runs nothing during a queue run
     tab.nas_folder_edit.clear()
     tab.add_recordings([other])
     env.qtbot.waitUntil(lambda: len(tab.queue) == 2, timeout=10_000)
     assert tab.queue[1].state is QueueState.NEEDS_NAS_FOLDER
+    assert tab.page() is Page.ARCHIVE  # the folder field is reachable
     assert tab.nas_folder_edit.isEnabled()
     tab.nas_folder_edit.setText(str(env.nas / "2027"))
     tab.nas_folder_edit.editingFinished.emit()

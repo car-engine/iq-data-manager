@@ -617,11 +617,11 @@ The tab (`gui/transfer_tab.py`, logic in `movecopy.py`) runs one operation at a 
 a preview, a copy, an archive, a check or a deletion. All run in a worker thread. The
 queue (below) runs its items one after another, each as one such operation.
 
-- **Locked form.** While an operation runs, the tab's inputs and pages are locked.
-  The NAS folder for archives and the folder for copies stay usable, for recordings
-  added from the Viewer (D98). The
-  Viewer
-  and the Log tab stay usable. The Viewer's "Archive / copy" button opens no other
+- **Locked form.** While an operation runs, the tab's inputs are locked, and while an
+  operation started from the form runs, the pages are locked too. During a queue run
+  the pages stay usable. The NAS folder for archives and the folder for copies stay
+  usable, for recordings added from the Viewer (D98). The Viewer and the Log tab stay
+  usable. The Viewer's "Archive / copy" button opens no other
   recording until the operation ends. Settings Save waits for it.
 - **Progress.** A copy shows a bar by bytes, files and bytes done, the speed over the
   last 10 s and the time left. A check shows bytes hashed and files checked. A

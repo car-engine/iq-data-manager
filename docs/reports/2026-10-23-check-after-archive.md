@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | Branch | `check-after-archive`, from `transfer-pages` at `1cf1bf7` |
-| Commits | The commit of this work and report |
+| Commits | `db22f57` |
 | Tests | 1,987 passed, 4 skipped (`pytest`); `ruff check` clean |
 | Report date | 2026-10-23 |
 | Merge status | Not merged. The second of three branches of version 1.3.0. |
