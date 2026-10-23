@@ -192,15 +192,22 @@ Requests, faults, questions and known gaps that are not yet decided or done. The
 default is what an agent proposes unless the user decides otherwise. Raise each item
 in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
-table in [reports/M0.md](reports/M0.md). The next free number is O60.
+table in [reports/M0.md](reports/M0.md). The next free number is O65.
 
 O53 to O59 came from the team's feedback on 1.2 (2026-10-23). Version 1.2.1 closed O53
-to O56 (D92 to D95); the work of version 1.3.0 closed O57 to O59 (D96 to D98).
+to O56 (D92 to D95); the work of version 1.3.0 closed O57 to O59 (D96 to D98). O60 to
+O64 come from the user's manual test of 1.3.0 (2026-10-24); the "Proposed default"
+column holds the agent's recommendation, not yet approved.
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
+| O60 | The Archive and Copy pages do not mark the field to fill in: an empty NAS folder for archives (step 1.2), or the field behind a preview error such as "Choose a destination folder" | 1.3.0, before the release | Frames as in the Log tab (D95), shown as the form changes: amber for an empty field to fill in, red for a wrong value with the reason as tooltip. An empty destination frames its folder field when that is empty too. Errors that belong to no field get no frame. | Manual test of 1.3.0, step 1.2 and the user's note |
+| O61 | The Check page's preview line "The checks on the Check page start from their own buttons." reads strangely | 1.3.0, before the release | Say what it means: 'Check archive and Compare with laptop copy need no preview. Their result shows below.', with the names in quotes (O62) | Manual test of 1.3.0, step 1.6 |
+| O62 | Names of buttons, fields, pages and panels in the app's text are not in quotation marks, so "Preview" reads as an ordinary word | 1.3.0, before the release | Double quotes round every such name in every message, tooltip, dialog and placeholder of all tabs, without a trailing "..."; a check in `tests/test_user_text.py`. The user guide's format is to be decided. | Manual test of 1.3.0, step 2.1 and the user's note |
+| O63 | Add to queue in the Viewer: the page shown should follow the action; one "Archive or copy" for a laptop and an archived recording together is ambiguous | 1.3.0, before the release | The menu offers "Archive", "Copy" and "Check archive". "Archive" adds laptop recordings and names archived ones as not added; "Copy" copies any recording to the folder for copies; the tab shows the page of the action, unless an operation from a page runs | Manual test of 1.3.0, step 3.6 |
+| O64 | The rationale for "Forget..." under Unfinished transfers rather than "Remove" | 1.3.0, before the release | No decision records one (Milestone 6). Rename it "Remove from list...": the question already says that the files and the history stay | The user's note after the manual test of 1.3.0 |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
@@ -269,6 +276,11 @@ Decided items are in `docs/DECISIONS.md` (D1–D98). The M0 review table in
 ## Pending checks for the user
 
 Things that cannot be tested on the development PC, or were tested only partly.
+
+On 2026-10-24 the user ran the manual test of 1.3.0 (`dev/test-1.3.0/CHECKLIST.html`,
+build `dist/test-1.3.0-2` from `1a8254a`) and sent the page's exported results: 24 of 25
+steps passed and none failed. Step 1.6 was not marked; its comment asked what the Check
+page's preview line means (O61). The comments and notes gave O60 to O64.
 
 - **Version 1.3.0, the manual test:** the three pages on a real display in light and
   dark mode, Run archive with its Check before delete, Stop during that check, items
