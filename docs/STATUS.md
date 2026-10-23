@@ -273,7 +273,15 @@ Things that cannot be tested on the development PC, or were tested only partly.
 - **Version 1.3.0, the manual test:** the three pages on a real display in light and
   dark mode, Run archive with its Check before delete, Stop during that check, items
   from the Viewer that wait for a folder, and a queue run with items added meanwhile.
-  The checklist is `dev/test-1.3.0/CHECKLIST.html`.
+  The checklist is `dev/test-1.3.0/CHECKLIST.html` (25 steps), on the build
+  `dist/test-1.3.0-2` (from `1a8254a`) and the data in `dev/test-1.3.0/testdata`
+  (made by `make_test_data.py`; `check_expectations.py` read the quoted texts from the
+  app offscreen). Step 0.1 shares `testdata\nas` as the stand-in NAS. A harness in
+  headless Edge (`dev/test-1.3.0/harness`) checked the page's export. Two points are
+  left to the automated tests: Compare with laptop copy on the Check page (the test
+  data holds no recording logged on the NAS) and the Archive page's start at the
+  sampled hashes when Settings says "Sizes only" (a change in Settings keeps the
+  current choice until the app starts again).
 - **Version 1.3.0 in the field:** the check after each archive on the real NAS, for a
   queue of real recordings overnight. Through a Windows share of the PC it fails for
   files whose size is not a multiple of 512 bytes (D85).
@@ -364,9 +372,17 @@ that (checked on 2026-10-23).
   the folders `o54-shots` and `o55-shots` (probe and screenshot scripts), and, after
   the manual test, `test-1.2.1` (the checklist, its data and scripts, and `harness`,
   which holds a copy of the page, a headless Edge profile and a screenshot). From the
-  1.3.0 work: `o58-shots` (a screenshot script and its output) and `commit-msg.txt`
-  (the last commit message, written to a file so that the shell command holds none of
-  the words the safety hook blocks).
+  1.3.0 work: `o58-shots` (a screenshot script and its output in `run1` and `run2`)
+  and `commit-msg.txt` (the last commit message, written to a file so that the shell
+  command holds none of the words the safety hook blocks). After the manual test of
+  1.3.0: `test-1.3.0` (the checklist, `make_test_data.py`, `check_expectations.py`,
+  the data in `testdata` (about 1 GB once the test has run) and in `data` (a first
+  version with 12 batch recordings), and `harness`, which holds a copy of the page's
+  check, a headless Edge profile and a screenshot).
+- The test builds of 1.3.0, after the manual test: `dist/test-1.3.0/`,
+  `build/work-test-1.3.0/` and `build/test-1.3.0-build.log` (made before the fix of
+  `1a8254a`, not for the test), and `dist/test-1.3.0-2/`, `build/work-test-1.3.0-2/`
+  and `build/test-1.3.0-2-build.log`. Also the share `iqtest13` of step 0.1.
 - The test builds of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/`,
   `build/test-1.2.1-build.log`, `dist/test-1.2.1-2/`, `build/work-test-1.2.1-2/` and
   `build/test-1.2.1-2-build.log`, after the manual test. Also `dev/o56-popup/`.
