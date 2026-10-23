@@ -501,3 +501,33 @@ and ask me; do not look for a workaround.
 At the end, give in chat: what was done per item, the test and lint counts, what was
 not tested and why, and the decisions I need to make next.
 ```
+
+## Version 1.2.1
+
+Used on 2026-10-23 for version 1.2.1 (tag `v1.2.1` on `485434f`; STATUS.md, "Work
+after 1.0"). The prompt was the template "Work after a release" in `docs/KICKOFF.md`,
+with `1.2.0` for the version. The input section, as the user wrote it, is below. The
+user then chose version 1.2.1 for items 1 to 4 (O53 to O56) and left items 5 to 8
+(O57 to O59) to a session for version 1.3.0.
+
+```
+Items, not sorted by importance. Assess the severity of each item when planning the fixes and sequence of fixes
+
+Logging-related
+1. "Logged by" should be made a compulsory field for someone to fill in, rather than taking to device name (which may not be useful information)
+2. When a mandatory field is not filled in, it is not very obvious beyond the fact that there is a warning on the panel + the save entry button is disabled. Perhaps there could have some colour/indicator when these fields need to be filled in? 
+3. When adding several folders - scan works, fields are populated. However, RF chain items that are automatically added are not shown in the UI. The right panel notes that certain fields like USRP, USRP gain, and Clock reference were automatically pulled. However, when you save the entry, these fields do indeed show up and get logged.
+
+Quality-of-Life
+4. Mouse wheel scrolling - when scrolling the panels using the mousewheel, there is a high tendency to accidentally mouse over a field (drop down or up/down arrow input box), and cause the value to change, potentially resulting in errors. Is it possible to disable mouse wheel scrolling for adjustment of these input fields?
+
+Archive
+5. Archiving does not being a check automatically after. Logging typically happens overnight to allow ample time for the data to transfer. This would be a good time to automatically queue a check after a log. Assess how this can be implemented, for both single archives and bulk added queue archives (check after the archive immediately? or at the end of the queue?). 
+6. The archive/copy tab is very overwhelming. The left panel is too cluttered, having both actions related to copying and archiving in one giant tab. At any one point in time, the user is only doing archival or copying. Even if they wanted to queue archives and copies, when adding each item individually, they should not need to interact with the other action (i.e., I do not need to see the copy destination folder input box when setting up and archive). Review how this can be improved (perhaps a tab for archive and copy). Queue and unfinished transfers could be shared since they apply both to archives and copy. 
+7. The "Checks and the laptop copy" box is also quite out of place. Perhaps that can be fully integrated with archival? The only situation where it is used without archive is when a copy was done without the app, or when adding legacy items. Perhaps checks can be a tab as well (so we have archive/check/copy).
+8. When queueing an archive from the view tab, if the "NAS folder for archives" is not filled in, an error is raised. The user would have to then fill in the NAS folder input box, go back to the view tab, then add the items again. This is unintuitive. When adding items to the queue, they should be brought to the page where they then fill in the required details like NAS destination. Same for copies.
+
+Order, if it matters:
+Target version (1.2.1 for fixes, 1.3.0 for features)
+Assess which items to fall into which version, and if a 1.3 deployment is warranted given the extent of the new items.
+```

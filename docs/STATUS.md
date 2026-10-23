@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-23 (work for version 1.2.1).
+its report. Last updated: 2026-10-23 (version 1.2.1 released).
 
 ## Current state
 
@@ -52,15 +52,24 @@ its report. Last updated: 2026-10-23 (work for version 1.2.1).
   support, and the shipped user guide, release notes and `defaults.example.toml`
   match their sources. At the release: 1,925 tests pass and 4 skip; `ruff check` is
   clean. The schema is unchanged (version 1).
-- **The work for version 1.2.1 is done, not merged** (2026-10-23): O53 to O56 from
-  the team's feedback on 1.2 (D92 to D95), on four branches from `wheel-guard` to
-  `required-field-marks`, listed under "Work after 1.0". At the last branch: 1,958
-  tests pass and 4 skip; `ruff check` is clean. Next: the user's manual test of
-  1.2.1 (`dev/test-1.2.1/CHECKLIST.html`, 28 steps, on the test build
-  `dist/test-1.2.1` from `b29c497` and the data in `dev/test-1.2.1/data`), then the
-  merge and the release (HANDOFF.md, section 4). O57 to O59, the Archive / copy tab,
-  are for version 1.3.0 in another session. A new session starts from the prompt
-  "Work after a release" in [KICKOFF.md](KICKOFF.md).
+- **Version 1.2.1 is released** (2026-10-23). The tag `v1.2.1` is on `485434f`;
+  `main` and the tag are pushed. It holds O56 (the mouse wheel, D92), O55 (the log
+  rows in "Several folders", D93), O53 (Logged by typed, D94) and O54 (fields to
+  fill in are framed, D95), from the team's feedback on 1.2. The user approved the
+  plan on 2026-10-23. The user's manual test of 2026-10-23 passed 26 of 28 steps;
+  step 1.3 failed because its list could not scroll and passed when repeated on a
+  longer list, and the optional step 1.7 (a touchpad) was not run. After the test the
+  Save button's tooltip quotes "Before saving", and a framed dropdown keeps its
+  Windows look (`101ac99`), which the user checked in the second test build. `main`
+  was fast-forwarded to `required-field-marks` at `b3b3bec`, then `release-1.2.1`
+  set the version and the release notes (`485434f`). The build is
+  `dist/release-1.2.1` (104 MB), made from `485434f`: `--smoke-test` passed, both
+  programs print 1.2.1, `IQDataManager-check.exe --help` lists its commands, both
+  declare long-path support, and the shipped user guide, release notes and
+  `defaults.example.toml` match their sources. At the release: 1,959 tests pass and 4
+  skip; `ruff check` is clean. The schema is unchanged (version 1).
+- **The next work** is version 1.3.0: O57 to O59, the Archive / copy tab. The ready
+  prompt is "Version 1.3.0" in [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -127,10 +136,15 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O51, logging several folders with one set-up (D90) | Done, merged | `log-several-folders`, from `delete-entry` at `9cad0d3` | `ca79895` (with its report), `7948de3`–`f7ab319` (the manual test in STATUS) | [2026-10-23-log-several-folders](reports/2026-10-23-log-several-folders.md) |
 | O52, a deleted entry's number given again (D91) | Done, merged | `queue-entry-check`, from `log-several-folders` at `f7ab319` | `fc64422` (with its report) | [2026-10-23-queue-entry-check](reports/2026-10-23-queue-entry-check.md) |
 | Release 1.2.0 | Released: tag `v1.2.0`, pushed | `release-1.2.0`, from `main` at `fc64422` | `616b18c`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| O56, the mouse wheel never changes a field (D92) | Done, not merged | `wheel-guard`, from `main` at `f22bc20` | `e9977e6` (with its report) | [2026-10-23-wheel-guard](reports/2026-10-23-wheel-guard.md) |
-| O55, "Several folders" shows each folder's log rows (D93) | Done, not merged | `batch-log-rf-rows`, from `wheel-guard` at `e9977e6` | `b5aaa55` (with its report) | [2026-10-23-batch-log-rf-rows](reports/2026-10-23-batch-log-rf-rows.md) |
-| O53, Logged by is typed by the user (D94) | Done, not merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
-| O54, fields to fill in or correct are framed (D95) | Done, not merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | The commit of the code and its report | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
+| O56, the mouse wheel never changes a field (D92) | Done, merged | `wheel-guard`, from `main` at `f22bc20` | `e9977e6` (with its report; also records O53 to O59) | [2026-10-23-wheel-guard](reports/2026-10-23-wheel-guard.md) |
+| O55, "Several folders" shows each folder's log rows (D93) | Done, merged | `batch-log-rf-rows`, from `wheel-guard` at `e9977e6` | `b5aaa55` (with its report) | [2026-10-23-batch-log-rf-rows](reports/2026-10-23-batch-log-rf-rows.md) |
+| O53, Logged by is typed by the user (D94) | Done, merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
+| O54, fields to fill in or correct are framed (D95) | Done, merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | `b29c497` (with its report), `0de5087` (the manual test), `808b97b` (the tooltip), `101ac99` (the dropdown frame), `b3b3bec` (STATUS) | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
+| Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+
+The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
+`main` as fast-forwards on 2026-10-23. None was pushed. They are not deleted yet;
+deleting them with `git branch -d` waits for the user's approval.
 
 The five branches of 1.2.0, from `band-from-fc` to `release-1.2.0`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -248,14 +262,8 @@ Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **The manual test of 1.2.1** (`dev/test-1.2.1/CHECKLIST.html`) ran on 2026-10-23:
-  26 of 28 steps passed. Step 1.3 failed because the band list fits its popup and
-  cannot scroll (a fault of the step, shown by `dev/o56-popup/probe.py`); a repeat
-  with a longer list is open. Step 1.7, the wheel on a touchpad, was not run. The
-  tooltip of step 2.1 now quotes "Before saving", as the user asked. The user
-  repeated step 1.3 on a catalogue with 15 sites (`dev/test-1.2.1/data-sites`): the
-  long list scrolls. For step 4.2 a dropdown's frame is now painted by a holder
-  (`101ac99`); the user looks at it in the second test build, `dist/test-1.2.1-2`.
+- **Version 1.2.1 in the field:** the mouse wheel on a laptop's touchpad over a
+  dropdown (step 1.7 of the manual test, not run), and a theme switch on a team PC.
 
 - **Version 1.2 in the field:** several real folders of one day on the NAS (scan
   time over the network, and Cancel during a long scan, step 3.16 of the manual
@@ -268,6 +276,16 @@ Things that cannot be tested on the development PC, or were tested only partly.
   2026-10-22). M8.md, part 2 recorded that every file failed; the manual test of
   2026-10-22 read 64,000-byte files and failed 4,000-byte files. A limit of such a
   share; the real NAS read 1,000,000-byte files.
+
+On 2026-10-23 the user ran the manual test of 1.2.1 (`dev/test-1.2.1/CHECKLIST.html`,
+build `dist/test-1.2.1` from `b29c497`, synthetic data) and sent the page's exported
+results: 26 of 28 steps passed. Step 1.3 failed because the band list fits its popup
+and cannot scroll (a fault of the step, shown by `dev/o56-popup/probe.py`); the user
+repeated it on a catalogue with 15 sites (`dev/test-1.2.1/data-sites`), and the long
+list scrolled. Step 1.7, the wheel on a touchpad, was not run. After the test the
+tooltip of step 2.1 quotes "Before saving", as the user asked, and a dropdown's frame
+is painted by a holder (`101ac99`), which the user found fine in the second test
+build, `dist/test-1.2.1-2`.
 
 On 2026-10-23 the user ran the manual test of 1.2 (`dev/test-1.2/CHECKLIST.html`,
 build `dist/test-1.2` from `ca79895`, synthetic data) and sent the page's exported
@@ -314,9 +332,11 @@ that (checked on 2026-10-23).
 
 - Old builds: `dist/smoke-1/`, `dist/smoke-2/`, `dist/m7-4/`, `dist/m8-1/`,
   `dist/m8-2/`, `dist/review-1/` and `dist/review-1.1/`. Keep the `release-*`
-  folders the team may still use: `dist/release-1.2.0/` stays; `dist/release-1.1.1/`,
-  `dist/release-1.1.0/` and `dist/release-1.0.0/` can go once the team runs 1.2.0.
-- `build/spec-removed-sections.md` and `build/release-1.2.0-build.log`.
+  folders the team may still use: `dist/release-1.2.1/` stays; `dist/release-1.2.0/`,
+  `dist/release-1.1.1/`, `dist/release-1.1.0/` and `dist/release-1.0.0/` can go once
+  the team runs 1.2.1.
+- `build/spec-removed-sections.md`, `build/release-1.2.0-build.log`,
+  `build/release-1.2.1-build.log` and `build/work-release-1.2.1/`.
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/` and
   `fixtures_out/m3-manual/`.
 - Under `dev/`: `test.db`, `m3.db` and `scratch.db` (scratch databases; the first two

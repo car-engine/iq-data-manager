@@ -1,22 +1,22 @@
-# Handoff: IQ Data Manager after release 1.2.0
+# Handoff: IQ Data Manager after release 1.2.1
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds, and what is still open. It points to the other documents
-for the detail. Last updated: 2026-10-23, at the release of version 1.2.0.
+for the detail. Last updated: 2026-10-23, at the release of version 1.2.1.
 [STATUS.md](STATUS.md) is updated after every piece of work and is the current record.
 
 ## 1. State
 
 | | |
 | --- | --- |
-| Version | 1.2.0, tag `v1.2.0` on `616b18c` (annotated, pushed, 2026-10-23). Earlier: 1.1.1 (`v1.1.1` on `3108c63`), 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
-| `main` | `616b18c` at the release, pushed to `origin`; a later commit records the release |
-| Tests | 1,925 passed, 4 skipped (`pytest`); `ruff check` clean |
-| Release build | `dist/release-1.2.0/IQDataManager/` on the development PC, built from `616b18c`. The older `dist/release-*` folders stay until the team runs 1.2.0. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Version | 1.2.1, tag `v1.2.1` on `485434f` (annotated, pushed, 2026-10-23). Earlier: 1.2.0 (`v1.2.0` on `616b18c`), 1.1.1 (`v1.1.1` on `3108c63`), 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
+| `main` | `485434f` at the release, pushed to `origin`; a later commit records the release |
+| Tests | 1,959 passed, 4 skipped (`pytest`); `ruff check` clean |
+| Release build | `dist/release-1.2.1/IQDataManager/` on the development PC, built from `485434f`. The older `dist/release-*` folders stay until the team runs 1.2.1. `dist/` is gitignored, so a new PC builds its own with README "Build". |
 | Schema | Version 1, unchanged since 1.0.0 (section 5) |
 | Milestones | 0 to 8 done, then work after 1.0 from open items (STATUS.md, "Work after 1.0"). |
-| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). The user's manual test of 1.2 passed (2026-10-23). |
-| Next | The team's feedback on 1.2, and the field checks of 1.2 (section 6). The prompt is "Work after a release" in [KICKOFF.md](KICKOFF.md). |
+| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). The user's manual tests of 1.2 and 1.2.1 passed (2026-10-23). |
+| Next | Version 1.3.0: O57 to O59, the Archive / copy tab (section 6). The ready prompt is "Version 1.3.0" in [KICKOFF.md](KICKOFF.md). |
 
 The app is a Windows desktop tool (Python 3.12, PySide6) that logs RF IQ recordings
 into a shared SQLite catalogue on the NAS, and copies, archives and deletes recordings
@@ -31,9 +31,15 @@ with verification. The team uses the packaged build; the laptops have no Python.
    this repository. Read the notes before the first shell command.
 4. [SPEC.md](SPEC.md): the current requirements. Read the sections your change
    touches.
-5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D91. Every SPEC rule names its
+5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D95. Every SPEC rule names its
    decision.
-6. The latest reports, of version 1.2:
+6. The latest reports, of version 1.2.1:
+   [reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md) (with
+   "Notes for version 1.3.0", the plan for O57 to O59),
+   [reports/2026-10-23-batch-log-rf-rows.md](reports/2026-10-23-batch-log-rf-rows.md),
+   [reports/2026-10-23-logged-by-typed.md](reports/2026-10-23-logged-by-typed.md) and
+   [reports/2026-10-23-required-field-marks.md](reports/2026-10-23-required-field-marks.md),
+   which holds the manual test. Of version 1.2:
    [reports/2026-10-23-band-from-fc.md](reports/2026-10-23-band-from-fc.md),
    [reports/2026-10-23-delete-entry.md](reports/2026-10-23-delete-entry.md),
    [reports/2026-10-23-log-several-folders.md](reports/2026-10-23-log-several-folders.md)
@@ -55,7 +61,7 @@ after a release" and "Review of a release". Earlier prompts are in
 a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
-   with the next free number (STATUS.md names it; O53 is next on 2026-10-23), a
+   with the next free number (STATUS.md names it; O60 is next on 2026-10-23), a
    proposed default and its origin.
 2. **Plan.** Propose a plan with its test list in chat, and wait for approval
    (CLAUDE.md, "Workflow"). The safety hook blocks plan files outside the
@@ -63,7 +69,7 @@ a milestone did:
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D92 is next on 2026-10-23),
+5. **Record the decision.** A new entry in DECISIONS.md (D96 is next on 2026-10-23),
    the current requirement in SPEC.md, and the item moved to "Closed items" in
    STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
@@ -124,11 +130,18 @@ lists them the same way.
   table or column of `schema.sql` as older. It compares tables and columns only, not
   constraints or triggers (release review, finding 14). With numbered migrations this
   limit no longer matters.
-- Versions 1.1.0 and 1.1.1 changed no schema statement.
+- Versions 1.1.0 to 1.2.1 changed no schema statement.
 
 ## 6. Outstanding items
 
 STATUS.md, "Open items", is the current list. At this handoff:
+
+### Done in version 1.2.1
+
+O56 (the mouse wheel never changes a field, D92), O55 (the log rows in "Several
+folders", D93), O53 (Logged by typed by the user, D94) and O54 (fields to fill in or
+correct are framed, D95), from the team's feedback on 1.2. The reports are the four
+`docs/reports/2026-10-23-*.md` of version 1.2.1 in section 2.
 
 ### Done in version 1.2.0
 
@@ -142,6 +155,9 @@ schema change; D91 holds the reason.
 
 | ID | Item | When |
 | --- | --- | --- |
+| O57 | Check before delete straight after each archive, from the form and the queue; the check-after box goes | Version 1.3.0 |
+| O58 | The Archive / copy tab split into Archive, Check and Copy pages, with the queue and unfinished transfers shared | Version 1.3.0 |
+| O59 | Adding from the Viewer without a NAS folder or copy folder opens the page that needs it | Version 1.3.0 |
 | O19 | "Upgrade database" in the Settings tab | With the first schema migration |
 | O37 | Small files copy slowly to the NAS | Measure first; not needed for 1.x. The team has not found it a problem (2026-10-22). |
 | O40 | Unconfirmed suspicions from the release review: path work on the Qt main thread, a network error during a check, SQLite errors in the legacy import, a read-only connection after a crash | When a fault points at one of them. None seen in use (2026-10-22). |
@@ -154,6 +170,7 @@ schema change; D91 holds the reason.
 | Check before delete through a Windows share of the same PC | Fails with WinError 87 for files whose size is not a multiple of 512 bytes, most likely (D85). The real NAS passed. | Known limit; manual tests use file sizes that are multiples of 512 |
 | The GUI by eye in dark mode on Windows | Offscreen renders and the user's checks only | User, with each build |
 | Version 1.2 on the NAS: several real folders of a day (scan time, Cancel during a long scan), and a delete while a second PC works on the catalogue | The manual test used local synthetic data on one PC | User, in the field |
+| Version 1.2.1: the mouse wheel on a laptop's touchpad, and a theme switch while the app runs on a team PC | Step 1.7 of the manual test was optional and not run; tests cannot send real wheel input | User, in the field |
 
 The checks of 1.1 on the NAS and in the field passed (STATUS.md, "Pending checks for
 the user"). The user's rollout steps after 1.0 are done: the real catalogue, the
@@ -181,7 +198,9 @@ settings path needs `APPDATA`, so a Linux build would need another settings loca
 | Diagnostics | `diagnostics/`, wrapped by `tools/` and `IQDataManager-check.exe` | `diagnostics/fixtures.py` makes synthetic recordings for tests and manual tests |
 | Viewer filter | `models.RecordingFilter`, `viewer.parse_filter()`, `repository._filter_sql()`, `gui/widgets/check_combo.py` in `gui/viewer_tab.py` | Several sites, projects (with "No project") and bands since D78 |
 | Log tab state | `gui/log_tab.py`: `_carried` (kept band and fc, D79), `_log_values` and `_log_applied_for` (the recorder's log, D82, D87), `_ChannelRow.fc_log`, `fs_log` and `band_auto` (the italic marks), `_ChannelRow.fc_before` (the fc the band last followed, D88) | Code that sets a field without `textEdited` must set or clear these flags itself |
-| Several folders | `gui/log_tab.py`: `_folders`, `_selected_key`, `_views`, `_checks` (D90); `gui/widgets/folder_table.py` | Section 4 shows the selected folder's channels; `_sync_selected()` keeps what was typed there with that folder. A scanned channel keeps its size counts (`ChannelScan.size_counts`), so a refresh of 50 folders stays near 50 ms |
+| Several folders | `gui/log_tab.py`: `_folders`, `_selected_key`, `_views`, `_checks` (D90); `gui/widgets/folder_table.py` | Section 4 shows the selected folder's channels; `_sync_selected()` keeps what was typed there with that folder. A scanned channel keeps its size counts (`ChannelScan.size_counts`), so a refresh of 50 folders stays near 50 ms. The selected folder's log rows show under section 5 (`_show_log_rows()`, `batchlog.log_shown()`, D93) |
+| Field frames | `entry.field_marks()` (D95), `gui/log_tab.py`: `_show_field_marks()`, `_show_mark()`, `_restyle_sheets()`; `gui/widgets/mark_frame.py` for dropdowns | The checklist's field lines are built from `field_marks()`. A dropdown gets no style sheet; its `MarkFrame` paints the frame. A widget with a style sheet keeps its old palette after a theme switch until the sheet is set again |
+| Mouse wheel | `gui/widgets/wheel_guard.py`, installed by `MainWindow` (D92) | An application event filter; tests cannot send the real wheel input that Qt passes to the parent |
 
 ## 8. Traps that cost time before
 
