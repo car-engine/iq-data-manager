@@ -274,7 +274,7 @@ def test_the_list_checklist_names_a_shared_to_do_once(tmp_path, db_path):
 
 
 def test_the_list_checklist_with_nothing_to_save(tmp_path):
-    assert texts(batchlog.combined_items([])) == ["Add folders, then scan them"]
+    assert texts(batchlog.combined_items([])) == ['Click "Add folders", then "Scan folders"']
     a = scanned(recording(tmp_path, "a"))
     a.ticked = False
     view = batchlog.folder_items(shared_form(1), a, [a])

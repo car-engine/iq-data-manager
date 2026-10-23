@@ -133,7 +133,7 @@ def test_the_running_item_cannot_be_removed():
     running = queue.add(item(1))
     waiting = queue.add(item(2))
     queue.set_state(running.key, QueueState.RUNNING)
-    with pytest.raises(QueueError, match="Pause the queue first"):
+    with pytest.raises(QueueError, match='Click "Pause" first'):
         queue.remove(running.key)
     queue.remove(waiting.key)
     assert [i.recording_id for i in queue.items] == [1]
@@ -336,12 +336,13 @@ def test_an_item_without_a_destination_is_not_started(env):
     result, seen = env.run(waiting_item(env.rids[0]))
     assert result.state is QueueState.NOT_STARTED
     assert result.note == (
-        "The item has no destination. Choose the NAS folder for archives on the Archive page."
+        'The item has no destination. Choose the "NAS folder for archives" on the "Archive" '
+        "page."
     )
     assert seen == []
     assert env.transfers() == []
     copy, _ = env.run(waiting_item(env.rids[1], QueueKind.COPY))
-    assert copy.note.endswith("Choose the folder for copies on the Copy page.")
+    assert copy.note.endswith('Choose the "Folder for copies" on the "Copy" page.')
     assert preview_item(env.db, waiting_item(env.rids[0]), env.config).state is (
         QueueState.NEEDS_NAS_FOLDER
     )
@@ -417,7 +418,7 @@ def env(tmp_path, db_path, make_recording) -> Env:
 def test_an_archive_with_its_check_before_delete(env):
     result, seen = env.run(env.item())
     assert result.state is QueueState.DONE
-    assert "Check before delete passed" in result.note
+    assert '"Check before delete" passed' in result.note
     assert result.size_bytes == sum(c.total_bytes for c in env.infos[0].channels)
     assert env.recording().archive_state is ArchiveState.ARCHIVED
     archive, check = env.transfers()
@@ -431,8 +432,9 @@ def test_an_archive_with_its_check_before_delete(env):
     assert phases == [
         "Scanning the source folder",
         "Copying",
-        "Check before delete: reading the NAS copy",
+        CHECK_PHASE,
     ]
+    assert CHECK_PHASE == '"Check before delete": reading the NAS copy'
 
 
 def test_a_copy_is_not_followed_by_a_check(env):
@@ -451,8 +453,8 @@ def test_sizes_only_skips_the_check_and_says_why(env):
     assert result.note.startswith("Archived: transfer ")
     assert CHECK_NEEDS_HASHES in result.note
     assert result.note.endswith(
-        "Click Check before delete on the Archive page; the laptop copy can be deleted only "
-        "after it passes."
+        'Click "Check before delete" on the "Archive" page; the laptop copy can be deleted '
+        "only after it passes."
     )
     assert Phase(CHECK_PHASE) not in seen
     assert [t.operation for t in env.transfers()] == [Operation.ARCHIVE]
@@ -473,7 +475,7 @@ def test_a_failed_check_before_delete_is_check_needed(env, monkeypatch):
     item = env.item(hash_mode=HashMode.ALL)
     result, _ = env.run(item)
     assert result.state is QueueState.CHECK_NEEDED
-    assert "Check before delete failed:" in result.note
+    assert '"Check before delete" failed:' in result.note
     assert env.recording().archive_state is ArchiveState.ARCHIVED
     archive, check = env.transfers()
     assert (archive.verification, check.verification) == (Verification.PASS, Verification.FAIL)
@@ -497,7 +499,7 @@ def test_a_check_that_cannot_run_is_check_needed(env, monkeypatch, error, reason
     monkeypatch.setattr(movecopy, "check_before_delete", fail)
     result, _ = env.run(env.item())
     assert result.state is QueueState.CHECK_NEEDED
-    assert "Check before delete could not run:" in result.note
+    assert '"Check before delete" could not run:' in result.note
     assert reason in result.note
 
 
@@ -510,7 +512,7 @@ def test_a_stopped_check_before_delete_is_check_needed(env, monkeypatch):
     )
     result, _ = env.run(env.item())
     assert result.state is QueueState.CHECK_NEEDED
-    assert "Check before delete was stopped." in result.note
+    assert '"Check before delete" was stopped.' in result.note
 
 
 def test_clear_finished_keeps_archives_whose_check_is_needed():
@@ -535,7 +537,7 @@ def test_a_copy_and_a_check_archive(env):
     check = QueueItem(recording_id=env.rids[1], label="r", kind=QueueKind.CHECK_ARCHIVE)
     result, seen = env.run(check)
     assert result.state is QueueState.DONE
-    assert Phase("Check archive: scanning the NAS folder") in seen
+    assert Phase('"Check archive": scanning the NAS folder') in seen
     assert env.transfers(1)[-1].operation is Operation.CHECK
 
 
@@ -571,7 +573,7 @@ def test_an_item_does_not_run_for_an_entry_that_took_its_number(env, make_record
     assert result.state is QueueState.NOT_STARTED
     assert result.note == (
         f"Recording {env.rids[1]} is no longer the entry this queue item was made for. That "
-        "entry was deleted, and a new entry got its number. Remove this item."
+        'entry was deleted, and a new entry got its number. Select the item and click "Remove".'
     )
     assert seen == []
     assert env.transfers(1) == []
@@ -613,7 +615,7 @@ def test_a_pause_stops_the_item_and_resume_continues_it(env):
 
     paused, _ = env.run(env.item(), cancelled=lambda: stop["now"], report=report)
     assert paused.state is QueueState.PAUSED
-    assert "Resume continues it" in paused.note
+    assert '"Resume" continues it' in paused.note
     (row,) = env.transfers()
     assert row.verification is Verification.SKIPPED
     assert env.recording().archive_state is ArchiveState.LOCAL

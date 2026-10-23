@@ -424,8 +424,8 @@ def test_unrecognised_entries_are_information(make_recording):
     [
         ({"logged_by": "  "}, ItemState.TODO, "Enter the logged-by name"),
         ({"site_id": None}, ItemState.TODO, "Choose a site"),
-        ({"file_duration_s": 0.0}, ItemState.ERROR, "File duration must be positive"),
-        ({"header_bytes": -1}, ItemState.ERROR, "Header bytes must be 0 or more"),
+        ({"file_duration_s": 0.0}, ItemState.ERROR, '"File duration" must be positive'),
+        ({"header_bytes": -1}, ItemState.ERROR, '"Header bytes" must be 0 or more'),
     ],
 )
 def test_missing_required_field(make_recording, change, state, message):
@@ -525,7 +525,10 @@ def test_network_folder_outside_nas_roots_is_information(make_recording):
     )
     items = ready_items(form_for(scan, 1), scan, location)
     assert can_save(items)
-    assert any("outside the NAS locations in Settings" in t for t in texts(items, ItemState.INFO))
+    assert any(
+        'outside the "NAS locations" in the "Settings" tab' in t
+        for t in texts(items, ItemState.INFO)
+    )
 
 
 def test_duration_change_without_rescan_changes_the_check(make_recording):
@@ -959,7 +962,7 @@ def test_an_edit_of_an_entry_that_changed_writes_nothing(db_path, site_id, make_
         save_edit(db_path, edited_remarks(original), original=original)
     assert str(caught.value) == (
         f"Recording {original.id} changed after you opened it, for example by an archive "
-        "or a check. Open it again with Edit entry and make the change there."
+        'or a check. Open it again with "Edit entry" and make the change there.'
     )
     assert entry.load_recording(db_path, original.id) == before
 
@@ -990,8 +993,8 @@ def test_save_edit_needs_the_original_of_the_same_recording(db_path, site_id, ma
 def test_state_note():
     local = Location(storage_root="E:\\", rel_path="r", archive_state=ArchiveState.LOCAL)
     nas = Location(storage_root=NAS, rel_path="r", archive_state=ArchiveState.ARCHIVED)
-    assert entry.state_note(local, None).startswith("Archive state on save: local.")
-    assert entry.state_note(nas, None).startswith("Archive state on save: archived.")
+    assert entry.state_note(local, None).startswith('"Archive state" on save: local.')
+    assert entry.state_note(nas, None).startswith('"Archive state" on save: archived.')
     assert entry.state_note(None, None) == ""
 
 
@@ -1209,7 +1212,7 @@ def test_folder_07_case_is_caught_without_inference(make_recording):
     form = form_for(fixed, 1, file_duration_s=0.5, file_duration_inferred=True)
     items = ready_items(form, fixed, local_location(info))
     assert can_save(items), texts(items)
-    assert "File duration set to 0.5 s from the spacing of the file names." in texts(
+    assert '"File duration" set to 0.5 s from the spacing of the file names.' in texts(
         items, ItemState.INFO
     )
 
@@ -1423,9 +1426,11 @@ def test_users_example_gives_information_only(make_recording):
     form, scan, info, items = rf_items(make_recording, params)
     assert can_save(items)
     infos = texts(items, ItemState.INFO)
-    assert "Ch 0: Antenna repeats the Recording value." in infos
-    assert "Ch 1: Antenna is LogP; the Recording value Omni applies to the other channels." in infos
-    assert "Ch 2: Antenna repeats the Recording value." in infos
+    assert 'Ch 0: Antenna repeats the "Recording" value.' in infos
+    assert 'Ch 1: Antenna is LogP; the "Recording" value Omni applies to the other channels.' in (
+        infos
+    )
+    assert 'Ch 2: Antenna repeats the "Recording" value.' in infos
     assert "antenna will be saved as Antenna, the spelling already in use." in infos
     rec = build_recording(form, scan=scan, location=local_location(info))
     assert [(p.param, p.value, p.channel_index) for p in rec.params] == [

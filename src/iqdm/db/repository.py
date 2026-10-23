@@ -433,7 +433,7 @@ def history_text(recording_id: int) -> str:
     """Why a recording with an archive, a copy or a delete cannot be deleted."""
     return (
         f"Recording {recording_id} has an archive or a copy in its history, so it cannot be "
-        "deleted. Correct it with Save entry instead."
+        'deleted. Correct it with "Save entry" instead.'
     )
 
 
@@ -782,7 +782,11 @@ def reused_text(recording_id: int, made_for: str) -> str:
 
     made_for names what was made for the old entry: 'preview' or 'queue item'.
     """
-    again = "Preview it again." if made_for == "preview" else "Remove this item."
+    again = (
+        'Click "Preview" again.'
+        if made_for == "preview"
+        else 'Select the item and click "Remove".'
+    )
     return (
         f"Recording {recording_id} is no longer the entry this {made_for} was made for. "
         f"That entry was deleted, and a new entry got its number. {again}"

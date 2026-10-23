@@ -265,13 +265,13 @@ def marks_of(rec, *, folder="", time_errors=None, preview=None, **kw):
 def test_an_empty_destination_marks_the_folder_that_fills_it(rec):
     archive = {"operation": Operation.ARCHIVE, "destination": ""}
     assert marks_of(rec, **archive) == {
-        FormField.FOLDER: (ItemState.TODO, "Choose the NAS folder for archives.")
+        FormField.FOLDER: (ItemState.TODO, 'Choose the "NAS folder for archives".')
     }
     assert marks_of(rec, folder="N:\\iq", **archive) == {
         FormField.DESTINATION: (ItemState.TODO, "Choose a destination folder.")
     }
     assert marks_of(rec, destination="") == {
-        FormField.FOLDER: (ItemState.TODO, "Choose the folder for copies.")
+        FormField.FOLDER: (ItemState.TODO, 'Choose the "Folder for copies".')
     }
     assert marks_of(rec) == {}  # the form helper fills in a destination
     assert marks_of(rec, recording=None, destination="") == {}
@@ -516,12 +516,18 @@ def test_a_partly_deleted_copy_counts_what_remains(archived_rec):
     assert state.step is LaptopStep.PARTLY_DELETED
     assert state.files_left == 6
     assert state.can_delete
-    assert state.text == "Partly deleted: 6 files remain in C:\\captures\\rec. Delete the rest."
+    assert state.text == (
+        'Partly deleted: 6 files remain in C:\\captures\\rec. Click "Delete laptop copy" for '
+        "the rest."
+    )
 
 
 def test_one_file_left_is_named_in_the_singular(archived_rec):
     state = laptop_copy(archived_rec, [archive(), check(), delete(3, 9)])
-    assert state.text == "Partly deleted: 1 file remains in C:\\captures\\rec. Delete the rest."
+    assert state.text == (
+        'Partly deleted: 1 file remains in C:\\captures\\rec. Click "Delete laptop copy" for '
+        "the rest."
+    )
     unknown = laptop_copy(archived_rec, [archive(n_files=None), check(), delete(3, 9)])
     assert unknown.text.startswith("Partly deleted: Some files remain in C:\\captures\\rec.")
 
@@ -594,15 +600,15 @@ def test_a_passed_check_after_an_archive(monkeypatch):
 @pytest.mark.parametrize(
     ("behaviour", "why"),
     [
-        (Verification.FAIL, "Check before delete failed: 2 files differ."),
-        (Verification.SKIPPED, "Check before delete was stopped. 2 files differ."),
+        (Verification.FAIL, '"Check before delete" failed: 2 files differ.'),
+        (Verification.SKIPPED, '"Check before delete" was stopped. 2 files differ.'),
         (
             DeleteRefused(["The archive copy has no file list."]),
-            "Check before delete could not run: The archive copy has no file list.",
+            '"Check before delete" could not run: The archive copy has no file list.',
         ),
         (
             DatabaseBusyError("The database is in use by someone else."),
-            "Check before delete could not run: The database is in use by someone else.",
+            '"Check before delete" could not run: The database is in use by someone else.',
         ),
         (OSError(87, "The parameter is incorrect"), "The parameter is incorrect"),
     ],
@@ -616,15 +622,15 @@ def test_a_check_after_an_archive_that_did_not_pass_says_why(monkeypatch, behavi
 def test_sizes_only_runs_no_check_after_an_archive(monkeypatch):
     result, calls = run_check_after(monkeypatch, Verification.PASS, HashMode.NONE)
     assert calls == []
-    assert result.why == f"Check before delete was not run: {CHECK_NEEDS_HASHES}"
+    assert result.why == f'"Check before delete" was not run: {CHECK_NEEDS_HASHES}'
 
 
 def test_the_check_needed_note_points_at_the_archive_page():
-    note = check_needed_note(12, "Check before delete was stopped.")
+    note = check_needed_note(12, '"Check before delete" was stopped.')
     assert note == (
         "Archived: transfer 12 passed its check, and the recording now points at the NAS "
-        "copy. The laptop copy stays. Check before delete was stopped. Click Check before "
-        "delete on the Archive page; the laptop copy can be deleted only after it passes."
+        'copy. The laptop copy stays. "Check before delete" was stopped. Click "Check before '
+        'delete" on the "Archive" page; the laptop copy can be deleted only after it passes.'
     )
 
 

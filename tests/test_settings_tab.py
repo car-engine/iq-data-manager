@@ -416,7 +416,7 @@ def test_new_database_creates_the_file_and_fills_the_field(
     assert new_db_dialogs["asked"] == [new_database_question(target)]
     assert tab.db_edit.text() == str(target)
     assert tab.db_state.state is ItemState.OK
-    assert tab.message_label.text() == f"Created {target}. Click Save to use it."
+    assert tab.message_label.text() == f'Created {target}. Click "Save" to use it.'
     assert tab.new_db_button.isEnabled()
     assert tab.save_button.isEnabled()
     assert not config_file.exists()  # Save switches to it
@@ -717,7 +717,7 @@ def test_a_wrong_hidden_key_blocks_save(make_tab, config_file):
     tab = make_tab(config_file)
     tab.db_edit.setText("new.db")
     assert "storage_roots" in tab.problem_label.text()  # named, to fix by hand (D36)
-    assert "Correct it in the file (Open folder)" in tab.problem_label.text()
+    assert 'Correct it in the file ("Open folder")' in tab.problem_label.text()
     assert not tab.save_button.isEnabled()
 
     write(config_file, "network_speed_mb_s = 50\n")

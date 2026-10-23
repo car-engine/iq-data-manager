@@ -73,8 +73,8 @@ from iqdm.viewer import recording_folder, scan_differences
 
 NAMES_IN_NOTES = 10  # file names listed in a transfer_log note
 CHECK_NEEDS_HASHES = (
-    "Check before delete reads the content of the NAS files. Choose a check that hashes "
-    "a sample of the files or every file."
+    '"Check before delete" reads the content of the NAS files. Choose a check that '
+    "hashes a sample of the files or every file."
 )
 FILE_LIST_UNUSABLE = (
     "The file list of this archive cannot be read, or it changed after the archive. The "
@@ -195,8 +195,8 @@ def _archive_errors(
         errors.append("An archive takes the whole recording with all its channels.")
     if selection.differences:
         errors.append(
-            "The folder differs from the database entry. Scan it again in the Log tab "
-            "and save the entry first. " + " ".join(selection.differences)
+            'The folder differs from the database entry. Scan it again in the "Log '
+            'recording" tab and save the entry first. ' + " ".join(selection.differences)
         )
     if location is None:
         return errors
@@ -777,7 +777,8 @@ def check_archive(
             ):
                 notes += (
                     f" The files are {spacing:g} s apart, but the entry gives a file "
-                    f"duration of {rec.file_duration_s:g} s. Correct it in the Log tab."
+                    f'duration of {rec.file_duration_s:g} s. Correct it in the "Log recording" '
+                    "tab."
                 )
         else:
             verification = Verification.PASS

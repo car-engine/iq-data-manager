@@ -501,7 +501,7 @@ def combined_items(
     folder's name. Information lines stay in the checklist of the selected folder.
     """
     if not views:
-        return [ChecklistItem(ItemState.TODO, "Add folders, then scan them")]
+        return [ChecklistItem(ItemState.TODO, 'Click "Add folders", then "Scan folders"')]
     open_views = [(f, v) for f, v in views if f.ticked and not f.saved]
     if not open_views:
         if all(f.saved for f, _ in views):

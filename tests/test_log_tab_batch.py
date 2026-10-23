@@ -137,7 +137,7 @@ def test_the_mode_switch_shows_the_folder_list(qtbot, tab):
     assert tab.batch_mode
     assert tab.several_page.isVisibleTo(tab) and not tab.one_page.isVisibleTo(tab)
     assert not tab.duration_spin.isEnabled()
-    assert texts(tab.checklist.items) == ["Add folders, then scan them"]
+    assert texts(tab.checklist.items) == ['Click "Add folders", then "Scan folders"']
     assert tab.save_button.text() == "Save entries"
     assert not tab.save_button.isEnabled()
     tab.one_radio.setChecked(True)  # an empty list asks nothing

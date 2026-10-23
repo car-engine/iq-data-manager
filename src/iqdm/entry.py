@@ -542,10 +542,13 @@ def state_note(location: Location | None, original: Recording | None) -> str:
         return ""
     if location.archive_state is ArchiveState.ARCHIVED:
         return (
-            "Archive state on save: archived. The transfer log will mark it as not verified "
-            "against a source."
+            '"Archive state" on save: archived. The transfer log will mark it as not '
+            "verified against a source."
         )
-    return "Archive state on save: local. Archive it to the NAS later from the Archive / copy tab."
+    return (
+        '"Archive state" on save: local. Archive it to the NAS later from the "Archive / '
+        'copy" tab.'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -808,9 +811,9 @@ def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistI
         if key in marks
     ]
     if not math.isfinite(form.file_duration_s) or form.file_duration_s <= 0:
-        items.append(ChecklistItem(ItemState.ERROR, "File duration must be positive"))
+        items.append(ChecklistItem(ItemState.ERROR, '"File duration" must be positive'))
     if form.header_bytes < 0:
-        items.append(ChecklistItem(ItemState.ERROR, "Header bytes must be 0 or more"))
+        items.append(ChecklistItem(ItemState.ERROR, '"Header bytes" must be 0 or more'))
     for name, label, _text_of, _parse in _CHANNEL_FIELDS:
         empty = []
         for index in indices:
@@ -972,10 +975,10 @@ def _param_consistency_items(form: EntryInput, known_names: Sequence[str]) -> li
             continue  # a conflict, reported above
         name, own, shared = spelling[key], channel_values[0], recording_values[0]
         if _value_key(own) == _value_key(shared):
-            text = f"Ch {scope}: {name} repeats the Recording value."
+            text = f'Ch {scope}: {name} repeats the "Recording" value.'
         else:
             text = (
-                f"Ch {scope}: {name} is {_value_text(own)}; the Recording value "
+                f'Ch {scope}: {name} is {_value_text(own)}; the "Recording" value '
                 f"{_value_text(shared)} applies to the other channels."
             )
         items.append(ChecklistItem(ItemState.INFO, text))
@@ -1013,7 +1016,7 @@ def _spacing_items(form: EntryInput, scan: ScanResult) -> list[ChecklistItem]:
         return [
             ChecklistItem(
                 ItemState.INFO,
-                f"File duration set to {duration:g} s from the spacing of the file names.",
+                f'"File duration" set to {duration:g} s from the spacing of the file names.',
             )
         ]
     return []
@@ -1191,8 +1194,8 @@ def checklist(
         items.append(
             ChecklistItem(
                 ItemState.INFO,
-                "The folder is on a network share outside the NAS locations in Settings, "
-                "so it is logged as local.",
+                'The folder is on a network share outside the "NAS locations" in the '
+                '"Settings" tab, so it is logged as local.',
             )
         )
     parent = None if location is None or original is not None else channel_like_parent(location)
@@ -1413,7 +1416,7 @@ def changed_text(recording_id: int | None) -> str:
     """The message when the stored entry changed after the edit opened (D76)."""
     return (
         f"Recording {recording_id} changed after you opened it, for example by an archive "
-        "or a check. Open it again with Edit entry and make the change there."
+        'or a check. Open it again with "Edit entry" and make the change there.'
     )
 
 
@@ -1475,7 +1478,7 @@ class DeletionCheck:
 def changed_delete_text(recording_id: int | None) -> str:
     return (
         f"Recording {recording_id} changed after you opened it, for example by an archive "
-        "or a check. Open it again with Edit entry, then delete it."
+        'or a check. Open it again with "Edit entry", then delete it.'
     )
 
 

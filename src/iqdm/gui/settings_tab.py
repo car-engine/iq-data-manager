@@ -74,7 +74,7 @@ from iqdm.timeutil import display_time, iso_to_unix, offset_label
 PREVIEW_ISO = "2026-09-30T02:00:00Z"  # a fixed instant for the offset preview
 DB_FILE_FILTER = "SQLite database (*.db);;All files (*)"
 FILE_NOTE = (
-    "Save keeps the previous settings in config.toml.bak. Comments typed into the "
+    '"Save" keeps the previous settings in config.toml.bak. Comments typed into the '
     "file by hand are not kept."
 )
 ROOTS_RULE = (
@@ -101,7 +101,7 @@ def new_database_question(path: Path) -> str:
         f"Create a new, empty database?\n\n{path}\n\n"
         "The new database is separate from the shared catalogue. Recordings saved in it "
         "do not appear in the shared catalogue. Other people see them only if they "
-        "choose this file.\n\nClick Save afterwards to use the new database."
+        'choose this file.\n\nClick "Save" afterwards to use the new database.'
     )
 
 
@@ -198,7 +198,7 @@ def nas_root_message(text: str) -> str:
 OFFSET_MESSAGE = "Use whole or quarter hours, for example 5.5 or 5.75."
 COVERAGE_MESSAGE = "Use a value above 0 % and at most 100 %."
 COVERAGE_TOOLTIP = (
-    "The Viewer marks a recording or channel whose coverage is below this value. "
+    'The "Viewer" tab marks a recording or channel whose coverage is below this value. '
     "Coverage is the share of the recording's time span that has data files."
 )
 COVERAGE_STEP_PERCENT = 0.5
@@ -209,7 +209,7 @@ TRANSFER_TOOLTIPS = {
         "A copy to a PC goes to this folder, under the recording's own folder path. "
         "You can change the destination for each copy."
     ),
-    "speed": "Used for the time estimates in the Archive / copy tab. Nothing is limited.",
+    "speed": 'Used for the time estimates in the "Archive / copy" tab. Nothing is limited.',
     "hash": "What the check after a copy compares, unless you choose otherwise there.",
     "sample": "The share of the files that a sample check hashes, at least one file.",
     "margin": "A copy or an archive starts only if this much space stays free afterwards.",
@@ -594,7 +594,7 @@ class SettingsTab(QWidget):
         self.defaults_note.setText(
             info_note(
                 "This PC has no settings file yet. The values shown come from the defaults "
-                f"file in the program folder ({self._source}). Save writes them to the "
+                f'file in the program folder ({self._source}). "Save" writes them to the '
                 "settings file above."
             )
             if self.reads_defaults
@@ -611,7 +611,7 @@ class SettingsTab(QWidget):
         if self.db_override is not None:
             self.db_override_note.setText(
                 info_note(
-                    f"Started with --db: this run uses {self.db_override}. Save writes the "
+                    f'Started with --db: this run uses {self.db_override}. "Save" writes the '
                     "path above to the file. The --db path stays in force until the app "
                     "restarts."
                 )
@@ -636,15 +636,15 @@ class SettingsTab(QWidget):
             return self._defaults_problem()
         if self._read_error is not None:
             return (
-                "The settings file cannot be read. Save replaces it with the values shown "
+                'The settings file cannot be read. "Save" replaces it with the values shown '
                 "here and keeps the old file as config.toml.bak.",
                 self._read_error,
             )
         if self._hidden_error is not None:
             return (
                 f"The settings file has a wrong value that this tab does not show: "
-                f"{self._hidden_error}. Correct it in the file (Open folder), then click "
-                "Reload from file.",
+                f'{self._hidden_error}. Correct it in the file ("Open folder"), then click '
+                '"Reload from file".',
                 self._hidden_error,
             )
         if self._file_error is not None:
@@ -659,7 +659,7 @@ class SettingsTab(QWidget):
         where = "The defaults file in the program folder"
         if self._read_error is not None:
             return (
-                f"{where} cannot be read. Save writes the values shown here to the "
+                f'{where} cannot be read. "Save" writes the values shown here to the '
                 "settings file above.",
                 self._read_error,
             )
@@ -773,7 +773,7 @@ class SettingsTab(QWidget):
             target = target.with_name(target.name + NEW_DB_SUFFIX)
         if target.exists():
             self.show_message(
-                f"{target} already exists. Choose a new file name, or use Browse to "
+                f'{target} already exists. Choose a new file name, or use "Browse" to '
                 "choose that file."
             )
             return
@@ -799,7 +799,7 @@ class SettingsTab(QWidget):
         self.new_db_button.setEnabled(True)
         self.db_edit.setText(str(target))
         self.check_database()
-        self.show_message(f"Created {target}. Click Save to use it.")
+        self.show_message(f'Created {target}. Click "Save" to use it.')
 
     def _database_not_created(self, target: Path, exc: BaseException) -> None:
         self.new_db_button.setEnabled(True)

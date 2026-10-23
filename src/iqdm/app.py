@@ -33,24 +33,27 @@ from iqdm.transfer.manifest import manifests_dir
 APP_NAME = "IQ Data Manager"
 TAB_COUNT = 4
 CLEAR_LOG_TAB_QUESTION = (
-    "The new database file or NAS locations clear the Log tab form. The form holds input "
-    "that is not saved.\n\nSave the settings and clear the form?"
+    'A new "Database file" or new "NAS locations" clear the form of the "Log recording" tab. '
+    "The form holds input that is not saved.\n\nSave the settings and clear the form?"
 )
-LOG_TAB_SAVING = "The Log tab is saving a recording. Save the settings when it has finished."
+LOG_TAB_SAVING = (
+    'The "Log recording" tab is saving a recording. Save the settings when it has finished.'
+)
 LOG_TAB_SAVING_EDIT = (
-    "The Log tab is saving a recording. Click Edit entry again when it has finished."
+    'The "Log recording" tab is saving a recording. Click "Edit entry" again when it has '
+    "finished."
 )
 TRANSFER_RUNNING = (
-    "An operation is running in the Archive / copy tab. Save the settings when it has "
+    'An operation is running in the "Archive / copy" tab. Save the settings when it has '
     "finished."
 )
 TRANSFER_BUSY = (
-    "An operation is running in the Archive / copy tab. Open the recording there when it "
-    "has finished."
+    'An operation is running in the "Archive / copy" tab. Open the recording there when '
+    "it has finished."
 )
 CLOSE_QUESTION = (
-    "An operation is running in the Archive / copy tab.\n\nStop it and close the app? A "
-    'stopped copy or archive stays under "Unfinished transfers", where Open in form '
+    'An operation is running in the "Archive / copy" tab.\n\nStop it and close the app? A '
+    'stopped copy or archive stays under "Unfinished transfers", where "Open in form" '
     "continues it later. The queue is not kept."
 )
 
@@ -59,8 +62,8 @@ def folders_close_question(unsaved: int) -> str:
     """Closing the app while the Log tab lists folders not yet saved (D90)."""
     folders = "1 folder" if unsaved == 1 else f"{unsaved} folders"
     return (
-        f"The Log tab lists {folders} not yet saved.\n\nClose the app? The list is not "
-        "kept; the folders and their files stay as they are."
+        f'The "Log recording" tab lists {folders} not yet saved.\n\nClose the app? The '
+        "list is not kept; the folders and their files stay as they are."
     )
 
 
@@ -68,16 +71,16 @@ def queue_close_question(waiting: int) -> str:
     """Closing the app with queue items that have not run (D81)."""
     items = "1 item" if waiting == 1 else f"{waiting} items"
     return (
-        f"The queue in the Archive / copy tab holds {items} that have not run.\n\nClose "
+        f'The queue in the "Archive / copy" tab holds {items} that have not run.\n\nClose '
         "the app? The queue is not kept. A paused copy or archive stays under "
-        '"Unfinished transfers", where Open in form continues it later.'
+        '"Unfinished transfers", where "Open in form" continues it later.'
     )
 TRANSFER_TAB = "Archive / copy"
 SETTINGS_TAB = "Settings"
 SETTINGS_UNSAVED_TAB = "Settings (not saved)"
-UNSAVED_QUESTION = "The Settings tab has changes that are not saved.\n\nSave them now?"
+UNSAVED_QUESTION = 'The "Settings" tab has changes that are not saved.\n\nSave them now?'
 UNSAVED_WRONG_VALUE = (
-    "The Settings tab has changes that are not saved. A field holds a wrong value, so "
+    'The "Settings" tab has changes that are not saved. A field holds a wrong value, so '
     "the changes cannot be saved.\n\nStay and correct the field, or drop the changes?"
 )
 
@@ -113,7 +116,7 @@ def ask_unsaved_settings(parent: QWidget, *, can_save: bool, closing: bool) -> U
 
 def drop_log_input_question(recording_id: int) -> str:
     return (
-        "The Log tab form holds input that is not saved.\n\n"
+        'The form of the "Log recording" tab holds input that is not saved.\n\n'
         f"Open recording {recording_id} for editing and drop that input?"
     )
 
@@ -243,7 +246,7 @@ class MainWindow(QMainWindow):
             return True
         answer = QMessageBox.question(
             self,
-            "Clear the Log tab?",
+            'Clear the "Log recording" tab?',
             CLEAR_LOG_TAB_QUESTION,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -337,7 +340,7 @@ class MainWindow(QMainWindow):
         if self.log_tab.has_unsaved_input():
             answer = QMessageBox.question(
                 self,
-                "Drop the Log tab input?",
+                'Drop the input in the "Log recording" tab?',
                 drop_log_input_question(recording_id),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -353,7 +356,7 @@ def status_text(config: Config, config_error: str | None) -> str:
     if config_error is not None:
         return f"Configuration error: {config_error}"
     if config.db_path is None:
-        return "No database configured. Set the database path in the Settings tab."
+        return 'No database configured. Set the database path in the "Settings" tab.'
     return f"Database: {config.db_path}"
 
 

@@ -88,33 +88,34 @@ from iqdm.transferqueue import ItemResult, Phase, QueueError, QueueItem, QueueKi
 PROGRESS_EVERY_S = 0.1  # copy progress reaches the GUI at most this often
 PAUSE_QUEUE_QUESTION = (
     "Pause the queue?\n\nThe running item stops after the part of a file it is copying. "
-    "Files already copied stay. Resume continues with that item and does not copy them "
-    "again.\n\nDuring a Check before delete, the check stops instead. The item is then "
-    '"Archived, check needed": load it and click Check before delete on the Archive page.'
+    'Files already copied stay. "Resume" continues with that item and does not copy them '
+    'again.\n\nDuring a "Check before delete", the check stops instead. The item is then '
+    '"Archived, check needed": load it and click "Check before delete" on the "Archive" '
+    "page."
 )
 QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
     QueueState.WAITING: (
-        "This transfer is waiting in the queue. Click Start under the queue to run it, or "
-        "remove it from the queue to run it here."
+        'This transfer is waiting in the queue. Click "Start" under the queue to run it, '
+        'or "Remove" it from the queue to run it here.'
     ),
     QueueState.PAUSED: (
-        "This transfer is paused in the queue. Click Resume under the queue to continue "
-        "it, or remove it from the queue to run it here."
+        'This transfer is paused in the queue. Click "Resume" under the queue to continue '
+        'it, or "Remove" it from the queue to run it here.'
     ),
     QueueState.NEEDS_NAS_FOLDER: (
-        "This transfer waits in the queue for the NAS folder for archives. Choose the "
-        "folder, then click Start under the queue, or remove it from the queue to run it "
-        "here."
+        'This transfer waits in the queue for the "NAS folder for archives". Choose the '
+        'folder, then click "Start" under the queue, or "Remove" it from the queue to run '
+        "it here."
     ),
     QueueState.NEEDS_COPY_FOLDER: (
-        "This transfer waits in the queue for the folder for copies. Choose the folder, "
-        "then click Start under the queue, or remove it from the queue to run it here."
+        'This transfer waits in the queue for the "Folder for copies". Choose the folder, '
+        'then click "Start" under the queue, or "Remove" it from the queue to run it here.'
     ),
 }
 FOLDER_REQUIRED = "Required for the items that wait in the queue"
-NAS_FOLDER_PLACEHOLDER = "A folder in one of the NAS locations"
+NAS_FOLDER_PLACEHOLDER = 'A folder in one of the "NAS locations"'
 COPY_FOLDER_PLACEHOLDER = "A folder on this PC"
-ARCHIVE_DEST_PLACEHOLDER = "A new folder in one of the NAS locations"
+ARCHIVE_DEST_PLACEHOLDER = 'A new folder in one of the "NAS locations"'
 COPY_DEST_PLACEHOLDER = "A folder on this PC"
 UNIX_PLACEHOLDER = "Unix seconds"
 SUMMARY_WORDS = {  # the end-of-queue summary; "; " between parts (D85)
@@ -132,32 +133,34 @@ AMBER_AT_THE_END = (  # states that make the summary amber, when no item failed
     QueueState.NEEDS_COPY_FOLDER,
 )
 QUEUE_HINT = (
-    "Add recordings with Add to queue in the Viewer, or set one up on the Archive or Copy "
-    "page and click Add to queue under the preview. Start runs them one after another."
+    'Add recordings with "Add to queue" in the "Viewer" tab, or set one up on the '
+    '"Archive" or "Copy" page and click "Add to queue" under the preview. "Start" runs '
+    "them one after another."
 )
 ARCHIVE_NOTE = (
     "Copies the whole recording to the NAS and checks the copy. The recording then points "
-    "at the NAS copy. The laptop copy stays until you delete it below."
+    'at the NAS copy. The laptop copy stays until you delete it under "Laptop copy" below.'
 )
-ALREADY_ARCHIVED = "This recording is already archived. To copy it, use the Copy page."
+ALREADY_ARCHIVED = 'This recording is already archived. To copy it, use the "Copy" page.'
 COPY_NOTE = "Copies the files to a folder on a PC. The recording entry stays as it is."
 NAS_FOLDER_TOOLTIP = (
     "Each recording on the laptop is archived into a folder of its own name in this "
-    "folder, from this page and from Add to queue in the Viewer. To archive a queue item "
-    "elsewhere, select it in the queue and click Edit."
+    'folder, from this page and from "Add to queue" in the "Viewer" tab. To archive a '
+    'queue item elsewhere, select it in the queue and click "Edit".'
 )
 COPY_FOLDER_TOOLTIP = (
     "Each recording is copied into a folder of its own name in this folder, from this page "
-    "and from Add to queue in the Viewer. It starts as the default copy folder in Settings."
+    'and from "Add to queue" in the "Viewer" tab. It starts as the "Local copy folder" in '
+    'the "Settings" tab.'
 )
 COMPARE_TOOLTIP = (
     "Every check compares the number of files and each file's size. A hash also "
     "compares the content, and reads each hashed file again."
 )
 ARCHIVE_COMPARE_TOOLTIP = (
-    "The check after the copy, and Check before delete, which follows each archive. "
+    'The check after the copy, and "Check before delete", which follows each archive. '
     "Every check compares the number of files and each file's size. A hash also compares "
-    "the content. Check before delete reads the NAS files again for it."
+    'the content. "Check before delete" reads the NAS files again for it.'
 )
 NOT_ARCHIVED_BY_APP = (
     "The app did not archive this recording to its NAS folder, so it has no laptop copy "
@@ -174,13 +177,14 @@ COMPARE_NOTE = (
 ON_LAPTOP_CHECKS = (
     "The recording is on the laptop. These checks work on a recording archived on the NAS."
 )
+PREVIEW_HINT = 'Click "Preview" to check the transfer.'
 CHECK_PAGE_PREVIEW = (  # D101
     '"Check archive" and "Compare with laptop copy" need no preview. Their result shows '
     "below."
 )
 QUEUE_EDIT_NOTE = (
-    "The queue item is in the form. Change it, click Preview, then Add to queue puts it "
-    "back in its place."
+    'The queue item is on its page. Change it, click "Preview", then "Add to queue" puts '
+    "it back in its place."
 )
 QUEUE_HEADERS = ("Recording", "State", "Operation", "Size", "Scope", "Destination")
 QUEUE_NOTE_HINT = "Select an item to see its full state."
@@ -195,7 +199,7 @@ NO_MANIFEST_FOLDER = (
 )
 STOP_COPY_QUESTION = (
     "Stop the {what}?\n\nFiles already copied stay in the destination. To continue the "
-    '{what} later, select it under "Unfinished transfers" and click Open in form.'
+    '{what} later, select it under "Unfinished transfers" and click "Open in form".'
 )
 
 
@@ -211,24 +215,24 @@ def folder_wait_text(state: QueueState, count: int) -> str:
     """Which folder the waiting items need, and where to choose it (D98)."""
     items = "1 item waits" if count == 1 else f"{count} items wait"
     if state is QueueState.NEEDS_NAS_FOLDER:
-        where = "the NAS folder for archives. Choose it on the Archive page"
+        where = 'the "NAS folder for archives". Choose it on the "Archive" page'
     else:
-        where = "the folder for copies. Choose it on the Copy page"
-    return f"{items} for {where}, then click Start."
+        where = 'the "Folder for copies". Choose it on the "Copy" page'
+    return f'{items} for {where}, then click "Start".'
 
 
 def queue_holds_text(recording_id: int) -> str:
     """Why the Log tab cannot delete a recording the queue holds (D89)."""
     return (
-        f"The Archive / copy queue holds recording {recording_id}. Remove it from the queue "
-        "first, then delete the entry."
+        f'The queue in the "Archive / copy" tab holds recording {recording_id}. "Remove" it '
+        "from the queue first, then delete the entry."
     )
 
 
 def tab_holds_text(recording_id: int) -> str:
     """Why the Log tab cannot delete a recording this tab works on (D89)."""
     return (
-        f"The Archive / copy tab is working on recording {recording_id}. Wait until it "
+        f'The "Archive / copy" tab is working on recording {recording_id}. Wait until it '
         "finishes, then delete the entry."
     )
 
@@ -392,7 +396,9 @@ class TransferTab(QWidget):
         self.load_button = QPushButton("Load")
         self.load_button.clicked.connect(lambda: self.load_recording(self.id_spin.value()))
         self.pick_button = QPushButton("Pick in Viewer")
-        self.pick_button.setToolTip("Select a recording in the Viewer, then click Archive / copy.")
+        self.pick_button.setToolTip(
+            'Select a recording in the "Viewer" tab, then click "Archive / copy".'
+        )
         self.pick_button.clicked.connect(self.pick_requested.emit)
         self.source_label = QLabel()
         self.source_label.setWordWrap(True)
@@ -677,8 +683,8 @@ class TransferTab(QWidget):
         self.others_check.toggled.connect(self.refresh_unfinished)
         self.resume_button = QPushButton("Open in form")  # not "Resume": the queue has one
         self.resume_button.setToolTip(
-            "Load this transfer into the form to check it and continue it with Run. Files "
-            "already in place are not copied again."
+            'Load this transfer onto its page to check it, and continue it with "Run archive" '
+            'or "Run copy". Files already in place are not copied again.'
         )
         self.resume_button.clicked.connect(self.resume_selected)
         self.forget_button = QPushButton("Forget")  # it asks first (D100)
@@ -930,7 +936,9 @@ class TransferTab(QWidget):
             self._set_message(ItemState.TODO, NO_DATABASE)
             return False
         if recording_id <= 0:
-            self._set_message(ItemState.TODO, "Enter a recording ID or pick one in the Viewer.")
+            self._set_message(
+                ItemState.TODO, 'Enter a "Recording ID", or pick one in the "Viewer" tab.'
+            )
             return False
         self._load_id += 1
         load_id = self._load_id
@@ -1389,7 +1397,7 @@ class TransferTab(QWidget):
                 text = (
                     CHECK_PAGE_PREVIEW
                     if self.page() is Page.CHECK
-                    else "Click Preview to check the transfer."
+                    else PREVIEW_HINT
                 )
                 lines = [ChecklistItem(ItemState.TODO, text)]
             self.preview_lines.set_items(lines)
@@ -1491,7 +1499,7 @@ class TransferTab(QWidget):
             self._status(movecopy.percent(value.bytes_done, value.bytes_total))
         elif isinstance(value, VerifyProgress):
             phase = self.phase_label.text()
-            if phase != "Checking" and not phase.startswith("Check before delete"):
+            if phase not in ("Checking", movecopy.CHECK_PHASE):
                 self.phase_label.setText("Checking")
                 self._meter = movecopy.RateMeter()
             done, total = (
@@ -1544,7 +1552,7 @@ class TransferTab(QWidget):
             text = f"The {what} passed its check. Transfer {result.transfer_id} is recorded."
             if archive:
                 text += (
-                    " The recording now points at the NAS copy. Check before delete passed: "
+                    ' The recording now points at the NAS copy. "Check before delete" passed: '
                     "the laptop copy can be deleted."
                 )
             self._set_result(ItemState.OK, text)
@@ -1552,7 +1560,7 @@ class TransferTab(QWidget):
             self._set_result(
                 ItemState.TODO,
                 f'{result.notes} To continue it, select it under "Unfinished transfers" '
-                "and click Open in form.",
+                'and click "Open in form".',
             )
         else:
             self._set_result(ItemState.ERROR, f"The {what} failed. {result.notes or ''}")
@@ -2077,7 +2085,7 @@ class TransferTab(QWidget):
         parts = [f"{counts[s]} {word}" for s, word in SUMMARY_WORDS.items() if counts[s]]
         waiting = counts[QueueState.WAITING] + counts[QueueState.PAUSED]
         if self._pause_requested and waiting:
-            text = f"Queue paused. {waiting} left; Resume continues."
+            text = f'Queue paused. {waiting} left; "Resume" continues.'
             state = ItemState.INFO
         else:
             text = "Queue finished."

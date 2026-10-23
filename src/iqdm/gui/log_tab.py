@@ -61,7 +61,7 @@ FS_FILLED_TOOLTIP = (
     "Filled in from the file size, sample type, header bytes and file duration. "
     "Type a value to replace it."
 )
-NO_DATABASE = "No database configured. Set the database path in the Settings tab."
+NO_DATABASE = 'No database configured. Set the database path in the "Settings" tab.'
 NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
 LOGGED_BY_PLACEHOLDER = "Your name (required)"
 SITE_PLACEHOLDER = "Choose a site (required)"
@@ -90,7 +90,7 @@ def replace_template_question(path: Path) -> str:
     return f"{path} already exists. Replace it with the fields you chose?"
 
 
-DELETE_TITLE = "Delete entry?"
+DELETE_TITLE = "Delete this entry?"
 DELETE_BUTTON = "Delete entry"
 DELETE_TOOLTIP = (
     "Delete this entry from the catalogue, for example a folder logged by mistake. "
@@ -123,7 +123,7 @@ PARENT_IS_RECORDING = (
 LOG_ROWS_HEADERS = ("Applies to", "Parameter", "Value", "Unit")
 LOG_ROWS_TOOLTIP = (
     "From this folder's recorder's log. To change a value for one folder, untick the "
-    "folder in the list and log it with One folder."
+    'folder in the list and log it with "One folder".'
 )
 
 
@@ -210,8 +210,8 @@ def conflict_question(conflicts: Sequence[recorderlog.Conflict]) -> str:
     )
     return (
         "The recorder's log filled in these values for this folder. The template holds "
-        f"other values for them:\n\n{lines}\n\nKeep the log's values, or use the "
-        "template's? Either way, the template fills in its other fields."
+        f"other values for them:\n\n{lines}\n\nClick \"Keep the log's values\" or \"Use "
+        "the template's values\". Either way, the template fills in its other fields."
     )
 
 

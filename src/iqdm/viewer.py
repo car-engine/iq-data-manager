@@ -88,7 +88,7 @@ def parse_filter(form: FilterInput, offset_hours: float) -> FilterResult:
     start_from = _date_bound(form.start_from, "Start date from", offset_hours, errors)
     start_to = _date_bound(form.start_to, "Start date to", offset_hours, errors)
     if start_from is not None and start_to is not None and start_to < start_from:
-        errors.append("Start date to is before Start date from.")
+        errors.append('"Start date to" is before "Start date from".')
     fc_min = _mhz_bound(form.fc_min, "Centre frequency min", errors)
     fc_max = _mhz_bound(form.fc_max, "Centre frequency max", errors)
     if fc_min is not None and fc_max is not None and fc_max < fc_min:
@@ -268,7 +268,7 @@ def effective_params(rec: Recording, channel_index: int | None) -> list[ParamRow
         replaced = by_name.get(p.param.casefold())
         note = ""
         if replaced is not None and _value_with_unit(replaced) != _value_with_unit(p):
-            note = f"replaces the Recording value {_value_with_unit(replaced)}"
+            note = f'replaces the "Recording" value {_value_with_unit(replaced)}'
         rows.append(
             ParamRow(
                 scope=f"Ch {channel_index}", param=p.param, value=_value_with_unit(p), note=note
@@ -534,8 +534,8 @@ def load_details(db_path: Path | str, recording_id: int) -> Details:
 
 
 NEWER_DATABASE = (
-    "This database comes from a newer version of IQ Data Manager. The Viewer can show it, "
-    "but some details may be missing."
+    'This database comes from a newer version of IQ Data Manager. The "Viewer" tab can '
+    "show it, but some details may be missing."
 )
 
 
@@ -543,7 +543,7 @@ def error_text(exc: BaseException) -> str:
     """A plain message for a failed database read. The technical text goes in a tooltip."""
     if isinstance(exc, FileNotFoundError):
         return (
-            "Database file not found. Check the path in the Settings tab and the network "
+            'Database file not found. Check the path in the "Settings" tab and the network '
             "connection."
         )
     if isinstance(exc, SchemaVersionError):
@@ -552,9 +552,12 @@ def error_text(exc: BaseException) -> str:
                 "This database comes from an older version of IQ Data Manager. This version "
                 "cannot open it."
             )
-        return "This file is not an IQ Data Manager database. Check the path in the Settings tab."
+        return (
+            'This file is not an IQ Data Manager database. Check the path in the "Settings" '
+            "tab."
+        )
     if isinstance(exc, repository.NotFoundError):
-        return "This recording is no longer in the database. Click Refresh."
+        return 'This recording is no longer in the database. Click "Refresh".'
     if isinstance(exc, DatabaseError | OSError):
-        return "Cannot read the database. Check the network connection and click Refresh."
-    return "Cannot read the database. Click Refresh to try again."
+        return 'Cannot read the database. Check the network connection and click "Refresh".'
+    return 'Cannot read the database. Click "Refresh" to try again.'

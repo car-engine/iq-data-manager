@@ -261,7 +261,7 @@ def test_archive_of_an_archived_recording_is_refused(env):
 def test_archive_outside_the_nas_is_refused(env):
     preview = env.preview(env.request(dest=env.tmp / "pc" / "rec"))
     assert any(
-        e.startswith("An archive goes to a folder in one of the NAS") for e in preview.errors
+        e.startswith('An archive goes to a folder in one of the "NAS') for e in preview.errors
     )
 
 
@@ -835,7 +835,7 @@ def test_check_notes_a_different_file_duration_and_keeps_it(env):
     assert out.verification is Verification.SKIPPED
     assert out.notes.endswith(
         " The files are 1 s apart, but the entry gives a file duration of 0.5 s. "
-        "Correct it in the Log tab."
+        'Correct it in the "Log recording" tab.'
     )
     rec = env.recording()
     assert rec.file_duration_s == 0.5

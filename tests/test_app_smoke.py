@@ -468,7 +468,7 @@ def test_unsaved_log_input_answer_no_keeps_everything(qtbot, tmp_path, db_path, 
     window.settings_tab.db_edit.setText(str(tmp_path / "other.db"))
     save_settings(qtbot, window)
     assert len(questions) == 1
-    assert "clear the Log tab form" in questions[0]
+    assert 'clear the form of the "Log recording" tab' in questions[0]
     assert path.read_text(encoding="utf-8") == f"db_path = '{db_path}'\n"
     assert window.log_tab.remarks_edit.toPlainText() == "not saved yet"
     assert window.config.db_path == str(db_path)
@@ -769,8 +769,8 @@ def test_the_queue_holds_a_recording_against_a_delete(qtbot, tmp_path, db_path):
         QueueItem(recording_id=rid, label="r", kind=QueueKind.CHECK_ARCHIVE)
     )
     assert blocked(rid) == (
-        f"The Archive / copy queue holds recording {rid}. Remove it from the queue first, "
-        "then delete the entry."
+        f'The queue in the "Archive / copy" tab holds recording {rid}. "Remove" it from the '
+        "queue first, then delete the entry."
     )
     window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
     assert blocked(rid) is None

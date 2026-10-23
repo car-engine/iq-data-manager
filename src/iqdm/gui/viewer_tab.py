@@ -248,17 +248,20 @@ class ViewerTab(QWidget):
         self.open_button.setToolTip("Open the recording folder in Explorer.")
         self.open_button.clicked.connect(self.open_folder)
         self.edit_button = QPushButton("Edit entry")
-        self.edit_button.setToolTip("Open this recording in the Log recording tab to change it.")
+        self.edit_button.setToolTip(
+            'Open this recording in the "Log recording" tab to change it.'
+        )
         self.edit_button.clicked.connect(self.request_edit)
         self.transfer_button = QPushButton("Archive / copy")
         self.transfer_button.setToolTip(
-            "Open this recording in the Archive / copy tab to archive it to the NAS or copy it."
+            'Open this recording in the "Archive / copy" tab to archive it to the NAS or copy '
+            "it."
         )
         self.transfer_button.clicked.connect(self.request_transfer)
         self.queue_button = QToolButton()
         self.queue_button.setText("Add to queue")
         self.queue_button.setToolTip(
-            "Add the selected recordings to the queue in the Archive / copy tab. Select "
+            'Add the selected recordings to the queue in the "Archive / copy" tab. Select '
             "several with Ctrl or Shift."
         )
         self.queue_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)

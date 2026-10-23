@@ -119,6 +119,7 @@ Rules for this file:
 | D99 | The page shown after Add to queue in the Viewer | 2026-10-24, version 1.3 | Active; amends D98 |
 | D100 | "Forget" under Unfinished transfers keeps its name | 2026-10-24, version 1.3 | Active |
 | D101 | The Archive and Copy pages frame the fields to fill in or correct | 2026-10-24, version 1.3 | Active |
+| D102 | Names of controls in quotation marks | 2026-10-24, version 1.3 | Active; amends D38 |
 
 ## D1. Sample types
 
@@ -2531,3 +2532,43 @@ Check page's preview line read strangely (step 1.6); the user approved the new w
 
 Affects: SPEC section 8, `movecopy.py` (`FormField`, `form_marks()`,
 `destination_errors()`), `gui/transfer_tab.py`, the user guide.
+
+## D102. Names of controls in quotation marks
+
+Closes O62. Amends D38. The user's manual test of 1.3.0 (2026-10-24, step 2.1) and a
+note after it: names of buttons, fields and panels should be in quotation marks, so
+that "Run copy" or "Preview" reads as a name and not as an ordinary word. The user
+chose on 2026-10-24 to drop the trailing "..." in a quoted name and to keep bold for
+names in the user guide.
+
+- In every message, tooltip, dialog, placeholder, checklist line and queue note of all
+  tabs, the name of a tab, page, panel, button, check box, radio button, field, menu
+  item or dropdown choice used in a sentence is in double quotes: 'Click "Check before
+  delete" on the "Archive" page.'
+- A button's "..." is left out of the quoted name: "Delete laptop copy".
+- A tab is named with its own name and the word "tab": 'the "Log recording" tab', which
+  replaces "the Log tab"; 'the "Viewer" tab'.
+- No quotes for a label or title shown on its own, a window title such as "Settings not
+  saved", and a name before a colon that labels a value ("Logged by: Anna", "Start date
+  from: use the form …"). An ordinary word that happens to be a name ("Archive it to the
+  NAS first.", "the laptop copy", "a time range") is not quoted.
+- A few texts were reworded so that they name the control: "Add folders, then scan
+  them" became 'Click "Add folders", then "Scan folders"'; "Preview it again." became
+  'Click "Preview" again.'; "Remove this item." became 'Select the item and click
+  "Remove".'; "Pause the queue first." became 'Click "Pause" first.'; "Check the NAS copy,
+  then delete the rest." became 'Click "Check before delete", then "Delete laptop copy"
+  for the rest.' The dialog title "Delete entry?" became "Delete this entry?".
+- `tests/test_user_text.py` checks every text it collects for a name from
+  `tests/user_text_names.py` used without quotes. Names that are also ordinary words at
+  the start of a sentence ("Archive", "Check", "Copy", "Save", "Start", "Site"...) are
+  left out of that check, because it cannot tell the two apart; they were reviewed by
+  hand with `dev/o62/scan.py`, which lists every string constant of the source that
+  holds a name.
+- The console program's output (`IQDataManager-check.exe`) and the test-set notes it
+  writes were left as they are: they name no control of the app's window.
+- The user guide keeps bold for names (**Preview**). Past release notes are unchanged.
+
+Affects: SPEC section 11, every tab's text, `entry.py`, `movecopy.py`,
+`transferqueue.py`, `viewer.py`, `batchlog.py`, `db/repository.py`,
+`transfer/operations.py`, `transfer/pathcheck.py`, `app.py`, `tests/test_user_text.py`,
+`tests/user_text_names.py`.

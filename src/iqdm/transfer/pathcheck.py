@@ -196,7 +196,8 @@ def _archive_errors(
         return [f"The destination cannot hold a recording: {exc}."]
     if location.archive_state is not ArchiveState.ARCHIVED:
         return [
-            "An archive goes to a folder in one of the NAS locations in Settings. "
+            'An archive goes to a folder in one of the "NAS locations" in the "Settings" '
+            "tab. "
             f"{dest_text} is not in one."
         ]
     return []

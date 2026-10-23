@@ -73,8 +73,11 @@ its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
   questions; the reports of the three branches record them. O58 is done on
   `transfer-pages` (D96), O57 on `check-after-archive` (D97) and O59 on
   `queue-asks-for-folder` (D98), each branch made from the one before. None is merged.
-  USER_GUIDE.md section 5 describes the new screen. The user's manual test of 1.3.0
-  comes next (pending checks below).
+  USER_GUIDE.md section 5 describes the new screen. The user's manual test of
+  2026-10-24 passed 24 of 25 steps, none failed, and gave O60 to O64, which the
+  user chose to fix before the release: `queue-actions` (O63, O64; D99, D100),
+  `transfer-field-marks` (O60, O61; D101) and `quoted-names` (O62; D102) follow on.
+  A short manual test of those changes comes next (pending checks below).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -150,7 +153,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
 | O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | `85e7d7d` (with its report and USER_GUIDE.md section 5), `1a8254a` (the pages during a queue run), `8db0a65` and `ad5b9d3` (STATUS: the manual test) | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
 | O63 and O64, the page after Add to queue (D99) and "Forget" (D100) | Done, not merged | `queue-actions`, from `queue-asks-for-folder` at `ad5b9d3` | `ce63581` (with its report) | [2026-10-24-queue-actions](reports/2026-10-24-queue-actions.md) |
-| O60 and O61, frames on the Archive and Copy pages, and the Check page's line (D101) | Done, not merged | `transfer-field-marks`, from `queue-actions` at `ce63581` | The commit of this work, with its report | [2026-10-24-transfer-field-marks](reports/2026-10-24-transfer-field-marks.md) |
+| O60 and O61, frames on the Archive and Copy pages, and the Check page's line (D101) | Done, not merged | `transfer-field-marks`, from `queue-actions` at `ce63581` | `e9cdccf` (with its report) | [2026-10-24-transfer-field-marks](reports/2026-10-24-transfer-field-marks.md) |
+| O62, names of controls in quotation marks (D102) | Done, not merged | `quoted-names`, from `transfer-field-marks` at `e9cdccf` | The commit of this work, with its report | [2026-10-24-quoted-names](reports/2026-10-24-quoted-names.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -206,12 +210,11 @@ column holds the approved answers.
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
-| O62 | Names of buttons, fields, pages and panels in the app's text are not in quotation marks, so "Preview" reads as an ordinary word | 1.3.0, before the release | Double quotes round every such name in every message, tooltip, dialog and placeholder of all tabs, without a trailing "..."; a check in `tests/test_user_text.py`. The user guide keeps bold for names (the user's choice, 2026-10-24). | Manual test of 1.3.0, step 2.1 and the user's note |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D101). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D102). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -275,6 +278,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D101). The M0 review table in
 | O64 | The rationale for "Forget..." under Unfinished transfers | D100 (2026-10-24): the name stays, without the dots |
 | O60 | The Archive and Copy pages do not mark the field to fill in | D101 (2026-10-24) |
 | O61 | The Check page's preview line reads strangely | D101 (2026-10-24) |
+| O62 | Names of controls in the app's text are not in quotation marks | D102 (2026-10-24) |
 
 ## Pending checks for the user
 
@@ -285,10 +289,14 @@ build `dist/test-1.3.0-2` from `1a8254a`) and sent the page's exported results: 
 steps passed and none failed. Step 1.6 was not marked; its comment asked what the Check
 page's preview line means (O61). The comments and notes gave O60 to O64.
 
-- **Version 1.3.0, the manual test:** the three pages on a real display in light and
-  dark mode, Run archive with its Check before delete, Stop during that check, items
-  from the Viewer that wait for a folder, and a queue run with items added meanwhile.
-  The checklist is `dev/test-1.3.0/CHECKLIST.html` (25 steps), on the build
+- **Version 1.3.0, the second manual test:** the changes after the first test (O60 to
+  O64): the page after an add, the frames on the Archive and Copy pages, the Check
+  page's line, "Forget", and the quoted names in each tab. Its checklist follows with
+  the next commit.
+- **Version 1.3.0, the first manual test (done, see above):** the three pages on a
+  real display in light and dark mode, Run archive with its Check before delete, Stop
+  during that check, items from the Viewer that wait for a folder, and a queue run with
+  items added meanwhile. The checklist is `dev/test-1.3.0/CHECKLIST.html` (25 steps), on the build
   `dist/test-1.3.0-2` (from `1a8254a`) and the data in `dev/test-1.3.0/testdata`
   (made by `make_test_data.py`; `check_expectations.py` read the quoted texts from the
   app offscreen). Step 0.1 shares `testdata\nas` as the stand-in NAS. A harness in
@@ -388,6 +396,7 @@ that (checked on 2026-10-23).
   the manual test, `test-1.2.1` (the checklist, its data and scripts, and `harness`,
   which holds a copy of the page, a headless Edge profile and a screenshot). From the
   1.3.0 work: `o58-shots` (a screenshot script and its output in `run1` and `run2`)
+  and `o62` (the name probe, the source scan and their outputs),
   and `commit-msg.txt` (the last commit message, written to a file so that the shell
   command holds none of the words the safety hook blocks). After the manual test of
   1.3.0: `test-1.3.0` (the checklist, `make_test_data.py`, `check_expectations.py`,

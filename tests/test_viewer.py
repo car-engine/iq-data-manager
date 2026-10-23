@@ -62,7 +62,7 @@ def test_a_wrong_date_is_an_error(text):
 
 def test_to_before_from_is_an_error():
     result = parse_filter(FilterInput(start_from="2026-09-30", start_to="2026-09-29"), 8.0)
-    assert result.errors == ("Start date to is before Start date from.",)
+    assert result.errors == ('"Start date to" is before "Start date from".',)
 
 
 def test_frequencies_are_mhz_and_exact():
@@ -256,7 +256,7 @@ def test_a_channel_row_replaces_the_recording_row():
     assert [(r.scope, r.param, r.value, r.note) for r in rows] == [
         ("Recording", "SDR", "USRP X310", ""),
         ("Ch 1", "Antenna", "Monopole B", ""),
-        ("Ch 1", "lna GAIN", "20 dB", "replaces the Recording value 10 dB"),
+        ("Ch 1", "lna GAIN", "20 dB", 'replaces the "Recording" value 10 dB'),
     ]
 
 
@@ -570,7 +570,7 @@ def test_loading_never_changes_the_file(filled_db):
         ),
         (repo.NotFoundError("x"), "This recording is no longer in the database."),
         (OSError("x"), "Cannot read the database. Check the network connection"),
-        (RuntimeError("x"), "Cannot read the database. Click Refresh"),
+        (RuntimeError("x"), 'Cannot read the database. Click "Refresh"'),
     ],
 )
 def test_error_text(exc, start):

@@ -121,6 +121,7 @@ from iqdm.scan.scanner import scan_recording
 from iqdm.transfer.operations import FILE_LIST_UNUSABLE, TransferRequest, preview_transfer
 from iqdm.transfer.pathcheck import DiskUsage
 from make_fixtures import ChannelSpec
+from user_text_names import CONTROL_NAMES, QUOTED_NAMES
 
 FORBIDDEN = re.compile(
     r"DECISIONS|\bSPEC\b|\bD\d{1,2}\b|\bO\d{1,2}\b|\bMilestone\b"
@@ -162,8 +163,52 @@ def visible_texts(root: QWidget, skip_tooltips: tuple[QWidget, ...] = ()) -> lis
     return [t for t in texts if t]
 
 
+NAME_PATTERNS = [
+    (name, re.compile(r'(?<![\w"])' + re.escape(name) + r'(?![\w"])'))
+    for name in sorted(QUOTED_NAMES)
+]
+# A label or title shown on its own: "Add folders...", "1 · Source folder",
+# "Remarks (optional)", "Storage root · from folder", "Unfinished transfers (2)"
+LABEL = re.compile(r"^(\d+ · )?(?P<name>.+?)( \(.*\)| · .*|\.\.\.)?$")
+
+
+def unquoted_names(text: str) -> list[str]:
+    """The control names that a text uses without double quotes (O62, D102).
+
+    A label is its own name, and a name before a colon labels a value ("Logged by:
+    Anna", "Start date from: use the form …").
+    """
+    shown = text.strip()
+    label = LABEL.match(shown)
+    if shown in CONTROL_NAMES or (label is not None and label.group("name") in CONTROL_NAMES):
+        return []
+    found = []
+    for name, pattern in NAME_PATTERNS:
+        if any(text[m.end() : m.end() + 1] != ":" for m in pattern.finditer(text)):
+            found.append(name)
+    return found
+
+
 def offending(texts: list[str]) -> list[str]:
-    return [t for t in texts if FORBIDDEN.search(t)]
+    """Texts with a forbidden word, or with a control name not in quotes (D38, D102)."""
+    return [t for t in texts if FORBIDDEN.search(t) or unquoted_names(t)]
+
+
+def test_names_in_a_sentence_need_quotes():
+    """D102: "Preview" is a button; Preview reads as an ordinary word."""
+    assert unquoted_names('Click "Check before delete" on the "Archive" page.') == []
+    assert unquoted_names("Click Check before delete on the Archive page.") == [
+        "Check before delete"
+    ]
+    assert unquoted_names("Open it again with Edit entry.") == ["Edit entry"]
+    assert unquoted_names("Delete laptop copy...") == []  # the button's own label
+    assert unquoted_names("1 · Source folder") == []
+    assert unquoted_names("Unfinished transfers (2)") == []
+    assert unquoted_names("Logged by: Anna") == []
+    assert unquoted_names("Archive it to the NAS first.") == []  # an ordinary word
+    assert offending(["Set the database path in the Settings tab of Pick in Viewer."]) == [
+        "Set the database path in the Settings tab of Pick in Viewer."
+    ]
 
 
 def test_forbidden_pattern_catches_the_old_texts():
@@ -330,7 +375,7 @@ def test_queue_text_is_plain():
         # Check before delete after each archive (D97)
         movecopy.CHECK_AFTER_ARCHIVE_TEXT,
         movecopy.CHECK_PHASE,
-        movecopy.check_needed_note(3, "Check before delete was stopped."),
+        movecopy.check_needed_note(3, '"Check before delete" was stopped.'),
         ARCHIVE_COMPARE_TOOLTIP,
         # Items that wait for their folder (D98)
         FOLDER_REQUIRED,

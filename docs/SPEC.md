@@ -951,7 +951,15 @@ takes each channel's start and end from its files (D71).
 - `tests/test_architecture.py` enforces the module rules in section 9 by reading the
   package source (DECISIONS.md D10).
 - `tests/test_user_text.py` checks the visible text of each tab for decision numbers,
-  SPEC references, config key names and database internals (DECISIONS.md D38).
+  SPEC references, config key names and database internals (DECISIONS.md D38), and
+  for names of controls used in a sentence without double quotes (D102). The names are
+  in `tests/user_text_names.py`.
+- **Names of controls in the app's text** (D102): a tab, page, panel, button, check
+  box, field or choice named inside a sentence is in double quotes, without a trailing
+  "...": 'Click "Check before delete" on the "Archive" page.' A tab is named with its
+  own name ('the "Log recording" tab'). A label shown on its own, a window title, and a
+  name before a colon that labels a value ("Logged by: Anna") have no quotes. The user
+  guide marks names in bold instead.
 
 ## 12. Milestones
 

@@ -264,7 +264,7 @@ def test_an_archive_goes_to_a_new_folder_under_a_nas_root(selection, nas):
 def test_an_archive_outside_the_nas_roots_is_refused(selection, tmp_path, nas):
     dest = tmp_path / "local" / "rec1"
     assert archive(selection,dest, nas).errors == (
-        "An archive goes to a folder in one of the NAS locations in Settings. "
+        'An archive goes to a folder in one of the "NAS locations" in the "Settings" tab. '
         f"{dest} is not in one.",
     )
 

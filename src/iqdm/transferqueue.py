@@ -206,7 +206,7 @@ class TransferQueue:
         """Take an item out of the queue. A running item cannot be removed."""
         item = self.get(key)
         if item.state is QueueState.RUNNING:
-            raise QueueError("The running item cannot be removed. Pause the queue first.")
+            raise QueueError('The running item cannot be removed. Click "Pause" first.')
         self._items.remove(item)
         return item
 
@@ -472,9 +472,9 @@ def run_item(
     if request is None:
         return ItemResult(state=QueueState.NOT_STARTED, note="The item has no transfer.")
     if not request.destination.strip():  # it waits for its folder (D98)
-        page = "NAS folder for archives on the Archive page"
+        page = '"NAS folder for archives" on the "Archive" page'
         if request.operation is Operation.COPY:
-            page = "folder for copies on the Copy page"
+            page = '"Folder for copies" on the "Copy" page'
         return ItemResult(
             state=QueueState.NOT_STARTED, note=f"The item has no destination. Choose the {page}."
         )
@@ -520,7 +520,7 @@ def run_item(
     )
     tid = outcome.transfer_id
     if outcome.verification is Verification.SKIPPED:
-        note = f"{outcome.notes or 'Stopped.'} Resume continues it."
+        note = f'{outcome.notes or "Stopped."} "Resume" continues it.'
         return ItemResult(state=QueueState.PAUSED, note=note, transfer_id=tid, size_bytes=size)
     if not outcome.passed:
         note = f"Transfer {tid}: {outcome.notes or 'the check after the copy failed.'}"
@@ -542,7 +542,7 @@ def run_item(
         cancelled=cancelled,
     )
     if after.passed:
-        note = f"{done} Check before delete passed; the laptop copy can be deleted."
+        note = f'{done} "Check before delete" passed; the laptop copy can be deleted.'
         return ItemResult(state=QueueState.DONE, note=note, transfer_id=tid, size_bytes=size)
     return ItemResult(
         state=QueueState.CHECK_NEEDED,
@@ -559,7 +559,7 @@ def _run_check_archive(
     report: Callable[[object], None],
     cancelled: Callable[[], bool],
 ) -> ItemResult:
-    report(Phase("Check archive: scanning the NAS folder"))
+    report(Phase('"Check archive": scanning the NAS folder'))
     try:
         outcome = check_archive(
             db_path,

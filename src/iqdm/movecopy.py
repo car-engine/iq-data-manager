@@ -50,7 +50,7 @@ from iqdm.transfer.verify import VerifyProgress
 FILES_LISTED = 200  # file names shown in the preview's file list; the rest are counted
 SPEED_WINDOW_S = 10.0  # the speed is averaged over this many seconds
 CHECK_AFTER_ARCHIVE_TEXT = (
-    "After the archive, Check before delete reads the NAS copy again, past this PC's file "
+    'After the archive, "Check before delete" reads the NAS copy again, past this PC\'s file '
     "cache. The estimated time does not include it."
 )
 
@@ -275,8 +275,8 @@ def form_marks(
     archive = form.operation is Operation.ARCHIVE
     if not form.destination.strip():
         if not folder.strip():
-            what = "the NAS folder for archives" if archive else "the folder for copies"
-            marks[FormField.FOLDER] = ChecklistItem(ItemState.TODO, f"Choose {what}.")
+            what = '"NAS folder for archives"' if archive else '"Folder for copies"'
+            marks[FormField.FOLDER] = ChecklistItem(ItemState.TODO, f"Choose the {what}.")
         else:
             marks[FormField.DESTINATION] = ChecklistItem(
                 ItemState.TODO, "Choose a destination folder."
@@ -499,7 +499,11 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
             remain = "Some files remain"
         else:
             remain = f"{files_text(left)} {'remains' if left == 1 else 'remain'}"
-        then = "Delete the rest." if checked else "Check the NAS copy, then delete the rest."
+        then = (
+            'Click "Delete laptop copy" for the rest.'
+            if checked
+            else 'Click "Check before delete", then "Delete laptop copy" for the rest.'
+        )
         return LaptopCopy(
             step=LaptopStep.PARTLY_DELETED,
             archive=archive,
@@ -531,7 +535,7 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
 # Check before delete straight after an archive (D97)
 # ---------------------------------------------------------------------------
 
-CHECK_PHASE = "Check before delete: reading the NAS copy"
+CHECK_PHASE = '"Check before delete": reading the NAS copy'
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -564,7 +568,7 @@ def check_after_archive(
     """
     if hash_mode is HashMode.NONE:
         return ArchiveCheck(
-            passed=False, why=f"Check before delete was not run: {CHECK_NEEDS_HASHES}"
+            passed=False, why=f'"Check before delete" was not run: {CHECK_NEEDS_HASHES}'
         )
     try:
         check = check_before_delete(
@@ -578,27 +582,27 @@ def check_after_archive(
         )
     except DeleteRefused as exc:
         return ArchiveCheck(
-            passed=False, why=f"Check before delete could not run: {' '.join(exc.reasons)}"
+            passed=False, why=f'"Check before delete" could not run: {" ".join(exc.reasons)}'
         )
     except Exception as exc:
         # The archive passed, so any error here, a locked database among them, leaves a
         # check still to do. It is not a failed archive (review of 1.1.0, finding 1).
-        return ArchiveCheck(passed=False, why=f"Check before delete could not run: {exc}")
+        return ArchiveCheck(passed=False, why=f'"Check before delete" could not run: {exc}')
     if check.verification is Verification.PASS:
         return ArchiveCheck(passed=True)
     if check.verification is Verification.SKIPPED:
         return ArchiveCheck(
-            passed=False, why=f"Check before delete was stopped. {check.notes or ''}".strip()
+            passed=False, why=f'"Check before delete" was stopped. {check.notes or ""}'.strip()
         )
-    return ArchiveCheck(passed=False, why=f"Check before delete failed: {check.notes}")
+    return ArchiveCheck(passed=False, why=f'"Check before delete" failed: {check.notes}')
 
 
 def check_needed_note(transfer_id: int | None, why: str) -> str:
     """The note of an archive that passed but whose check did not (D85, D97)."""
     return (
         f"Archived: transfer {transfer_id} passed its check, and the recording now points "
-        f"at the NAS copy. The laptop copy stays. {why} Click Check before delete on the "
-        "Archive page; the laptop copy can be deleted only after it passes."
+        f'at the NAS copy. The laptop copy stays. {why} Click "Check before delete" on the '
+        '"Archive" page; the laptop copy can be deleted only after it passes.'
     )
 
 

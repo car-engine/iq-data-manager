@@ -631,7 +631,7 @@ def test_selecting_a_channel_shows_its_rf_chain_and_path(qtbot, tab, catalogue):
     assert params == [
         ["Recording", "SDR", "USRP X310", ""],
         ["Ch 1", "Antenna", "Monopole B", ""],
-        ["Ch 1", "LNA gain", "20 dB", "replaces the Recording value 10 dB"],
+        ["Ch 1", "LNA gain", "20 dB", 'replaces the "Recording" value 10 dB'],
     ]
     assert tab.path_label.text().endswith("\\1")
 

@@ -165,7 +165,7 @@ def archive_to_nas(env: Env, tab: TransferTab) -> Path:
 def test_without_a_database_the_tab_says_where_to_set_it(qtbot, tmp_path):
     tab = TransferTab(Config(), manifests_dir=tmp_path / "m")
     qtbot.addWidget(tab)
-    assert tab.message_label.text().endswith("Set the database path in the Settings tab.")
+    assert tab.message_label.text().endswith('Set the database path in the "Settings" tab.')
     assert not tab.preview_button.isEnabled()
     assert not tab.load_recording(1)
 
@@ -190,8 +190,8 @@ def test_an_operation_on_the_recording_holds_it_against_a_delete(env, monkeypatc
     assert tab.deletion_blocked(env.rid) is None
     monkeypatch.setattr(TransferTab, "is_busy", property(lambda self: True))
     assert tab.deletion_blocked(env.rid) == (
-        f"The Archive / copy tab is working on recording {env.rid}. Wait until it finishes, "
-        "then delete the entry."
+        f'The "Archive / copy" tab is working on recording {env.rid}. Wait until it '
+        "finishes, then delete the entry."
     )
     assert tab.deletion_blocked(env.rid + 1) is None
     tab.recording_deleted(env.rid)  # busy: the form stays
@@ -253,7 +253,7 @@ def test_a_new_tab_shows_no_progress_and_asks_for_a_preview(env):
     """Found in the screenshots of D96: the progress bar showed before any operation."""
     tab = env.tab()
     assert tab.progress_bar.isHidden() and tab.phase_label.isHidden()
-    assert [i.text for i in tab.preview_lines.items] == ["Click Preview to check the transfer."]
+    assert [i.text for i in tab.preview_lines.items] == ['Click "Preview" to check the transfer.']
 
 
 def mark(widget) -> str:
@@ -267,7 +267,7 @@ def test_the_archive_page_frames_the_field_to_fill_in(env):
     assert mark(tab.nas_folder_edit) == "todo"
     assert "border: 2px solid" in tab.nas_folder_edit.styleSheet()
     assert tab.nas_folder_edit.placeholderText() == (
-        "A folder in one of the NAS locations (required)"
+        'A folder in one of the "NAS locations" (required)'
     )
     assert mark(tab.archive_dest_edit) == ""
     tab.nas_folder_edit.setText(str(env.nas / "2026"))
@@ -507,7 +507,7 @@ def test_archive_check_and_delete(env, answers):
     assert tab.result == (
         ItemState.OK,
         f"The archive passed its check. Transfer {env.transfers()[0].id} is recorded. The "
-        "recording now points at the NAS copy. Check before delete passed: the laptop copy "
+        'recording now points at the NAS copy. "Check before delete" passed: the laptop copy '
         "can be deleted.",
     )
     assert env.recording().archive_state is ArchiveState.ARCHIVED
@@ -597,8 +597,8 @@ def test_a_failed_check_after_run_archive_keeps_the_laptop_copy(env, monkeypatch
     assert tab.result[1].startswith("Archived: transfer ")
     assert "in use by someone else" in tab.result[1]
     assert tab.result[1].endswith(
-        "Click Check before delete on the Archive page; the laptop copy can be deleted only "
-        "after it passes."
+        'Click "Check before delete" on the "Archive" page; the laptop copy can be deleted '
+        "only after it passes."
     )
     assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
     assert tab.check_delete_button.isEnabled() and not tab.delete_button.isEnabled()
@@ -629,7 +629,7 @@ def test_stop_during_the_check_after_an_archive_asks_nothing(env, monkeypatch, a
     assert answers.texts == []
     env.idle(tab)
     assert tab.result[0] is ItemState.INFO
-    assert "Check before delete was stopped." in tab.result[1]
+    assert '"Check before delete" was stopped.' in tab.result[1]
     assert env.recording().archive_state is ArchiveState.ARCHIVED
     assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
     _archive, check = env.transfers()
@@ -939,7 +939,7 @@ def test_start_runs_the_items_in_turn(env, make_recording):
     assert tab.is_busy and not tab.start_queue_button.isEnabled()
     queue_idle(env, tab)
     assert states(tab) == [QueueState.DONE, QueueState.DONE]
-    assert all("Check before delete passed" in i.note for i in tab.queue)
+    assert all('"Check before delete" passed' in i.note for i in tab.queue)
     assert env.recording().archive_state is ArchiveState.ARCHIVED
     assert any(s.startswith("queue 2 of 2") for s in statuses)
     assert busy[0] is True and busy[-1] is False and False not in busy[:-1]
@@ -961,7 +961,7 @@ def test_pause_then_start_finishes_the_item(env, answers, slow_queue, make_recor
     assert answers.texts[-1] == tab_module.PAUSE_QUEUE_QUESTION
     queue_idle(env, tab)
     assert states(tab) == [QueueState.PAUSED]
-    assert tab.result == (ItemState.INFO, "Queue paused. 1 left; Resume continues.")
+    assert tab.result == (ItemState.INFO, 'Queue paused. 1 left; "Resume" continues.')
     assert tab.start_queue_button.text() == "Resume"  # D86
     (stopped,) = tab.unfinished
     assert stopped.operation is Operation.ARCHIVE
@@ -1158,8 +1158,8 @@ def test_viewer_archives_wait_for_the_nas_folder(env, make_recording):
     assert all(i.destination == "" and i.size_bytes is None for i in tab.queue)
     assert tab.result == (
         ItemState.INFO,
-        "Added 2 items to the queue. 2 items wait for the NAS folder for archives. Choose "
-        "it on the Archive page, then click Start.",
+        'Added 2 items to the queue. 2 items wait for the "NAS folder for archives". Choose '
+        'it on the "Archive" page, then click "Start".',
     )
     assert tab.page() is Page.ARCHIVE
     assert tab.nas_folder_edit.property(tab_module.MARK_PROPERTY) == "todo"

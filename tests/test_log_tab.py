@@ -220,7 +220,7 @@ def test_folder_under_a_mapped_nas_drive_is_archived(make_tab, make_recording, d
     tab.folder_edit.setText(info.root)
     assert tab.storage_root_edit.text() == NAS
     assert tab.state_edit.text() == "archived"
-    assert tab.state_note.text().startswith("Archive state on save: archived.")
+    assert tab.state_note.text().startswith('"Archive state" on save: archived.')
 
 
 def test_drive_root_cannot_be_logged(make_tab, tmp_path):
@@ -623,7 +623,7 @@ def test_an_edit_of_an_entry_archived_meanwhile_is_refused(
     save_and_wait(qtbot, tab)
     assert tab.message_text == (
         "Not saved: Recording 1 changed after you opened it, for example by an archive or "
-        "a check. Open it again with Edit entry and make the change there."
+        'a check. Open it again with "Edit entry" and make the change there.'
     )
     assert saves == []
     assert tab.remarks_edit.toPlainText() == "typo fixed"  # the form stays
@@ -845,7 +845,7 @@ def test_duration_comes_from_the_file_names(qtbot, make_tab, make_recording, sit
     logged_ready(qtbot, tab, info, site_id)
     assert tab.duration_spin.value() == 0.5
     assert fs_widget(tab).text() == "1k"  # typed by logged_ready()
-    assert "File duration set to 0.5 s from the spacing of the file names." in checklist_texts(
+    assert '"File duration" set to 0.5 s from the spacing of the file names.' in checklist_texts(
         tab, ItemState.INFO
     )
     assert tab.channel_table.item(0, 8).text() == "100.0%"
@@ -873,7 +873,7 @@ def test_next_folder_gets_its_own_duration(qtbot, make_tab, make_recording):
     assert tab.duration_spin.value() == 0.5
     scan_folder(qtbot, tab, whole.root)
     assert tab.duration_spin.value() == 1.0
-    assert not any("File duration set" in t for t in checklist_texts(tab))
+    assert not any('"File duration" set' in t for t in checklist_texts(tab))
 
 
 def test_edit_mode_keeps_stored_fs_and_fills_a_new_channel(
@@ -939,7 +939,7 @@ def test_messages_clear_for_a_new_folder(qtbot, make_tab, make_recording, site_i
     tab.start_scan()
     assert tab.message_text == ""
     wait_idle(qtbot, tab)
-    assert tab.state_note.text().startswith("Archive state on save: local.")
+    assert tab.state_note.text().startswith('"Archive state" on save: local.')
 
 
 def test_times_use_the_configured_offset(qtbot, make_tab, make_recording, db_path):
@@ -2307,7 +2307,7 @@ def test_an_archived_or_copied_entry_is_not_deleted(
     assert tab.message_state is ItemState.ERROR
     assert tab.message_text == (
         "Not deleted: Recording 1 has an archive or a copy in its history, so it cannot be "
-        "deleted. Correct it with Save entry instead."
+        'deleted. Correct it with "Save entry" instead.'
     )
     assert tab.editing is not None
 
