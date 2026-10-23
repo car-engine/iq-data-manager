@@ -248,10 +248,12 @@ Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
-- **The manual test of 1.2.1** (`dev/test-1.2.1/CHECKLIST.html`): the mouse wheel
-  with real input, including a touchpad (D92); the frames by eye under the real
-  Windows 11 style, and a theme switch while the app runs (D95); the log rows in
-  "Several folders" (D93); Logged by (D94).
+- **The manual test of 1.2.1** (`dev/test-1.2.1/CHECKLIST.html`) ran on 2026-10-23:
+  26 of 28 steps passed. Step 1.3 failed because the band list fits its popup and
+  cannot scroll (a fault of the step, shown by `dev/o56-popup/probe.py`); a repeat
+  with a longer list is open. Step 1.7, the wheel on a touchpad, was not run. The
+  tooltip of step 2.1 now quotes "Before saving", as the user asked. Open: the look
+  of a framed dropdown (step 4.2), the user's choice.
 
 - **Version 1.2 in the field:** several real folders of one day on the NAS (scan
   time over the network, and Cancel during a long scan, step 3.16 of the manual

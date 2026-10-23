@@ -27,7 +27,7 @@ tooltip."
 | With the italics of a filled-in value | Done | `test_a_mark_keeps_the_italics_of_a_value_from_the_log`; the fs filled in from the file size in `test_empty_required_fields_are_framed`. |
 | In both themes | Done | `test_the_frames_follow_a_theme_switch`. See "Found while testing". |
 | "Several folders" | Done | The shared fields and the selected folder's channels. `test_the_shared_fields_and_the_selected_folders_channels_are_framed`. |
-| The disabled Save button says why | Done | Tooltip "Complete the items under Before saving first." `test_the_disabled_save_button_says_why`. |
+| The disabled Save button says why | Done | Tooltip 'Complete the items under "Before saving" first.' (with the quotes since the manual test, below) `test_the_disabled_save_button_says_why`. |
 
 The new texts are in `test_log_tab_text_is_plain` in `tests/test_user_text.py`.
 
@@ -47,6 +47,25 @@ showed only when the theme changed while the app ran.
 
 - D95. Fields to fill in or correct are framed. Amends D23. D94's placeholder became
   "Your name (required)".
+
+## Changes after the user's review
+
+The user ran the manual test of 1.2.1 on 2026-10-23 (`dev/test-1.2.1/CHECKLIST.html`,
+build `dist/test-1.2.1` from `b29c497`): 26 of 28 steps passed, step 1.3 failed and
+the optional step 1.7 (a touchpad) was not run.
+
+- **Step 2.1:** the user asked that the tooltip mark "Before saving" as the name of
+  something on the screen. It now reads 'Complete the items under "Before saving"
+  first.', as other texts quote a group's name ("Unfinished transfers"). Changed in
+  the commit after `b29c497`.
+- **Step 1.3** ("An open list still scrolls") failed: the open band list did not
+  scroll. A probe with the `windows11` style (`dev/o56-popup/probe.py`) showed that
+  the band list holds 10 entries, and a dropdown shows 10 before it needs a scroll
+  bar, so its scroll range is 0 to 0; a list of 30 entries scrolled with the guard
+  installed (value 0 to 3). The step tested a list that cannot scroll; the app
+  needs no change. See the 1.2.1 summary for a repeat of the step.
+- **Step 4.2:** the user asked why the framed dropdown looks different. Answered in
+  chat; see "Issues found in self-review", item 1.
 
 ## Changes from the plan
 

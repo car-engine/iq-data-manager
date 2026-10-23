@@ -1857,7 +1857,7 @@ def test_the_disabled_save_button_says_why(qtbot, make_tab, make_recording, site
     tab = make_tab()
     tab.refresh_checklist()
     assert not tab.save_button.isEnabled()
-    assert tab.save_button.toolTip() == "Complete the items under Before saving first."
+    assert tab.save_button.toolTip() == 'Complete the items under "Before saving" first.'
     logged_ready(qtbot, tab, make_recording(), site_id)
     assert tab.save_button.isEnabled() and tab.save_button.toolTip() == ""
 

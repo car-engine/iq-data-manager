@@ -2275,8 +2275,9 @@ Save button, so the field itself was hard to find. The user chose an amber frame
   checklist does (D79).
 - In "Several folders" the frames cover the shared fields and the selected folder's
   channels in section 4.
-- While Save is disabled, its tooltip says "Complete the items under Before saving
-  first."
+- While Save is disabled, its tooltip says 'Complete the items under "Before saving"
+  first.' The quotes mark the name of the panel (the user's manual test of 1.2.1,
+  step 2.1).
 - A dropdown with a style sheet draws with Qt's own frame and arrow in the Windows 11
   style, so a framed site field looks a little different from the other dropdowns.
 

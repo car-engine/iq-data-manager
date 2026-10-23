@@ -343,7 +343,7 @@ error colour (red), and its tooltip gives the reason. The frames use the checkli
 colours for the theme and follow a switch between light and dark. A frame keeps the
 italics of a value filled in from the log, the file size or fc. In "Several folders"
 mode the frames cover the shared fields and the selected folder's channels. While
-Save is disabled, its tooltip says "Complete the items under Before saving first."
+Save is disabled, its tooltip says 'Complete the items under "Before saving" first.'
 
 Values filled in after a scan:
 
