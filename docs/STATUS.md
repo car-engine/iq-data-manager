@@ -252,8 +252,10 @@ Things that cannot be tested on the development PC, or were tested only partly.
   26 of 28 steps passed. Step 1.3 failed because the band list fits its popup and
   cannot scroll (a fault of the step, shown by `dev/o56-popup/probe.py`); a repeat
   with a longer list is open. Step 1.7, the wheel on a touchpad, was not run. The
-  tooltip of step 2.1 now quotes "Before saving", as the user asked. Open: the look
-  of a framed dropdown (step 4.2), the user's choice.
+  tooltip of step 2.1 now quotes "Before saving", as the user asked. The user
+  repeated step 1.3 on a catalogue with 15 sites (`dev/test-1.2.1/data-sites`): the
+  long list scrolls. For step 4.2 a dropdown's frame is now painted by a holder
+  (`101ac99`); the user looks at it in the second test build, `dist/test-1.2.1-2`.
 
 - **Version 1.2 in the field:** several real folders of one day on the NAS (scan
   time over the network, and Cancel during a long scan, step 3.16 of the manual
@@ -327,8 +329,9 @@ that (checked on 2026-10-23).
   the folders `o54-shots` and `o55-shots` (probe and screenshot scripts), and, after
   the manual test, `test-1.2.1` (the checklist, its data and scripts, and `harness`,
   which holds a copy of the page, a headless Edge profile and a screenshot).
-- The test build of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/` and
-  `build/test-1.2.1-build.log`, after the manual test.
+- The test builds of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/`,
+  `build/test-1.2.1-build.log`, `dist/test-1.2.1-2/`, `build/work-test-1.2.1-2/` and
+  `build/test-1.2.1-2-build.log`, after the manual test. Also `dev/o56-popup/`.
 - The pytest folders under `%TEMP%\pytest-of-Perry\` hold directory junctions from
   the release review and the D75 tests. Remove each as a link, so that its target is
   not touched.
