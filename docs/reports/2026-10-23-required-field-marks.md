@@ -64,8 +64,20 @@ the optional step 1.7 (a touchpad) was not run.
   bar, so its scroll range is 0 to 0; a list of 30 entries scrolled with the guard
   installed (value 0 to 3). The step tested a list that cannot scroll; the app
   needs no change. See the 1.2.1 summary for a repeat of the step.
-- **Step 4.2:** the user asked why the framed dropdown looks different. Answered in
-  chat; see "Issues found in self-review", item 1.
+- **Step 4.2:** the user asked why the framed dropdown looks different. A style sheet
+  on a dropdown makes the Windows 11 style draw it with Qt's generic box and arrow.
+  Of three options (keep it, frame a holder around the dropdown, no frame on
+  dropdowns), the user asked to try the holder. `MarkFrame`
+  ([mark_frame.py](../../src/iqdm/gui/widgets/mark_frame.py)) holds the Site
+  dropdown and each RF chain row's "Applies to" with a 2-pixel margin and paints the
+  frame there; the dropdown gets no style sheet. The margin first cut "Recording"
+  short in its column, so `ParamTable.add_row()` widens the column to the holder's
+  width. Test: `test_a_dropdown_is_framed_by_its_holder_and_keeps_its_own_look`, and
+  the holder's colour in `test_an_rf_chain_row_on_a_missing_channel_is_framed`.
+  An offscreen render with the `windows11` style in the dark palette showed both
+  dropdowns with their native box and arrow inside the frame. The suite after this
+  change: 1,959 passed, 4 skipped (`pytest`, 158.98 s); `ruff check` clean. The user
+  looks at the second test build, `dist/test-1.2.1-2`.
 
 ## Changes from the plan
 
@@ -91,9 +103,9 @@ None.
 
 ## Issues found in self-review
 
-1. **A framed dropdown looks a little different from the others** (see above). Left
-   as it is; D95 records it. A frame drawn without a style sheet would need a custom
-   paint of every field type.
+1. **A framed dropdown looked a little different from the others** in the first
+   build. Changed after the manual test: see "Changes after the user's review",
+   step 4.2.
 2. **The frames follow the checklist's refresh,** 150 ms after typing stops, as the
    checklist does.
 3. **I wrote `dev/o54-debug.py` once with a heredoc** that left it empty, then wrote

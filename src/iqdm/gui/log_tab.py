@@ -46,6 +46,7 @@ from iqdm.db.connection import DatabaseError
 from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState, ParamInput
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.folder_table import FolderRow, FolderTable
+from iqdm.gui.widgets.mark_frame import MarkFrame
 from iqdm.gui.widgets.param_table import ParamTable
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import Task, TaskRunner
@@ -491,7 +492,7 @@ class LogTab(QWidget):
         self.remarks_edit.setFixedHeight(60)
 
         site_row = QHBoxLayout()
-        site_row.addWidget(self.site_combo, 1)
+        site_row.addWidget(MarkFrame(self.site_combo), 1)  # its frame marks a missing site
         site_row.addWidget(self.add_site_button)
         project_row = QHBoxLayout()
         project_row.addWidget(self.project_combo, 1)
@@ -2554,26 +2555,29 @@ def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness])
 MARK_PROPERTY = "iqdmMark"  # the field's mark for tests: "todo", "error" or ""
 
 
+def mark_colour(widget: QWidget, mark: entry.ChecklistItem | None) -> QColor | None:
+    """The frame colour of a mark: the information colour (amber) for an empty required
+    field, the error colour (red) for a wrong value, or None (D95).
+
+    From the application's palette: a widget with a style sheet keeps its old palette
+    after a theme switch until its sheet is set again (_restyle_sheets()).
+    """
+    if mark is None:
+        return None
+    state = ItemState.INFO if mark.state is ItemState.TODO else ItemState.ERROR
+    return colours_for(QApplication.palette(widget))[state]
+
+
 def mark_style(
     widget: QWidget, mark: entry.ChecklistItem | None, *, italic: bool = False
 ) -> str:
-    """The style sheet of a field: italic for a filled-in value, and a frame for a mark.
-
-    An empty required field gets a frame in the information colour (amber), and a wrong
-    value one in the error colour (red), from the checklist's colours for the theme
-    (D95). The rules name the widget's type, so a dropdown's list keeps its own look.
-    """
+    """The style sheet of a text field: italic for a filled-in value, and a frame in
+    mark_colour() for a mark (D95). The rules name the type, QLineEdit."""
     rules = ["font-style: italic;"] if italic else []
-    if mark is not None:
-        state = ItemState.INFO if mark.state is ItemState.TODO else ItemState.ERROR
-        # The application's palette: a widget with a style sheet keeps its old palette
-        # after a theme switch until its sheet is set again (_restyle_sheets()).
-        colour = colours_for(QApplication.palette(widget))[state]
+    colour = mark_colour(widget, mark)
+    if colour is not None:
         rules.append(f"border: 2px solid {colour.name()}; border-radius: 3px;")
-    if not rules:
-        return ""
-    kind = "QComboBox" if isinstance(widget, QComboBox) else "QLineEdit"
-    return f"{kind} {{ {' '.join(rules)} }}"
+    return f"QLineEdit {{ {' '.join(rules)} }}" if rules else ""
 
 
 def _show_mark(
@@ -2584,8 +2588,17 @@ def _show_mark(
     tooltip: str = "",
 ) -> None:
     """Frame a field that is empty but required, or wrong (D95). A wrong value's
-    tooltip gives the reason; otherwise the field keeps `tooltip`."""
-    widget.setStyleSheet(mark_style(widget, mark, italic=italic))
+    tooltip gives the reason; otherwise the field keeps `tooltip`.
+
+    A dropdown sits in a MarkFrame, which draws the frame, so the dropdown needs no
+    style sheet and keeps the look of the Windows style. A text field gets a style
+    sheet, which it may need for italics anyway.
+    """
+    holder = widget.parentWidget()
+    if isinstance(widget, QComboBox) and isinstance(holder, MarkFrame):
+        holder.set_colour(mark_colour(widget, mark))
+    else:
+        widget.setStyleSheet(mark_style(widget, mark, italic=italic))
     widget.setProperty(MARK_PROPERTY, "" if mark is None else str(mark.state))
     error = mark is not None and mark.state is ItemState.ERROR
     widget.setToolTip(mark.text if error and mark is not None else tooltip)

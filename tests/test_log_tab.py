@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox
 
 import iqdm.gui.log_tab as log_tab_module
 from conftest import recorder_log_text
@@ -28,7 +28,8 @@ from iqdm.gui.log_tab import (
     scan_summary,
     time_text,
 )
-from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
+from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS, colours_for
+from iqdm.gui.widgets.mark_frame import MarkFrame
 from iqdm.gui.widgets.template_fields import TemplateFieldsDialog
 from iqdm.gui.workers import TaskRunner
 from iqdm.location import split_location
@@ -1801,6 +1802,22 @@ def test_empty_required_fields_are_framed(qtbot, make_tab, make_recording, site_
         assert "border" not in field.styleSheet()
 
 
+def test_a_dropdown_is_framed_by_its_holder_and_keeps_its_own_look(make_tab, site_id):
+    """D95: a style sheet would give the dropdown Qt's generic look (manual test, 4.2)."""
+    tab = make_tab()
+    tab.refresh_checklist()
+    frame = tab.site_combo.parentWidget()
+    assert isinstance(frame, MarkFrame)
+    assert frame.colour() == colours_for(tab.palette())[ItemState.INFO]
+    assert tab.site_combo.styleSheet() == ""
+    tab.reload_choices(select_site=site_id)
+    tab.runner.wait(10_000)
+    QApplication.processEvents()
+    tab.refresh_checklist()
+    assert frame.colour() is None
+    assert tab.field_mark(tab.site_combo) == ""
+
+
 def test_a_wrong_value_is_framed_with_its_reason(qtbot, make_tab, make_recording):
     tab = make_tab()
     scan_folder(qtbot, tab, make_recording().root)
@@ -1851,6 +1868,8 @@ def test_an_rf_chain_row_on_a_missing_channel_is_framed(qtbot, make_tab, make_re
     applies_to = tab.param_table.row_widgets(0)[0]
     assert tab.field_mark(applies_to) == "error"
     assert applies_to.toolTip() == "RF chain row 1 (LNA): channel 2 is not in this recording"
+    assert applies_to.parentWidget().colour() == colours_for(tab.palette())[ItemState.ERROR]
+    assert applies_to.styleSheet() == ""
 
 
 def test_the_disabled_save_button_says_why(qtbot, make_tab, make_recording, site_id):

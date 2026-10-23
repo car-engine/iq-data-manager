@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from iqdm.entry import ParamInput
+from iqdm.gui.widgets.mark_frame import MarkFrame
 
 HEADERS = ("Applies to", "Parameter", "Value", "Unit", "")
 
@@ -102,8 +103,14 @@ class ParamTable(QWidget):
         )
         position = self.table.rowCount()
         self.table.insertRow(position)
-        for col, widget in enumerate((row.applies_to, row.param, row.value, row.unit, row.remove)):
+        frame = MarkFrame(row.applies_to)  # its frame marks a channel not in the recording (D95)
+        for col, widget in enumerate((frame, row.param, row.value, row.unit, row.remove)):
             self.table.setCellWidget(position, col, widget)
+        # The column fits "Recording" and the frame's margin. A table column ignores the
+        # size of a widget in a cell, so it is widened here.
+        width = frame.sizeHint().width()
+        if self.table.columnWidth(0) < width:
+            self.table.setColumnWidth(0, width)
         applies_to.currentIndexChanged.connect(self.changed)
         for edit in (row.param, row.value, row.unit):
             edit.textChanged.connect(self.changed)

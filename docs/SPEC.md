@@ -339,7 +339,9 @@ is not blank. The checklist's lines for these fields are built from it, so the t
 agree. An empty required field gets a 2-pixel frame in the information colour
 (amber) and a placeholder with the word "Required" ("Your name (required)", "Choose a
 site (required)", "Required", "Required, e.g. 10M"). A wrong value gets a frame in the
-error colour (red), and its tooltip gives the reason. The frames use the checklist's
+error colour (red), and its tooltip gives the reason. A dropdown's frame is painted
+around it by `gui/widgets/mark_frame.py`, so the dropdown keeps the look of the
+Windows style; a text field's frame is a style sheet. The frames use the checklist's
 colours for the theme and follow a switch between light and dark. A frame keeps the
 italics of a value filled in from the log, the file size or fc. In "Several folders"
 mode the frames cover the shared fields and the selected folder's channels. While

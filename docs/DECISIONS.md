@@ -2278,8 +2278,14 @@ Save button, so the field itself was hard to find. The user chose an amber frame
 - While Save is disabled, its tooltip says 'Complete the items under "Before saving"
   first.' The quotes mark the name of the panel (the user's manual test of 1.2.1,
   step 2.1).
-- A dropdown with a style sheet draws with Qt's own frame and arrow in the Windows 11
-  style, so a framed site field looks a little different from the other dropdowns.
+- A dropdown gets no style sheet, because with one the Windows 11 style draws it
+  with Qt's generic box and arrow (the first build of 1.2.1; the user asked why in
+  the manual test, step 4.2). The Site dropdown and each RF chain row's "Applies to"
+  sit in a `MarkFrame`, which keeps a 2-pixel margin around the dropdown and paints
+  the frame in it. The dropdown keeps its native look, with the frame just outside
+  it. The margin stays when the frame is off, so the layout does not move, and the
+  RF chain's "Applies to" column is widened to fit it. Text fields keep their frame
+  from a style sheet; they look the same with one.
 
 Affects: SPEC section 6, `entry.py` (`FieldName`, `field_marks()`), `gui/log_tab.py`,
-the user guide.
+`gui/widgets/mark_frame.py`, `gui/widgets/param_table.py`, the user guide.
