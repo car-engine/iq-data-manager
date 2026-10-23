@@ -16,14 +16,21 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 import iqdm.gui.transfer_tab as tab_module
 from conftest import recording_from
-from iqdm import transferqueue, viewer
+from iqdm import movecopy, transferqueue, viewer
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import DatabaseBusyError, open_db, write_transaction
 from iqdm.entry import ItemState
-from iqdm.gui.transfer_tab import TransferTab
+from iqdm.gui.transfer_tab import TransferTab, _mode_of
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
-from iqdm.models import IN_PLACE_NOTE, ArchiveState, HashMode, Operation, TransferEntry
+from iqdm.models import (
+    IN_PLACE_NOTE,
+    ArchiveState,
+    HashMode,
+    Operation,
+    TransferEntry,
+    Verification,
+)
 from iqdm.movecopy import LaptopStep, Page
 from iqdm.transfer.copier import CopyItem, copy_files
 from iqdm.transfer.delete import DeleteResult, KeptFile
@@ -91,12 +98,13 @@ class Env:
         self.tabs: list[TransferTab] = []
 
     def tab(self, **kw) -> TransferTab:
+        config = kw.pop("config", self.config)
         values = {
             "manifests_dir": self.manifests,
             "performed_by": lambda: "userA",
             "preview_options": STUBS,
         } | kw
-        tab = TransferTab(self.config, **values)
+        tab = TransferTab(config, **values)
         self.qtbot.addWidget(tab)
         self.tabs.append(tab)
         self.idle(tab)
@@ -419,14 +427,20 @@ def test_archive_check_and_delete(env, answers):
     assert archive_page.isAncestorOf(tab.check_delete_button)  # D96
     assert archive_page.isAncestorOf(tab.delete_button)
     dest = archive_to_nas(env, tab)
-    assert tab.result[1].endswith("The recording now points at the NAS copy.")
+    assert tab.result == (
+        ItemState.OK,
+        f"The archive passed its check. Transfer {env.transfers()[0].id} is recorded. The "
+        "recording now points at the NAS copy. Check before delete passed: the laptop copy "
+        "can be deleted.",
+    )
     assert env.recording().archive_state is ArchiveState.ARCHIVED
+    archive, check = env.transfers()  # D97: the check ran straight after the archive
+    assert (check.operation, check.parent_id) == (Operation.CHECK, archive.id)
     env.idle(tab)
-    assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
-    assert tab.check_delete_button.isEnabled()
-    assert not tab.delete_button.isEnabled()
+    assert tab.laptop_state().step is LaptopStep.READY
+    assert tab.delete_button.isEnabled()
 
-    tab.check_delete_button.click()
+    tab.check_delete_button.click()  # can still run again
     env.idle(tab)
     assert tab.result[0] is ItemState.OK
     assert tab.laptop_state().step is LaptopStep.READY
@@ -476,17 +490,79 @@ def test_delete_results_name_one_file_in_the_singular(env):
     )
 
 
-def test_check_before_delete_needs_a_hash_mode_that_reads_content(env):
+def test_the_archive_page_offers_no_sizes_only(env):
+    """D97: Check before delete follows each archive and needs hashes (D55)."""
+    tab = env.tab(config=replace(env.config, default_hash_mode=HashMode.NONE))
+    assert tab.archive_hash_combo.findData(HashMode.NONE) == -1
+    assert _mode_of(tab.archive_hash_combo) is HashMode.SAMPLE  # the default was sizes only
+    assert _mode_of(tab.copy_hash_combo) is HashMode.NONE
+    assert tab.check_hash_combo.findData(HashMode.NONE) >= 0
+
+
+def run_archive_with_check(env, monkeypatch, check) -> TransferTab:
+    """Run archive in the form, with check_before_delete() replaced by `check`."""
+    monkeypatch.setattr(movecopy, "check_before_delete", check)
     tab = env.loaded(env.tab())
     archive_to_nas(env, tab)
     env.idle(tab)
-    tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(HashMode.NONE))
-    tab.check_delete_button.click()
-    env.idle(tab)
-    assert tab.result[0] is ItemState.ERROR
-    assert tab.result[1].startswith("Check before delete reads the content of the NAS files.")
+    return tab
+
+
+def test_a_failed_check_after_run_archive_keeps_the_laptop_copy(env, monkeypatch):
+    """D97 with D85: the archive stands, the result is amber, the delete stays off."""
+
+    def busy(*_a, **_kw):
+        raise DatabaseBusyError("The database is in use by someone else.")
+
+    tab = run_archive_with_check(env, monkeypatch, busy)
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    assert tab.result[0] is ItemState.INFO
+    assert tab.result[1].startswith("Archived: transfer ")
+    assert "in use by someone else" in tab.result[1]
+    assert tab.result[1].endswith(
+        "Click Check before delete on the Archive page; the laptop copy can be deleted only "
+        "after it passes."
+    )
     assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
-    assert len(env.transfers()) == 1
+    assert tab.check_delete_button.isEnabled() and not tab.delete_button.isEnabled()
+    assert len(tree(env.source)) == 11
+
+
+def test_stop_during_the_check_after_an_archive_asks_nothing(env, monkeypatch, answers):
+    """D97: Stop during the check stops the check; the copy's question does not apply."""
+    real = movecopy.check_before_delete
+    started: list[bool] = []
+
+    def wait_for_stop(db, archive_id, **kw):
+        started.append(True)
+        while not kw["cancelled"]():
+            time.sleep(0.01)
+        return real(db, archive_id, **kw)
+
+    monkeypatch.setattr(movecopy, "check_before_delete", wait_for_stop)
+    tab = env.loaded(env.tab())
+    tab.show_page(Page.ARCHIVE)
+    tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    env.previewed(tab)
+    tab.run_button.click()
+    env.qtbot.waitUntil(lambda: bool(started) and tab.job == "check", timeout=20_000)
+    assert tab.phase_label.text() == movecopy.CHECK_PHASE
+    answers.next = QMessageBox.StandardButton.No
+    assert tab.stop()  # stops without a question
+    assert answers.texts == []
+    env.idle(tab)
+    assert tab.result[0] is ItemState.INFO
+    assert "Check before delete was stopped." in tab.result[1]
+    assert env.recording().archive_state is ArchiveState.ARCHIVED
+    assert tab.laptop_state().step is LaptopStep.CHECK_NEEDED
+    _archive, check = env.transfers()
+    assert check.verification is Verification.SKIPPED
+
+
+def test_the_check_after_box_is_gone(env):
+    tab = env.tab()
+    assert not hasattr(tab, "check_after_box")
+    assert tab_module.ARCHIVE_COMPARE_TOOLTIP in tab.archive_hash_combo.toolTip()
 
 
 def test_check_archive_from_the_tab(env):
@@ -889,7 +965,7 @@ def test_a_locked_database_after_a_passed_archive_is_check_needed(env, monkeypat
     def busy(*_a, **_kw):
         raise DatabaseBusyError("The database is in use by someone else.")
 
-    monkeypatch.setattr(transferqueue, "check_before_delete", busy)
+    monkeypatch.setattr(movecopy, "check_before_delete", busy)
     tab = env.tab()
     queued_from_viewer(env, tab, env.rid)
     tab.start_queue_button.click()
@@ -1044,11 +1120,15 @@ def test_check_archive_items(env):
     assert env.transfers()[-1].operation is Operation.CHECK
 
 
-def test_an_archive_whose_check_is_needed_is_not_failed(env):
+def test_an_archive_whose_check_is_needed_is_not_failed(env, monkeypatch):
     """D85: amber, counted apart, kept by Clear finished, removed by Remove."""
+    real = movecopy.check_before_delete
+    monkeypatch.setattr(
+        movecopy,
+        "check_before_delete",
+        lambda db, aid, **kw: real(db, aid, **(kw | {"cancelled": lambda: True})),
+    )
     tab = env.tab()
-    tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(HashMode.NONE))  # sizes only
-    assert tab.check_after_box.isChecked()
     queued_from_viewer(env, tab, env.rid)
     tab.start_queue_button.click()
     queue_idle(env, tab)

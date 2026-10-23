@@ -12,11 +12,12 @@ from pathlib import Path
 import pytest
 
 from conftest import recording_from
-from iqdm import transferqueue
+from iqdm import movecopy, transferqueue
 from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import DatabaseBusyError, DatabaseError, open_db, write_transaction
 from iqdm.models import ArchiveState, HashMode, Operation, Verification
+from iqdm.movecopy import CHECK_PHASE
 from iqdm.transfer.copier import CopyProgress
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import CHECK_NEEDS_HASHES, TransferRequest
@@ -294,7 +295,7 @@ class Env:
             **kw,
         )
 
-    def run(self, it: QueueItem, *, check_after=True, cancelled=lambda: False, report=None):
+    def run(self, it: QueueItem, *, cancelled=lambda: False, report=None):
         seen: list[object] = []
         result = run_item(
             self.db,
@@ -302,7 +303,6 @@ class Env:
             self.config,
             performed_by="userA",
             manifests_dir=self.manifests,
-            check_after_archive=check_after,
             report=report or seen.append,
             cancelled=cancelled,
             preview_options=OPTIONS,
@@ -345,29 +345,33 @@ def test_an_archive_with_its_check_before_delete(env):
     ]
 
 
-def test_an_archive_without_the_check(env):
-    result, _ = env.run(env.item(), check_after=False)
+def test_a_copy_is_not_followed_by_a_check(env):
+    """D97: Check before delete follows every archive, and only an archive."""
+    result, seen = env.run(env.item(1, dest=env.tmp / "pc" / "c", operation=Operation.COPY))
     assert result.state is QueueState.DONE
-    assert [t.operation for t in env.transfers()] == [Operation.ARCHIVE]
+    assert [t.operation for t in env.transfers(1)] == [Operation.COPY]
+    assert Phase(CHECK_PHASE) not in seen
 
 
 def test_sizes_only_skips_the_check_and_says_why(env):
-    """D85: the archive passed, so it is not Failed; its laptop copy cannot go yet."""
-    result, _ = env.run(env.item(hash_mode=HashMode.NONE))
+    """D85: the archive passed, so it is not Failed; its laptop copy cannot go yet. The
+    tab offers no "Sizes only" for an archive (D97); a request made elsewhere can."""
+    result, seen = env.run(env.item(hash_mode=HashMode.NONE))
     assert result.state is QueueState.CHECK_NEEDED
     assert result.note.startswith("Archived: transfer ")
     assert CHECK_NEEDS_HASHES in result.note
     assert result.note.endswith(
-        "Run Check before delete in the form; the laptop copy can be deleted only after "
-        "it passes."
+        "Click Check before delete on the Archive page; the laptop copy can be deleted only "
+        "after it passes."
     )
+    assert Phase(CHECK_PHASE) not in seen
     assert [t.operation for t in env.transfers()] == [Operation.ARCHIVE]
     assert env.recording().archive_state is ArchiveState.ARCHIVED
 
 
 def test_a_failed_check_before_delete_is_check_needed(env, monkeypatch):
     """The check found a NAS file that differs: the archive still stands (D85)."""
-    real = transferqueue.check_before_delete
+    real = movecopy.check_before_delete
 
     def spoil_then_check(db, archive_id, **kw):
         dest = env.nas / Path(env.infos[0].root).name
@@ -375,7 +379,7 @@ def test_a_failed_check_before_delete_is_check_needed(env, monkeypatch):
         first.write_bytes(b"\xff" * first.stat().st_size)  # same size, other content
         return real(db, archive_id, **kw)
 
-    monkeypatch.setattr(transferqueue, "check_before_delete", spoil_then_check)
+    monkeypatch.setattr(movecopy, "check_before_delete", spoil_then_check)
     item = env.item(hash_mode=HashMode.ALL)
     result, _ = env.run(item)
     assert result.state is QueueState.CHECK_NEEDED
@@ -400,7 +404,7 @@ def test_a_check_that_cannot_run_is_check_needed(env, monkeypatch, error, reason
     def fail(*_a, **_kw):
         raise error
 
-    monkeypatch.setattr(transferqueue, "check_before_delete", fail)
+    monkeypatch.setattr(movecopy, "check_before_delete", fail)
     result, _ = env.run(env.item())
     assert result.state is QueueState.CHECK_NEEDED
     assert "Check before delete could not run:" in result.note
@@ -408,9 +412,9 @@ def test_a_check_that_cannot_run_is_check_needed(env, monkeypatch, error, reason
 
 
 def test_a_stopped_check_before_delete_is_check_needed(env, monkeypatch):
-    real = transferqueue.check_before_delete
+    real = movecopy.check_before_delete
     monkeypatch.setattr(
-        transferqueue,
+        movecopy,
         "check_before_delete",
         lambda db, aid, **kw: real(db, aid, **(kw | {"cancelled": lambda: True})),
     )
@@ -504,7 +508,7 @@ def test_an_item_for_a_deleted_entry_is_not_started(env):
 
 
 def test_an_item_for_its_own_entry_runs(env):
-    result, _ = env.run(env.item(created_at=env.recording().created_at), check_after=False)
+    result, _ = env.run(env.item(created_at=env.recording().created_at))
     assert result.state is QueueState.DONE
     assert transferqueue.entry_problem(env.db, env.item(created_at=None)) is None
 

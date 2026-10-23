@@ -89,6 +89,7 @@ from iqdm.gui.log_tab import (
 from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
 from iqdm.gui.transfer_tab import (
+    ARCHIVE_COMPARE_TOOLTIP,
     PAUSE_QUEUE_QUESTION,
     QUEUE_EDIT_NOTE,
     QUEUE_HEADERS,
@@ -323,6 +324,11 @@ def test_queue_text_is_plain():
         *(str(k) for k in transferqueue.QueueKind),
         "Archive or copy",
         "Check archive",
+        # Check before delete after each archive (D97)
+        movecopy.CHECK_AFTER_ARCHIVE_TEXT,
+        movecopy.CHECK_PHASE,
+        movecopy.check_needed_note(3, "Check before delete was stopped."),
+        ARCHIVE_COMPARE_TOOLTIP,
     ]
     assert offending(texts) == []
 

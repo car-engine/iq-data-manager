@@ -5,9 +5,10 @@ channels, range and check mode, or a Check archive of one recording (O41). The q
 lives in memory; a stopped item stays under "Unfinished transfers" as before.
 
 run_item() runs one item with the functions the tab already uses: preview_transfer(),
-run_transfer(), check_before_delete() and check_archive(). It adds no file code of its
-own. Pause stops the running item between chunks, as Stop does; the next run of that
-item previews again and skips the files already in place (D51, D63). No Qt here.
+run_transfer(), movecopy.check_after_archive() (which runs check_before_delete()) and
+check_archive(). It adds no file code of its own. Pause stops the running item between
+chunks, as Stop does; the next run of that item previews again and skips the files
+already in place (D51, D63). No Qt here.
 """
 
 import ntpath
@@ -21,15 +22,17 @@ from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import open_db
 from iqdm.models import ArchiveState, HashMode, Operation, Recording, Verification
-from iqdm.movecopy import default_copy_destination
+from iqdm.movecopy import (
+    CHECK_PHASE,
+    check_after_archive,
+    check_needed_note,
+    default_copy_destination,
+)
 from iqdm.scan.scanner import ScanCancelled, ScanError
 from iqdm.timeutil import display_time
-from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import (
-    CHECK_NEEDS_HASHES,
     TransferRequest,
     check_archive,
-    check_before_delete,
     preview_transfer,
     run_transfer,
 )
@@ -370,13 +373,13 @@ def run_item(
     *,
     performed_by: str,
     manifests_dir: Path,
-    check_after_archive: bool,
     report: Callable[[object], None],
     copy_report: Callable[[object], None] | None = None,
     cancelled: Callable[[], bool],
     preview_options: Mapping[str, Any] | None = None,
 ) -> ItemResult:
-    """Run one item: preview, then copy or archive, then the optional check (D81).
+    """Run one item: preview, then copy or archive, then for an archive Check before
+    delete (D81, D97).
 
     report gets Phase, scan counts (int), VerifyProgress and RetryNotice; copy_report
     gets CopyProgress, and defaults to report. A cancel gives PAUSED while the item can
@@ -439,47 +442,31 @@ def run_item(
     if not outcome.passed:
         note = f"Transfer {tid}: {outcome.notes or 'the check after the copy failed.'}"
         return ItemResult(state=QueueState.FAILED, note=note, transfer_id=tid, size_bytes=size)
-    archive = request.operation is Operation.ARCHIVE
     done = f"Transfer {tid} passed its check."
-    if not (archive and check_after_archive):
+    if request.operation is not Operation.ARCHIVE or tid is None:
         return ItemResult(state=QueueState.DONE, note=done, transfer_id=tid, size_bytes=size)
-
-    def check_needed(why: str) -> ItemResult:
-        """The archive passed and the recording points at the NAS; the check did not (D85)."""
-        note = (
-            f"Archived: transfer {tid} passed its check, and the recording now points at "
-            f"the NAS copy. The laptop copy stays. {why} Run Check before delete in the "
-            "form; the laptop copy can be deleted only after it passes."
-        )
-        return ItemResult(
-            state=QueueState.CHECK_NEEDED, note=note, transfer_id=tid, size_bytes=size
-        )
-
-    if request.hash_mode is HashMode.NONE:
-        return check_needed(f"Check before delete was not run: {CHECK_NEEDS_HASHES}")
-    report(Phase("Check before delete: reading the NAS copy"))
-    try:
-        check = check_before_delete(
-            db_path,
-            tid,
-            hash_mode=request.hash_mode,
-            sample_fraction=config.hash_sample_fraction,
-            performed_by=performed_by,
-            progress=report,
-            cancelled=cancelled,
-        )
-    except DeleteRefused as exc:
-        return check_needed(f"Check before delete could not run: {' '.join(exc.reasons)}")
-    except Exception as exc:
-        # The archive passed, so any error here, a locked database among them, is a
-        # check still needed. The tab would show it as Failed (review of 1.1.0, finding 1).
-        return check_needed(f"Check before delete could not run: {exc}")
-    if check.verification is Verification.PASS:
+    # Check before delete runs straight after every archive (D97). "Sizes only" reads no
+    # file content, so it gives "Archived, check needed" (D85).
+    if request.hash_mode is not HashMode.NONE:
+        report(Phase(CHECK_PHASE))
+    after = check_after_archive(
+        db_path,
+        tid,
+        request.hash_mode,
+        sample_fraction=config.hash_sample_fraction,
+        performed_by=performed_by,
+        progress=report,
+        cancelled=cancelled,
+    )
+    if after.passed:
         note = f"{done} Check before delete passed; the laptop copy can be deleted."
         return ItemResult(state=QueueState.DONE, note=note, transfer_id=tid, size_bytes=size)
-    if check.verification is Verification.SKIPPED:
-        return check_needed(f"Check before delete was stopped. {check.notes}".strip())
-    return check_needed(f"Check before delete failed: {check.notes}")
+    return ItemResult(
+        state=QueueState.CHECK_NEEDED,
+        note=check_needed_note(tid, after.why),
+        transfer_id=tid,
+        size_bytes=size,
+    )
 
 
 def _run_check_archive(

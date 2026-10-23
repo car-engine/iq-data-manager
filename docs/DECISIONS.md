@@ -114,6 +114,7 @@ Rules for this file:
 | D94 | Logged by is typed by the user | 2026-10-23, version 1.2.1 | Active |
 | D95 | Fields to fill in or correct are framed | 2026-10-23, version 1.2.1 | Active; amends D23 |
 | D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active |
+| D97 | Check before delete straight after each archive | 2026-10-23, version 1.3 | Active; amends D81 and D85 |
 
 ## D1. Sample types
 
@@ -2350,3 +2351,47 @@ archives and checks at once. The user found the layout of the mock-up fine on
 Affects: SPEC sections 5 and 8, `movecopy.py` (`Page`, `page_for()`,
 `archive_destination()`), `transferqueue.py` (`item_for_recording()` takes the copy
 folder), `gui/transfer_tab.py`, `app.py`, the user guide.
+
+## D97. Check before delete straight after each archive
+
+Closes O57. Amends D81 and D85. Team feedback on 1.2 (2026-10-23): Run archive in the
+form ran no Check before delete afterwards, and a queue ran it only while "After each
+archive, run Check before delete" was ticked. The user chose a check straight after
+each archive, from the form and from the queue, over one check pass at the end of the
+queue, and asked that the box be removed (2026-10-23). The user approved the
+recommended answer on "Sizes only" with the plan for version 1.3.0 (2026-10-23).
+
+- After every archive that passed its check after the copy, Check before delete (D55)
+  runs at once, in the same operation: in Run archive's worker in the form, and in
+  `transferqueue.run_item()`. Both call `movecopy.check_after_archive()`, which holds
+  the code that `run_item()` had. The check uses the archive's Compare choice.
+- The box "After each archive, run Check before delete" is gone.
+- **"Sizes only":** the Archive page's Compare dropdown offers only "Sizes, and hashes
+  of …" and "Sizes and hashes of every file", because Check before delete reads file
+  content (D55). When the default check mode in Settings is "Sizes only", the Archive
+  page starts at the sampled hashes. The Copy and Check pages keep all three choices.
+  An unfinished archive stored with "Sizes only" opens in the form with the sampled
+  hashes. `run_item()` still gives "Archived, check needed" for an archive request
+  with "Sizes only" made outside the tab.
+- A check that fails, is stopped or cannot run leaves the archive as it is: the
+  recording points at the NAS copy, and the laptop copy stays. The form shows that
+  with the information mark in amber, and the queue with "Archived, check needed"
+  (D85). Both notes end "Click Check before delete on the Archive page; the laptop copy
+  can be deleted only after it passes."
+- A passed check ends the form's result with "Check before delete passed: the laptop
+  copy can be deleted." Delete laptop copy stays a separate action that asks first,
+  with No as the default (D55).
+- Stop during the check stops the check without the copy's question, as Stop of a
+  Check before delete always did. The tab's title then reads "checking".
+- An archive's preview says that Check before delete follows and that the estimated
+  time does not include it.
+- **Why a check after each archive rather than one at the end of the queue:** if a
+  queue stops part-way through the night, the archives before the stop are already
+  checked; each item keeps the states of D85. A check at the end would give the NAS
+  longer to drop its own cache, but only for the early items, and the check already
+  reads past this PC's cache (D55).
+- No change to `check_before_delete()`, the copy engine or the delete module.
+
+Affects: SPEC section 8, `movecopy.py` (`check_after_archive()`, `ArchiveCheck`,
+`check_needed_note()`, `CHECK_PHASE`, the preview line), `transferqueue.py`
+(`run_item()`), `gui/transfer_tab.py`, the user guide.

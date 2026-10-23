@@ -6,6 +6,7 @@
 - The destination filled in for a copy to a PC (D60).
 - The preview as lines for the checklist widget.
 - The state of the laptop copy after an archive: check before delete, delete (D55).
+- Check before delete straight after each archive, for the form and the queue (D97).
 - The tab's pages, and the page the Viewer's button opens (D96).
 - The state of an unfinished copy or archive, and progress, speed and time left.
 """
@@ -14,7 +15,7 @@ import math
 import ntpath
 import re
 from collections import deque
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -34,14 +35,23 @@ from iqdm.models import (
 )
 from iqdm.timeutil import offset_label
 from iqdm.transfer.copier import CopyProgress
-from iqdm.transfer.delete import checked_before_delete
+from iqdm.transfer.delete import DeleteRefused, checked_before_delete
 from iqdm.transfer.estimate import duration_text
-from iqdm.transfer.operations import Preview, TransferRequest
+from iqdm.transfer.operations import (
+    CHECK_NEEDS_HASHES,
+    Preview,
+    TransferRequest,
+    check_before_delete,
+)
 from iqdm.transfer.pathcheck import files_text
 from iqdm.transfer.verify import VerifyProgress
 
 FILES_LISTED = 200  # file names shown in the preview's file list; the rest are counted
 SPEED_WINDOW_S = 10.0  # the speed is averaged over this many seconds
+CHECK_AFTER_ARCHIVE_TEXT = (
+    "After the archive, Check before delete reads the NAS copy again, past this PC's file "
+    "cache. The estimated time does not include it."
+)
 
 # ---------------------------------------------------------------------------
 # Time input (D59)
@@ -296,6 +306,8 @@ def preview_summary(preview: Preview, speed_mb_s: float) -> PreviewSummary:
             )
         )
     lines.append(ChecklistItem(ItemState.INFO, _hash_text(preview)))
+    if preview.request.operation is Operation.ARCHIVE:
+        lines.append(ChecklistItem(ItemState.INFO, CHECK_AFTER_ARCHIVE_TEXT))
     side = preview.selection.side_files
     if side:
         names = ", ".join(f.rel_path for f in side)
@@ -431,6 +443,81 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
             f"The laptop copy in {folder} is still there. Before it can be deleted, "
             '"Check before delete" reads the NAS copy again, past this PC\'s file cache.'
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Check before delete straight after an archive (D97)
+# ---------------------------------------------------------------------------
+
+CHECK_PHASE = "Check before delete: reading the NAS copy"
+
+
+@dataclass(frozen=True, kw_only=True)
+class ArchiveCheck:
+    """Check before delete run straight after a passed archive.
+
+    passed is True only when the check passed. Otherwise why says what happened, for the
+    note "Archived, check needed" (D85).
+    """
+
+    passed: bool
+    why: str = ""
+
+
+def check_after_archive(
+    db_path: Path | str,
+    archive_id: int,
+    hash_mode: HashMode,
+    *,
+    sample_fraction: float,
+    performed_by: str,
+    progress: Callable[[VerifyProgress], None] | None,
+    cancelled: Callable[[], bool],
+) -> ArchiveCheck:
+    """Run Check before delete (D55) on an archive that just passed (D97).
+
+    Called by Run archive in the form and by the queue. A stop, a failed check, or a
+    check that cannot run give passed False with the reason. "Sizes only" reads no file
+    content, so the check is not run for it.
+    """
+    if hash_mode is HashMode.NONE:
+        return ArchiveCheck(
+            passed=False, why=f"Check before delete was not run: {CHECK_NEEDS_HASHES}"
+        )
+    try:
+        check = check_before_delete(
+            db_path,
+            archive_id,
+            hash_mode=hash_mode,
+            sample_fraction=sample_fraction,
+            performed_by=performed_by,
+            progress=progress,
+            cancelled=cancelled,
+        )
+    except DeleteRefused as exc:
+        return ArchiveCheck(
+            passed=False, why=f"Check before delete could not run: {' '.join(exc.reasons)}"
+        )
+    except Exception as exc:
+        # The archive passed, so any error here, a locked database among them, leaves a
+        # check still to do. It is not a failed archive (review of 1.1.0, finding 1).
+        return ArchiveCheck(passed=False, why=f"Check before delete could not run: {exc}")
+    if check.verification is Verification.PASS:
+        return ArchiveCheck(passed=True)
+    if check.verification is Verification.SKIPPED:
+        return ArchiveCheck(
+            passed=False, why=f"Check before delete was stopped. {check.notes or ''}".strip()
+        )
+    return ArchiveCheck(passed=False, why=f"Check before delete failed: {check.notes}")
+
+
+def check_needed_note(transfer_id: int | None, why: str) -> str:
+    """The note of an archive that passed but whose check did not (D85, D97)."""
+    return (
+        f"Archived: transfer {transfer_id} passed its check, and the recording now points "
+        f"at the NAS copy. The laptop copy stays. {why} Click Check before delete on the "
+        "Archive page; the laptop copy can be deleted only after it passes."
     )
 
 

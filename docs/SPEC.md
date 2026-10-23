@@ -549,7 +549,9 @@ D96. Under the recording row the tab has three pages. The page sets the operatio
   for copies" starts as `default_local_copy_root` and lasts for the session. A new
   value in Settings replaces it only while the field still holds the old value.
 - Each page keeps its own Compare choice. Check before delete uses the Archive page's
-  choice, and Compare with laptop copy the Check page's.
+  choice, and Compare with laptop copy the Check page's. The Archive page offers no
+  "Sizes only", because Check before delete follows each archive and needs hashes; it
+  starts at the sampled hashes when that is the default (D97).
 - The preview is at the right. On the Check page, Preview, Run and Add to queue are
   hidden. A change of page drops the preview.
 - The queue and the unfinished transfers are two tabs below, with their counts in the
@@ -575,11 +577,16 @@ D96. Under the recording row the tab has three pages. The page sets the operatio
   If another archive pointed the recording elsewhere while this one ran, this archive
   is logged as failed, and the recording keeps the first archive copy. The preview
   warns when an archived recording has the same start, end and channel indices (D61).
+  After an archive that passed, Check before delete runs at once, in the same
+  operation, from the form and from the queue (D97). The preview says so.
 - **Check before delete** (D55): reads the NAS files of a passed archive with the
   Windows file cache bypassed, and hashes them in the chosen hash mode. Each hash is
   compared with the copy-time hash in the manifest, or with a hash of the laptop file
   where the manifest holds none. Hash mode `none` is refused, because it reads no
-  file content. It is logged as a `check` row with the archive in `parent_id`.
+  file content. It is logged as a `check` row with the archive in `parent_id`. It runs
+  straight after each archive (D97), and again from its button on the Archive page.
+  A check after an archive that fails, is stopped or cannot run leaves the archive as
+  it is; the form's result is amber and says that the check is still needed.
 - **Delete the laptop copy**: a separate, explicit, user-confirmed action, offered
   only after an archive passed verification and a later check before delete passed
   (D55). It is logged as a `transfer_log` row with `operation = 'delete'` and the
@@ -626,7 +633,8 @@ queue (below) runs its items one after another, each as one such operation.
   between chunks. Files already copied stay; the file being copied stays as
   `<name>.partial`. The row is finished as `skipped`, and its note says "Stopped after
   N of M files". A stopped check or deletion is logged as well. A check has no
-  resume. A deletion run again finishes the rest.
+  resume. A deletion run again finishes the rest. Stop during the check after an
+  archive stops the check without asking (D97).
 - **Closing the window** during an operation asks first. Yes stops the operation and
   waits until its row is written.
 - **Unfinished transfers.** The tab lists copies and archives that were stopped,
@@ -659,11 +667,10 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
 - New archives and copies from the Viewer are previewed when added, if the tab is
   idle. Each is previewed again just before it runs; a preview with errors gives "Not
   started" and the queue moves on. A failed item does not stop the queue.
-- After a passed archive, Check before delete runs when "After each archive, run Check
-  before delete" on the Archive page is ticked (the default), except with "Sizes
-  only". An archive that
+- After a passed archive, Check before delete runs at once (D97). An archive that
   passed but whose check did not (failed, stopped, could not run, or skipped for
-  "Sizes only") gets the state ⓘ "Archived, check needed" in amber, with a note that
+  "Sizes only" in a request made outside the tab) gets the state ⓘ "Archived, check
+  needed" in amber, with a note that
   the recording points at the NAS copy and the laptop copy stays (D85). Clear
   finished keeps such items, Remove removes them, Start skips them, and the summary
   counts them apart.

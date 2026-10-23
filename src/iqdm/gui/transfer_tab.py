@@ -89,7 +89,7 @@ PAUSE_QUEUE_QUESTION = (
     "Pause the queue?\n\nThe running item stops after the part of a file it is copying. "
     "Files already copied stay. Resume continues with that item and does not copy them "
     "again.\n\nDuring a Check before delete, the check stops instead. The item is then "
-    '"Archived, check needed": run Check before delete for it in the form.'
+    '"Archived, check needed": load it and click Check before delete on the Archive page.'
 )
 QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
     QueueState.WAITING: (
@@ -123,6 +123,11 @@ COPY_FOLDER_TOOLTIP = (
 COMPARE_TOOLTIP = (
     "Every check compares the number of files and each file's size. A hash also "
     "compares the content, and reads each hashed file again."
+)
+ARCHIVE_COMPARE_TOOLTIP = (
+    "The check after the copy, and Check before delete, which follows each archive. "
+    "Every check compares the number of files and each file's size. A hash also compares "
+    "the content. Check before delete reads the NAS files again for it."
 )
 NOT_ARCHIVED_BY_APP = (
     "The app did not archive this recording to its NAS folder, so it has no laptop copy "
@@ -369,13 +374,7 @@ class TransferTab(QWidget):
         self.archive_dest_edit.textEdited.connect(self._invalidate)
         self.archive_browse_button = QPushButton("Browse...")
         self.archive_browse_button.clicked.connect(self.browse_destination)
-        self.archive_hash_combo = self._hash_combo(COMPARE_TOOLTIP)
-        self.check_after_box = QCheckBox("After each archive, run Check before delete")
-        self.check_after_box.setToolTip(
-            "Reads each NAS copy again, past this PC's file cache, so the laptop copy can be "
-            "deleted afterwards. Needs a check with hashes."
-        )
-        self.check_after_box.setChecked(True)
+        self.archive_hash_combo = self._hash_combo(ARCHIVE_COMPARE_TOOLTIP)
 
         fields = QFormLayout()
         fields.addRow(
@@ -387,7 +386,6 @@ class TransferTab(QWidget):
         layout.addWidget(note)
         layout.addWidget(self.archived_label)
         layout.addLayout(fields)
-        layout.addWidget(self.check_after_box)
         layout.addWidget(self._build_laptop())
         layout.addStretch(1)
         return page
@@ -697,11 +695,19 @@ class TransferTab(QWidget):
         )
 
     def _fill_hash_modes(self) -> None:
-        for combo in (self.archive_hash_combo, self.check_hash_combo, self.copy_hash_combo):
+        """Every check mode for copies and comparisons. An archive is followed by Check
+        before delete, which needs hashes, so the Archive page has no "Sizes only"; it
+        starts at the sampled hashes when that is the default (D97)."""
+        every = (HashMode.NONE, HashMode.SAMPLE, HashMode.ALL)
+        for combo, modes in (
+            (self.archive_hash_combo, (HashMode.SAMPLE, HashMode.ALL)),
+            (self.check_hash_combo, every),
+            (self.copy_hash_combo, every),
+        ):
             current = combo.currentData() or self.config.default_hash_mode
             combo.blockSignals(True)
             combo.clear()
-            for mode in (HashMode.NONE, HashMode.SAMPLE, HashMode.ALL):
+            for mode in modes:
                 combo.addItem(hash_mode_text(mode, self.config.hash_sample_fraction), mode)
             combo.setCurrentIndex(max(0, combo.findData(current)))
             combo.blockSignals(False)
@@ -1335,19 +1341,20 @@ class TransferTab(QWidget):
         self._edit_position = None  # an edited queue item runs here instead
         db, manifests = self.config.db_path, self.manifests_dir
         workers, user = self.config.copy_workers, self._performed_by()
+        fraction = self.config.hash_sample_fraction
         archive = preview.request.operation is Operation.ARCHIVE
         self._begin("archive" if archive else "copy", "Archiving" if archive else "Copying")
         self.phase_label.setText("Copying")
         last = [0.0]
 
-        def work(task: Task) -> TransferOutcome:
+        def work(task: Task) -> tuple[TransferOutcome, movecopy.ArchiveCheck | None]:
             def copy_progress(p: CopyProgress) -> None:
                 now = time.monotonic()
                 if now - last[0] >= PROGRESS_EVERY_S or p.files_done == p.files_total:
                     last[0] = now
                     task.report(p)
 
-            return run_transfer(
+            outcome = run_transfer(
                 db,
                 preview,
                 performed_by=user,
@@ -1358,17 +1365,33 @@ class TransferTab(QWidget):
                 copy_retry=task.report,
                 cancelled=task.is_cancelled,
             )
+            if not (archive and outcome.passed) or outcome.transfer_id is None:
+                return outcome, None
+            # Check before delete straight after the archive, in the same worker (D97)
+            task.report(Phase(movecopy.CHECK_PHASE))
+            after = movecopy.check_after_archive(
+                db,
+                outcome.transfer_id,
+                preview.request.hash_mode,
+                sample_fraction=fraction,
+                performed_by=user,
+                progress=task.report,
+                cancelled=task.is_cancelled,
+            )
+            return outcome, after
 
         self._task = self.runner.start(
             work,
-            on_success=self._run_done,
+            on_success=lambda value: self._run_done(value, archive),
             on_failure=self._operation_failed,
             on_progress=self._progress,
         )
         self._update_buttons()
 
     def _progress(self, value: object) -> None:
-        if isinstance(value, Phase):  # a queue item starts its next step (D81)
+        if isinstance(value, Phase):  # a queue item or an archive starts its next step
+            if value.text == movecopy.CHECK_PHASE:
+                self._job = "check"  # Stop now stops the check, without the copy's question
             self.phase_label.setText(value.text)
             self.progress_bar.setValue(0)
             self.progress_label.setText("")
@@ -1421,16 +1444,26 @@ class TransferTab(QWidget):
             queue = f"{self._queue_status}, " if self._queue_running else ""
             self.status_changed.emit(f"{queue}{word} {pct} %")
 
-    def _run_done(self, result: object) -> None:
-        job = self._job
+    def _run_done(self, value: object, archive: bool) -> None:
         self._end()
+        if not isinstance(value, tuple):
+            return
+        result, after = value
         if not isinstance(result, TransferOutcome):
             return
-        what = "archive" if job == "archive" else "copy"
-        if result.passed:
+        what = "archive" if archive else "copy"
+        if result.passed and archive and after is not None and not after.passed:
+            # The archive stands; only its Check before delete did not pass (D85, D97)
+            self._set_result(
+                ItemState.INFO, movecopy.check_needed_note(result.transfer_id, after.why)
+            )
+        elif result.passed:
             text = f"The {what} passed its check. Transfer {result.transfer_id} is recorded."
-            if job == "archive":
-                text += " The recording now points at the NAS copy."
+            if archive:
+                text += (
+                    " The recording now points at the NAS copy. Check before delete passed: "
+                    "the laptop copy can be deleted."
+                )
             self._set_result(ItemState.OK, text)
         elif result.verification is Verification.SKIPPED:
             self._set_result(
@@ -1835,7 +1868,6 @@ class TransferTab(QWidget):
             return
         db, config, manifests = self.config.db_path, self.config, self.manifests_dir
         options, user = self._preview_options, self._performed_by()
-        check_after = self.check_after_box.isChecked()
         position = self._queue.position(item.key) + 1
         self._queue.set_state(item.key, QueueState.RUNNING)
         self._queue_key = item.key
@@ -1860,7 +1892,6 @@ class TransferTab(QWidget):
                 config,
                 performed_by=user,
                 manifests_dir=manifests,
-                check_after_archive=check_after,
                 report=task.report,
                 copy_report=copy_report,
                 cancelled=task.is_cancelled,

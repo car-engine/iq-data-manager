@@ -9,17 +9,21 @@ from conftest import recording_from
 from iqdm import movecopy
 from iqdm.config import Config
 from iqdm.db import repository as repo
-from iqdm.db.connection import write_transaction
+from iqdm.db.connection import DatabaseBusyError, write_transaction
 from iqdm.entry import ItemState
 from iqdm.models import ArchiveState, HashMode, Operation, TransferEntry, Verification
 from iqdm.movecopy import (
+    CHECK_AFTER_ARCHIVE_TEXT,
     NOT_FINISHED,
+    ArchiveCheck,
     FormError,
     FormInput,
     LaptopStep,
     Page,
     RateMeter,
     archive_destination,
+    check_after_archive,
+    check_needed_note,
     default_copy_destination,
     form_from_transfer,
     format_time_input,
@@ -33,7 +37,13 @@ from iqdm.movecopy import (
     unfinished_state,
 )
 from iqdm.transfer.copier import CopyItem, CopyProgress, copy_files, local_path
-from iqdm.transfer.operations import TransferRequest, preview_transfer
+from iqdm.transfer.delete import DeleteRefused
+from iqdm.transfer.operations import (
+    CHECK_NEEDS_HASHES,
+    CheckOutcome,
+    TransferRequest,
+    preview_transfer,
+)
 from iqdm.transfer.pathcheck import DiskUsage
 from iqdm.transfer.verify import VerifyProgress
 from make_fixtures import ChannelSpec
@@ -283,6 +293,14 @@ def test_preview_summary_of_a_new_copy(db_path, logged, tmp_path):
     assert "The check after the copy compares every file's size and hashes 3 of 11 files." in texts(
         summary, ItemState.INFO
     )
+    assert CHECK_AFTER_ARCHIVE_TEXT not in texts(summary)
+
+
+def test_an_archive_preview_names_the_check_that_follows(db_path, logged, tmp_path):
+    """D97."""
+    _, rid = logged
+    preview = preview_of(db_path, rid, tmp_path / "nas" / "rec", operation=Operation.ARCHIVE)
+    assert CHECK_AFTER_ARCHIVE_TEXT in texts(preview_summary(preview, 110), ItemState.INFO)
 
 
 @pytest.mark.parametrize(
@@ -446,6 +464,83 @@ def test_the_latest_archive_at_the_location_counts(archived_rec):
     state = laptop_copy(archived_rec, [old, check(2, parent=1), new])
     assert state.archive == new
     assert state.step is LaptopStep.CHECK_NEEDED
+
+
+# ---------------------------------------------------------------------------
+# Check before delete straight after an archive (D97)
+# ---------------------------------------------------------------------------
+
+
+def run_check_after(monkeypatch, behaviour, mode=HashMode.SAMPLE):
+    """check_after_archive() with check_before_delete() replaced by `behaviour`."""
+    calls: list[dict] = []
+
+    def fake(db, archive_id, **kw):
+        calls.append({"archive_id": archive_id, **kw})
+        if isinstance(behaviour, Exception):
+            raise behaviour
+        return CheckOutcome(transfer_id=9, verification=behaviour, notes="2 files differ.")
+
+    monkeypatch.setattr(movecopy, "check_before_delete", fake)
+    result = check_after_archive(
+        "catalog.db",
+        7,
+        mode,
+        sample_fraction=0.25,
+        performed_by="userA",
+        progress=None,
+        cancelled=lambda: False,
+    )
+    return result, calls
+
+
+def test_a_passed_check_after_an_archive(monkeypatch):
+    result, calls = run_check_after(monkeypatch, Verification.PASS, HashMode.ALL)
+    assert result == ArchiveCheck(passed=True)
+    (call,) = calls
+    assert (call["archive_id"], call["hash_mode"], call["sample_fraction"]) == (
+        7,
+        HashMode.ALL,
+        0.25,
+    )
+    assert call["performed_by"] == "userA"
+
+
+@pytest.mark.parametrize(
+    ("behaviour", "why"),
+    [
+        (Verification.FAIL, "Check before delete failed: 2 files differ."),
+        (Verification.SKIPPED, "Check before delete was stopped. 2 files differ."),
+        (
+            DeleteRefused(["The archive copy has no file list."]),
+            "Check before delete could not run: The archive copy has no file list.",
+        ),
+        (
+            DatabaseBusyError("The database is in use by someone else."),
+            "Check before delete could not run: The database is in use by someone else.",
+        ),
+        (OSError(87, "The parameter is incorrect"), "The parameter is incorrect"),
+    ],
+)
+def test_a_check_after_an_archive_that_did_not_pass_says_why(monkeypatch, behaviour, why):
+    result, _ = run_check_after(monkeypatch, behaviour)
+    assert not result.passed
+    assert why in result.why
+
+
+def test_sizes_only_runs_no_check_after_an_archive(monkeypatch):
+    result, calls = run_check_after(monkeypatch, Verification.PASS, HashMode.NONE)
+    assert calls == []
+    assert result.why == f"Check before delete was not run: {CHECK_NEEDS_HASHES}"
+
+
+def test_the_check_needed_note_points_at_the_archive_page():
+    note = check_needed_note(12, "Check before delete was stopped.")
+    assert note == (
+        "Archived: transfer 12 passed its check, and the recording now points at the NAS "
+        "copy. The laptop copy stays. Check before delete was stopped. Click Check before "
+        "delete on the Archive page; the laptop copy can be deleted only after it passes."
+    )
 
 
 # ---------------------------------------------------------------------------
