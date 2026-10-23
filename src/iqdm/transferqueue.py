@@ -51,6 +51,8 @@ class QueueKind(StrEnum):
 
 class QueueState(StrEnum):
     WAITING = "Waiting"
+    NEEDS_NAS_FOLDER = "Needs a NAS folder"  # added from the Viewer before the folder (D98)
+    NEEDS_COPY_FOLDER = "Needs a copy folder"
     RUNNING = "Running"
     PAUSED = "Paused"
     DONE = "Done"
@@ -59,7 +61,14 @@ class QueueState(StrEnum):
     NOT_STARTED = "Not started"
 
 
-ACTIVE = frozenset({QueueState.WAITING, QueueState.RUNNING, QueueState.PAUSED})
+# An item that waits for its folder has no destination yet. Start does not run while
+# one waits (D98).
+NEEDS_FOLDER = frozenset({QueueState.NEEDS_NAS_FOLDER, QueueState.NEEDS_COPY_FOLDER})
+FOLDER_STATE = {
+    QueueKind.ARCHIVE: QueueState.NEEDS_NAS_FOLDER,
+    QueueKind.COPY: QueueState.NEEDS_COPY_FOLDER,
+}
+ACTIVE = frozenset({QueueState.WAITING, QueueState.RUNNING, QueueState.PAUSED}) | NEEDS_FOLDER
 # Clear finished removes these. An archive whose check is still needed stays, as a
 # reminder that its laptop copy cannot be deleted yet (D85).
 FINISHED = frozenset({QueueState.DONE, QueueState.FAILED, QueueState.NOT_STARTED})
@@ -79,6 +88,9 @@ class QueueItem:
     # When the entry was logged. A deleted entry's number can go to a new entry
     # (O52); the item runs only for the entry it was made for.
     created_at: str | None = None
+    # The recording's relative path, for the destination of an item that waits for
+    # its folder (D98).
+    rel_path: str = ""
 
     @property
     def destination(self) -> str:
@@ -149,7 +161,7 @@ class TransferQueue:
         if other is None:
             return ""
         same_recording = other.recording_id == item.recording_id and other.kind is item.kind
-        if same_recording and item.kind is not QueueKind.COPY:
+        if same_recording and (item.kind is not QueueKind.COPY or not item.destination):
             return f"Recording {item.recording_id} is already in the queue for this."
         return f"Another item in the queue already goes to {item.destination}."
 
@@ -163,13 +175,20 @@ class TransferQueue:
             QueueItem(recording_id=request.recording_id, label="", kind=kind, request=request)
         )
 
-    def _repeated_by(self, item: QueueItem) -> QueueItem | None:
-        """The first active item that `item` repeats, by the rules of duplicate_problem()."""
+    def _repeated_by(self, item: QueueItem, exclude: int | None = None) -> QueueItem | None:
+        """The first active item that `item` repeats, by the rules of duplicate_problem().
+
+        Two copies of one recording that both wait for the copy folder repeat, because
+        the folder would give them the same destination (D98). `exclude` is the key of
+        an item to leave out, the item itself when its folder is filled in.
+        """
         for other in self._items:
-            if other.state not in ACTIVE:
+            if other.state not in ACTIVE or other.key == exclude:
                 continue
             same_recording = other.recording_id == item.recording_id and other.kind is item.kind
             if same_recording and item.kind is not QueueKind.COPY:
+                return other
+            if same_recording and not item.destination and not other.destination:
                 return other
             same_folder = ntpath.normcase(ntpath.normpath(other.destination)) == (
                 ntpath.normcase(ntpath.normpath(item.destination))
@@ -223,6 +242,40 @@ class TransferQueue:
     def runnable_count(self) -> int:
         return sum(1 for i in self._items if i.state in (QueueState.WAITING, QueueState.PAUSED))
 
+    def waiting_for(self, state: QueueState) -> int:
+        """How many items wait for the folder that `state` names (D98)."""
+        return sum(1 for i in self._items if i.state is state)
+
+    def waiting_for_folder(self) -> int:
+        """How many items wait for a NAS folder or a copy folder. Start waits for them."""
+        return sum(1 for i in self._items if i.state in NEEDS_FOLDER)
+
+    def fill_folder(self, kind: QueueKind, folder: str) -> list[QueueItem]:
+        """Give each item of `kind` that waits for its folder a destination (D98).
+
+        The destination is `folder` plus the item's relative path, as when the folder
+        was chosen before the item was added. The item then waits to run. An item whose
+        new destination repeats an active item gets NOT_STARTED with the reason.
+        Returns the items now waiting to run, for their previews.
+        """
+        state = FOLDER_STATE[kind]
+        if not folder.strip():
+            return []
+        ready: list[QueueItem] = []
+        for n, item in enumerate(self._items):
+            if item.state is not state or item.request is None:
+                continue
+            destination = default_copy_destination(folder, item.rel_path)
+            filled = replace(item, request=replace(item.request, destination=destination))
+            other = self._repeated_by(filled, exclude=item.key)
+            if other is not None:
+                note = f"Another item in the queue already goes to {destination}."
+                self._items[n] = replace(filled, state=QueueState.NOT_STARTED, note=note)
+                continue
+            self._items[n] = replace(filled, state=QueueState.WAITING, note="")
+            ready.append(self._items[n])
+        return ready
+
 
 # ---------------------------------------------------------------------------
 # Items from the Viewer
@@ -249,7 +302,8 @@ def item_for_recording(
     A recording on the laptop is archived to `nas_folder` plus its relative path. An
     archived recording is copied to `copy_folder` plus its relative path (D60); the
     Copy page's folder starts from the setting (D96). Both take the whole recording.
-    With check_archive_only, the item is a Check archive (O41). Raises QueueError with a
+    Without the folder, the item has no destination and waits for it (D98). With
+    check_archive_only, the item is a Check archive (O41). Raises QueueError with a
     plain reason.
     """
     if rec.id is None:
@@ -266,23 +320,22 @@ def item_for_recording(
             created_at=rec.created_at,
         )
     if rec.archive_state is ArchiveState.LOCAL:
-        if not nas_folder.strip():
-            raise QueueError("Choose the NAS folder for archives on the Archive page first.")
-        destination = ntpath.normpath(ntpath.join(nas_folder.strip(), rec.rel_path))
+        destination = default_copy_destination(nas_folder, rec.rel_path)
         operation, kind = Operation.ARCHIVE, QueueKind.ARCHIVE
     else:
         destination = default_copy_destination(copy_folder, rec.rel_path)
-        if not destination:
-            raise QueueError(
-                f"Recording {rec.id} is archived, so it would be copied to this PC, but no "
-                "folder for copies is chosen. Choose it on the Copy page first."
-            )
         operation, kind = Operation.COPY, QueueKind.COPY
     request = TransferRequest(
         recording_id=rec.id, operation=operation, destination=destination, hash_mode=hash_mode
     )
     return QueueItem(
-        recording_id=rec.id, label=label, kind=kind, request=request, created_at=rec.created_at
+        recording_id=rec.id,
+        label=label,
+        kind=kind,
+        request=request,
+        state=QueueState.WAITING if destination else FOLDER_STATE[kind],
+        created_at=rec.created_at,
+        rel_path=rec.rel_path,
     )
 
 
@@ -324,8 +377,8 @@ def preview_item(
     The state stays WAITING. The note names a problem, which the preview before the run
     finds again unless it was fixed in between.
     """
-    if item.request is None:
-        return ItemResult(state=QueueState.WAITING, note="")
+    if item.request is None or not item.request.destination:
+        return ItemResult(state=item.state, note=item.note)
     try:
         preview = preview_transfer(
             db_path,
@@ -395,6 +448,13 @@ def run_item(
     request = item.request
     if request is None:
         return ItemResult(state=QueueState.NOT_STARTED, note="The item has no transfer.")
+    if not request.destination.strip():  # it waits for its folder (D98)
+        page = "NAS folder for archives on the Archive page"
+        if request.operation is Operation.COPY:
+            page = "folder for copies on the Copy page"
+        return ItemResult(
+            state=QueueState.NOT_STARTED, note=f"The item has no destination. Choose the {page}."
+        )
     report(Phase("Scanning the source folder"))
     try:
         preview = preview_transfer(

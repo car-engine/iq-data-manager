@@ -90,13 +90,16 @@ from iqdm.gui.log_tab import NO_PROJECT as LOG_NO_PROJECT
 from iqdm.gui.settings_tab import SettingsTab, new_database_question
 from iqdm.gui.transfer_tab import (
     ARCHIVE_COMPARE_TOOLTIP,
+    FOLDER_REQUIRED,
     PAUSE_QUEUE_QUESTION,
     QUEUE_EDIT_NOTE,
     QUEUE_HEADERS,
     QUEUE_HINT,
     QUEUE_NOTE_HINT,
     QUEUED_TEXT,
+    SUMMARY_WORDS,
     TransferTab,
+    folder_wait_text,
     queue_holds_text,
     tab_holds_text,
 )
@@ -329,6 +332,10 @@ def test_queue_text_is_plain():
         movecopy.CHECK_PHASE,
         movecopy.check_needed_note(3, "Check before delete was stopped."),
         ARCHIVE_COMPARE_TOOLTIP,
+        # Items that wait for their folder (D98)
+        FOLDER_REQUIRED,
+        *(folder_wait_text(s, n) for s in transferqueue.NEEDS_FOLDER for n in (1, 4)),
+        *SUMMARY_WORDS.values(),
     ]
     assert offending(texts) == []
 

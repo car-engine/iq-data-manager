@@ -71,7 +71,10 @@ its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
 - **Version 1.3.0 is in progress**: O57 to O59, the Archive / copy tab. The user
   approved the plan on 2026-10-23, with the recommended answers to its seven
   questions; the reports of the three branches record them. O58 is done on
-  `transfer-pages` (D96), and O57 on `check-after-archive` (D97).
+  `transfer-pages` (D96), O57 on `check-after-archive` (D97) and O59 on
+  `queue-asks-for-folder` (D98), each branch made from the one before. None is merged.
+  USER_GUIDE.md section 5 describes the new screen. The user's manual test of 1.3.0
+  comes next (pending checks below).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -144,7 +147,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O54, fields to fill in or correct are framed (D95) | Done, merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | `b29c497` (with its report), `0de5087` (the manual test), `808b97b` (the tooltip), `101ac99` (the dropdown frame), `b3b3bec` (STATUS) | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
 | Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 | O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `0a5b3cd` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
-| O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | The commit of this work, with its report | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
+| O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
+| O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | The commit of this work, with its report and USER_GUIDE.md section 5 | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -190,20 +194,18 @@ in the plan for its work. When it is decided, record it in `docs/DECISIONS.md`,
 update `SPEC.md`, and move it to "Closed items" below. "M0 review <n>" refers to the
 table in [reports/M0.md](reports/M0.md). The next free number is O60.
 
-O53 to O59 come from the team's feedback on 1.2 (2026-10-23). The user chose version
-1.2.1 for O53 to O56, and version 1.3.0, by another session, for O57 to O59. The
-user's answers so far are in the "Proposed default" column.
+O53 to O59 came from the team's feedback on 1.2 (2026-10-23). Version 1.2.1 closed O53
+to O56 (D92 to D95); the work of version 1.3.0 closed O57 to O59 (D96 to D98).
 
 | ID | Item | When | Proposed default | Origin |
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
-| O59 | Adding recordings from the Viewer to the queue without a NAS folder for archives, or without a default copy folder, is refused; the user must choose the folder and add them again | 1.3.0 | The items join the queue and wait for the folder; the tab opens the page with the missing field. Start stays disabled while an item waits. Not yet discussed with the user. | Team feedback on 1.2, 2026-10-23 |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D97). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D98). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -262,11 +264,19 @@ Decided items are in `docs/DECISIONS.md` (D1–D97). The M0 review table in
 | O54 | An empty or wrong required field is not marked on the field | D95 (2026-10-23) |
 | O58 | The Archive / copy tab shows the controls for copies, archives and checks at once | D96 (2026-10-23) |
 | O57 | Run archive in the form runs no Check before delete afterwards | D97 (2026-10-23) |
+| O59 | Adding recordings from the Viewer to the queue without a NAS folder or a copy folder is refused | D98 (2026-10-23) |
 
 ## Pending checks for the user
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
+- **Version 1.3.0, the manual test:** the three pages on a real display in light and
+  dark mode, Run archive with its Check before delete, Stop during that check, items
+  from the Viewer that wait for a folder, and a queue run with items added meanwhile.
+  The checklist is `dev/test-1.3.0/CHECKLIST.html`.
+- **Version 1.3.0 in the field:** the check after each archive on the real NAS, for a
+  queue of real recordings overnight. Through a Windows share of the PC it fails for
+  files whose size is not a multiple of 512 bytes (D85).
 - **Version 1.2.1 in the field:** the mouse wheel on a laptop's touchpad over a
   dropdown (step 1.7 of the manual test, not run), and a theme switch on a team PC.
 

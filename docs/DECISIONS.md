@@ -115,6 +115,7 @@ Rules for this file:
 | D95 | Fields to fill in or correct are framed | 2026-10-23, version 1.2.1 | Active; amends D23 |
 | D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active |
 | D97 | Check before delete straight after each archive | 2026-10-23, version 1.3 | Active; amends D81 and D85 |
+| D98 | Queue items from the Viewer wait for their folder | 2026-10-23, version 1.3 | Active; amends D81 |
 
 ## D1. Sample types
 
@@ -2395,3 +2396,55 @@ recommended answer on "Sizes only" with the plan for version 1.3.0 (2026-10-23).
 Affects: SPEC section 8, `movecopy.py` (`check_after_archive()`, `ArchiveCheck`,
 `check_needed_note()`, `CHECK_PHASE`, the preview line), `transferqueue.py`
 (`run_item()`), `gui/transfer_tab.py`, the user guide.
+
+## D98. Queue items from the Viewer wait for their folder
+
+Closes O59. Amends D81. Team feedback on 1.2 (2026-10-23): Add to queue in the Viewer
+refused a laptop recording while no NAS folder for archives was chosen, and an
+archived recording while no copy folder was set. The user then had to choose the
+folder and add the recordings again, which every overnight batch met. The user
+approved the plan for version 1.3.0 on 2026-10-23, with the recommended answers to its
+questions 5 to 7.
+
+- Such a recording joins the queue without a destination, in the state ○ "Needs a NAS
+  folder" or ○ "Needs a copy folder", in the to-do colour. The item keeps the
+  recording's relative path.
+- The tab then shows the page with the missing folder, Archive or Copy, and puts the
+  cursor in the field. While an operation runs the pages are locked, so the page stays
+  as it is; the result line names the page.
+- Each folder field that items wait for has the amber frame of a required field
+  (D95), and its placeholder reads "Required for the items that wait in the queue". A
+  line under the queue says how many items wait for which folder and where to choose
+  it.
+- Choosing the folder (Enter or leaving the field, or Browse) gives each waiting item
+  the folder plus its relative path as destination, and the item waits to run. When
+  the tab is idle, the items are previewed for their size and any problem, as other
+  items from the Viewer are. A destination that repeats an active item gives "Not
+  started" with the reason.
+- **Start waits for the folder** (question 6): Start stays disabled while a folder
+  that items wait for is empty, so a batch left to run overnight does not stop
+  half-done. Once the field holds text, Start is enabled and fills the items in before
+  it runs, because a disabled button takes no click and no focus: a folder typed and
+  followed by a click on Start would otherwise never be taken. Remove takes an item
+  out. A queue that is already running skips such items, runs them once
+  their folder is chosen, and its summary counts any left as "waiting for a NAS
+  folder" or "waiting for a copy folder".
+- **The copy folder** (question 7) is the Copy page's "Folder for copies" (D96), which
+  starts from the default copy folder in Settings. Choosing it there does not change
+  Settings.
+- Both folder fields stay usable while an operation runs, so recordings added during
+  a queue run can get their folder. A change there leaves a running form's destination
+  as it is (D96).
+- An item that waits for its folder holds its recording like a waiting item: the Log
+  tab cannot delete the entry (D89), the form's Run stays disabled for the same
+  archive (D86), and closing the window asks first (D81). Two copies of one recording
+  that both wait for the copy folder repeat each other, because the folder would give
+  them one destination. Edit takes such an item into the form, where the page's folder
+  fills in its destination.
+- `transferqueue.run_item()` refuses an item without a destination before its preview,
+  with "The item has no destination. Choose the …".
+- No change to the copy engine, the checks or the delete module.
+
+Affects: SPEC section 8, `transferqueue.py` (`QueueState.NEEDS_NAS_FOLDER`,
+`NEEDS_COPY_FOLDER`, `QueueItem.rel_path`, `fill_folder()`, `waiting_for_folder()`,
+`item_for_recording()`, `run_item()`), `gui/transfer_tab.py`, the user guide.

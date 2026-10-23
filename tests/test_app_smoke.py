@@ -35,7 +35,7 @@ from iqdm.db import repository as repo
 from iqdm.db.connection import schema_sql, write_transaction
 from iqdm.models import Channel, Recording
 from iqdm.movecopy import Page
-from iqdm.transferqueue import QueueItem, QueueKind
+from iqdm.transferqueue import QueueItem, QueueKind, QueueState
 
 
 class UnsavedAnswers:
@@ -684,13 +684,15 @@ def test_viewer_recordings_go_to_the_queue(qtbot, tmp_path, db_path):
     window.viewer_tab.queue_requested.emit([rid], False)
     wait_window(qtbot, window)
     assert window.tabs.currentWidget() is window.transfer_tab
-    assert window.transfer_tab.queue == []
-    assert "Choose the NAS folder for archives" in window.transfer_tab.result[1]
+    (item,) = window.transfer_tab.queue  # it waits for the NAS folder (D98)
+    assert item.recording_id == rid
+    assert item.state is QueueState.NEEDS_NAS_FOLDER
+    assert window.transfer_tab.page() is Page.ARCHIVE
     window.transfer_tab.nas_folder_edit.setText(str(tmp_path / "nas"))
-    window.viewer_tab.queue_requested.emit([rid], False)
+    window.transfer_tab.nas_folder_edit.editingFinished.emit()
     wait_window(qtbot, window)
     (item,) = window.transfer_tab.queue
-    assert item.recording_id == rid
+    assert item.state is QueueState.WAITING
     window.transfer_tab._queue.remove(item.key)  # the teardown closes without a question
 
 

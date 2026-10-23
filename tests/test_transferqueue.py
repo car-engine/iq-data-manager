@@ -200,15 +200,17 @@ def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
         hash_mode=HashMode.SAMPLE,
     )
     assert got.created_at == "2026-10-23T08:00:00Z"  # the entry it was made for (O52)
-    with pytest.raises(QueueError, match="Choose the NAS folder"):
-        item_for_recording(
-            rec,
-            check_archive_only=False,
-            nas_folder=" ",
-            copy_folder="C:\\copies",
-            hash_mode=HashMode.ALL,
-            label="",
-        )
+    assert (got.state, got.rel_path) == (QueueState.WAITING, rec.rel_path)
+    waiting = item_for_recording(
+        rec,
+        check_archive_only=False,
+        nas_folder=" ",
+        copy_folder="C:\\copies",
+        hash_mode=HashMode.ALL,
+        label="",
+    )
+    assert (waiting.kind, waiting.state) == (QueueKind.ARCHIVE, QueueState.NEEDS_NAS_FOLDER)
+    assert waiting.destination == "" and waiting.rel_path == rec.rel_path  # D98
     with pytest.raises(QueueError, match="not archived"):
         item_for_recording(
             rec,
@@ -237,15 +239,16 @@ def test_an_archived_recording_is_copied_to_the_copy_folder(make_recording):
     )
     assert (got.kind, got.destination) == (QueueKind.COPY, "C:\\copies\\2026\\rec6")
     assert got.request.operation is Operation.COPY
-    with pytest.raises(QueueError, match="no folder for copies is chosen"):
-        item_for_recording(
-            rec,
-            check_archive_only=False,
-            nas_folder="D:\\nas",
-            copy_folder=" ",
-            hash_mode=HashMode.ALL,
-            label="",
-        )
+    waiting = item_for_recording(
+        rec,
+        check_archive_only=False,
+        nas_folder="D:\\nas",
+        copy_folder=" ",
+        hash_mode=HashMode.ALL,
+        label="",
+    )
+    assert (waiting.kind, waiting.state) == (QueueKind.COPY, QueueState.NEEDS_COPY_FOLDER)
+    assert waiting.destination == ""
     check = item_for_recording(
         rec,
         check_archive_only=True,
@@ -255,6 +258,76 @@ def test_an_archived_recording_is_copied_to_the_copy_folder(make_recording):
         label="",
     )
     assert (check.kind, check.request) == (QueueKind.CHECK_ARCHIVE, None)
+
+
+def waiting_item(rid: int, kind=QueueKind.ARCHIVE, rel_path: str | None = None) -> QueueItem:
+    operation = Operation.ARCHIVE if kind is QueueKind.ARCHIVE else Operation.COPY
+    return QueueItem(
+        recording_id=rid,
+        label=f"r{rid}",
+        kind=kind,
+        request=TransferRequest(
+            recording_id=rid, operation=operation, destination="", hash_mode=HashMode.SAMPLE
+        ),
+        state=transferqueue.FOLDER_STATE[kind],
+        rel_path=rel_path or f"day1\\rec{rid}",
+    )
+
+
+def test_items_that_wait_for_a_folder_do_not_run():
+    """D98: Start waits for them; they hold the recording like an active item."""
+    queue = TransferQueue()
+    queue.add(waiting_item(1))
+    queue.add(waiting_item(2, QueueKind.COPY))
+    assert queue.next_runnable() is None and queue.runnable_count() == 0
+    assert queue.waiting_for_folder() == 2
+    assert queue.waiting_for(QueueState.NEEDS_NAS_FOLDER) == 1
+    assert queue.clear_finished() == 0
+    with pytest.raises(QueueError, match="already in the queue for this"):
+        queue.add(waiting_item(1))
+    with pytest.raises(QueueError, match="already in the queue for this"):
+        queue.add(waiting_item(2, QueueKind.COPY))  # both would go to one folder
+
+
+def test_a_chosen_folder_gives_the_waiting_items_their_destination():
+    queue = TransferQueue()
+    archive = queue.add(waiting_item(1))
+    copy = queue.add(waiting_item(2, QueueKind.COPY))
+    assert queue.fill_folder(QueueKind.ARCHIVE, "  ") == []
+    (ready,) = queue.fill_folder(QueueKind.ARCHIVE, "N:\\iq\\2026")
+    assert ready.key == archive.key
+    assert queue.get(archive.key).state is QueueState.WAITING
+    assert queue.get(archive.key).destination == "N:\\iq\\2026\\day1\\rec1"
+    assert queue.get(copy.key).state is QueueState.NEEDS_COPY_FOLDER  # its folder is another
+    assert queue.waiting_for_folder() == 1
+    assert queue.next_runnable().key == archive.key
+
+
+def test_a_filled_destination_that_repeats_an_item_is_not_started():
+    queue = TransferQueue()
+    first = queue.add(item(1, dest="N:\\iq\\2026\\day1\\rec2"))
+    waiting = queue.add(waiting_item(2))
+    assert queue.fill_folder(QueueKind.ARCHIVE, "N:\\iq\\2026") == []
+    got = queue.get(waiting.key)
+    assert got.state is QueueState.NOT_STARTED
+    assert got.note == "Another item in the queue already goes to N:\\iq\\2026\\day1\\rec2."
+    assert queue.get(first.key).state is QueueState.WAITING
+
+
+def test_an_item_without_a_destination_is_not_started(env):
+    """run_item() refuses an item that still waits for its folder (D98)."""
+    result, seen = env.run(waiting_item(env.rids[0]))
+    assert result.state is QueueState.NOT_STARTED
+    assert result.note == (
+        "The item has no destination. Choose the NAS folder for archives on the Archive page."
+    )
+    assert seen == []
+    assert env.transfers() == []
+    copy, _ = env.run(waiting_item(env.rids[1], QueueKind.COPY))
+    assert copy.note.endswith("Choose the folder for copies on the Copy page.")
+    assert preview_item(env.db, waiting_item(env.rids[0]), env.config).state is (
+        QueueState.NEEDS_NAS_FOLDER
+    )
 
 
 # ---------------------------------------------------------------------------

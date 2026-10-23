@@ -283,7 +283,8 @@ The Viewer lists the catalogue.
 - **Scan for gaps** reads the folder and shows the missing seconds per channel. It
   changes nothing.
 - **Edit entry** opens the recording in the Log recording tab.
-- **Archive / copy** opens the recording in the Archive / copy tab.
+- **Archive / copy** opens the recording in the Archive / copy tab, on the page that
+  suits it (section 5).
 - **Add to queue** adds every selected recording to the queue in the Archive / copy
   tab (section 5). Select several with Ctrl or Shift. Choose **Archive or copy** or
   **Check archive**. The other buttons work on one selected recording.
@@ -291,43 +292,68 @@ The Viewer lists the catalogue.
 
 ## 5. Archive / copy
 
-The tab works on recordings that are already logged. Load one with **Pick in Viewer**,
-or with the Viewer's **Archive / copy** button.
+The tab works on recordings that are already logged. Load one with the Viewer's
+**Archive / copy** button, with **Pick in Viewer**, or by its ID and **Load**.
 
-### Copy to a PC
+The tab has three pages under the recording: **Archive**, **Check** and **Copy**. The
+page you choose sets what **Preview** and **Run** do. The preview is on the right. The
+queue and the unfinished transfers are two tabs at the bottom; drag the bar above
+them to give them more room. While an operation runs, the pages are locked.
 
-A copy leaves the catalogue entry unchanged.
-
-1. Choose **Copy to a PC**.
-2. Choose **Whole recording** or **Time range**, and the channels. Times use the
-   display offset; Unix seconds are shown next to them.
-3. Check the destination. It starts as the default copy folder plus the recording's
-   own folder path.
-4. Choose the check after the copy.
-5. Click **Preview**. The preview shows the files, the size, the missing seconds, the
-   estimated time and any problem with the destination.
-6. Click **Run copy**.
+The Viewer's **Archive / copy** button opens the Archive page for a recording on the
+laptop, and for an archived recording whose laptop copy is still to be checked or
+deleted. It opens the Copy page for any other recording. **Load** keeps the page you
+are on.
 
 ### Archive to the NAS
 
 An archive copies a whole laptop recording to the NAS, checks the copy, and points the
 catalogue entry at the NAS copy. The laptop copy stays until you delete it.
 
-1. Choose **Archive to the NAS** and a new folder under a NAS location.
-2. Click **Preview**, then **Run archive**.
-3. Click **Check before delete**. It reads the NAS files again from the NAS itself,
-   past the PC's memory, and compares their hashes with the hashes taken during the
-   archive. Choose a check that includes hashes; "Sizes only" is refused.
-4. When the check passes, **Delete laptop copy...** becomes available. It asks
-   first, names the folder, the number of files and the size, and defaults to No.
+1. On the **Archive** page, choose the **NAS folder for archives**. The destination
+   becomes that folder plus the recording's own folder name. You can change it.
+2. Choose **Compare**: hashes of a sample of the files, or of every file.
+3. Click **Preview**, then **Run archive**.
+4. When the copy has passed its check, **Check before delete** runs straight away. It
+   reads the NAS files again from the NAS itself, past the PC's memory, and compares
+   their hashes with the hashes taken during the archive. The preview's estimated time
+   does not include it.
+5. When it passes, the result line says so, and **Delete laptop copy...** under
+   **Laptop copy** becomes available. It asks first, names the folder, the number of
+   files and the size, and defaults to No.
 
-### Other checks
+If Check before delete does not pass, the archive still stands: the recording points
+at the NAS copy, and the laptop copy stays. The result line is amber and says why.
+Click **Check before delete** to run it again. **Stop** during the check stops only
+the check.
+
+The Archive page has no "Sizes only", because Check before delete reads the content of
+the files.
+
+### Copy to a PC
+
+A copy leaves the catalogue entry unchanged.
+
+1. On the **Copy** page, choose **Whole recording** or **Time range**, and the
+   channels. Times use the display offset; Unix seconds are shown next to them.
+2. Check the **Folder for copies**. It starts as the default copy folder in Settings.
+   A change here lasts until the app closes and does not change Settings. The
+   destination becomes that folder plus the recording's folder path. You can change
+   it.
+3. Choose **Compare**, the check after the copy. "Sizes only" compares the file sizes
+   and reads no content.
+4. Click **Preview**. The preview shows the files, the size, the missing seconds, the
+   estimated time and any problem with the destination.
+5. Click **Run copy**.
+
+### Check
 
 - **Check archive** compares a NAS folder with its catalogue entry: channels, file
   counts and sizes.
-- **Compare with laptop copy...** compares a recording that was logged on the NAS
-  with a laptop folder you choose. A passed comparison removes the "not verified"
-  mark. It does not allow deleting the laptop copy.
+- **Compare with laptop copy...** shows for a recording that was logged on the NAS and
+  never compared with its laptop copy. It compares the NAS folder with a laptop folder
+  you choose, with the **Compare** choice under it. A passed comparison removes the
+  "not verified" mark. It does not allow deleting the laptop copy.
 
 ### Log files
 
@@ -339,18 +365,25 @@ recording archived before version 1.1 keeps its log files on the laptop.
 ### Queue
 
 The queue runs several archives, copies and Check archive runs one after another.
+Each archive in the queue is followed by its Check before delete, as from the Archive
+page.
 
-1. To archive several laptop recordings, choose the **NAS folder for archives** in
-   the Queue group. Each recording goes into a folder of its own name in it.
-2. Add recordings:
+1. Add recordings:
    - In the Viewer, select them and click **Add to queue**, then **Archive or copy**
-     or **Check archive**. Laptop recordings are archived; archived recordings are
-     copied to the default copy folder.
-   - Or set up one transfer in the form, click **Preview**, then **Add to queue** in
-     place of Run. Use this for a copy of some channels or a time range.
-3. To change an item, select it and click **Edit**. It goes back into the form. Change
-   it, click **Preview**, then **Add to queue** puts it back in its place. Use this to
-   archive a recording to another NAS folder.
+     or **Check archive**. Laptop recordings are archived into the **NAS folder for
+     archives** on the Archive page, with that page's Compare choice. Archived
+     recordings are copied into the **Folder for copies** on the Copy page, with that
+     page's Compare choice. Each recording goes into a folder of its own name.
+   - Or set up one transfer on the Archive or Copy page, click **Preview**, then **Add
+     to queue** in place of Run. Use this for a copy of some channels or a time range.
+2. If that folder is not chosen yet, the items join the queue as **○ Needs a NAS
+   folder** or **○ Needs a copy folder**. The tab opens the page with the folder, and
+   the field has an amber frame. Type the folder and press Enter, or click
+   **Browse...**. The waiting items then get their destinations. **Start** stays off
+   while that folder is empty, and a line under the queue says which folder.
+3. To change an item, select it and click **Edit**. It goes back to its page, Archive
+   or Copy. Change it, click **Preview**, then **Add to queue** puts it back in its
+   place. Use this to archive a recording to another NAS folder.
 4. Click **Start**. The items run one after another. Each is checked again just
    before it starts; an item that cannot start is marked and the queue goes on.
 5. **Pause** stops the running item. Files already copied stay. The **Start** button
@@ -358,32 +391,35 @@ The queue runs several archives, copies and Check archive runs one after another
    A pause during Check before delete stops the check; the item is then marked
    **ⓘ Archived, check needed** (below).
 6. A transfer that is waiting or paused in the queue runs only from the queue. If you
-   load it into the form, **Run** stays off, and a line under the buttons says so.
-   To run it from the form instead, select it in the queue and click **Remove**.
+   set it up on its page, **Run** stays off, and a line under the buttons says so. To
+   run it from the page instead, select it in the queue and click **Remove**.
 
-With **After each archive, run Check before delete** ticked, each archive is checked
-before delete straight away. Delete each laptop copy afterwards with **Delete laptop
-copy...**, one recording at a time.
+You can add recordings while the queue runs. The two folder fields stay usable, so
+items that wait for a folder can get it; the running queue then runs them in their
+turn.
+
+Delete each laptop copy afterwards on the Archive page with **Delete laptop copy...**,
+one recording at a time.
 
 An item marked **ⓘ Archived, check needed** was archived: the recording points at
 the NAS copy. Only its Check before delete did not pass, so its laptop copy cannot be
-deleted yet. Select the item to read why, then open the recording in the form and
-click **Check before delete**. **Clear finished** leaves these items in the queue;
-**Remove** takes one out.
+deleted yet. Select the item to read why, then load the recording and click **Check
+before delete** on the Archive page. **Clear finished** leaves these items in the
+queue; **Remove** takes one out.
 
 The queue is not kept when the app closes. A paused copy or archive stays under
 **Unfinished transfers**.
 
 The queue's **Resume** and **Open in form** under Unfinished transfers do different
 things. **Resume** runs the queue again: the paused item, then every waiting item.
-**Open in form** loads one stopped transfer into the form, where **Run** continues it
+**Open in form** loads one stopped transfer onto its page, where **Run** continues it
 on its own. While the queue still holds that transfer, use **Resume**.
 
 ### Stopping and resuming
 
 **Stop** asks first. Files already copied stay. A stopped copy or archive appears
-under **Unfinished transfers**. Select it and click **Open in form** to fill in the
-form again; the preview then names the files already in place, which are not copied
+under **Unfinished transfers**. Select it and click **Open in form** to fill in its
+page again; the preview then names the files already in place, which are not copied
 again. Click **Run** to continue it.
 **Forget...** removes a row from the list and leaves the files.
 

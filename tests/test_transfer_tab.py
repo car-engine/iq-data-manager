@@ -276,8 +276,13 @@ def test_the_pages_are_locked_while_an_operation_runs(env, answers, slow):
     env.previewed(tab)
     start_and_wait_for_progress(env, tab)
     assert not tab.pages.tabBar().isEnabled()
-    assert not tab.copy_folder_edit.isEnabled()
-    assert tab.nas_folder_edit.isEnabled()  # for recordings added from the Viewer
+    assert not tab.copy_dest_edit.isEnabled()
+    # The folders stay usable for recordings added from the Viewer meanwhile (D98)
+    assert tab.nas_folder_edit.isEnabled() and tab.copy_folder_edit.isEnabled()
+    destination = tab.copy_dest_edit.text()
+    tab.copy_folder_edit.setText(str(env.tmp / "elsewhere"))
+    tab.copy_folder_edit.textEdited.emit(tab.copy_folder_edit.text())
+    assert tab.copy_dest_edit.text() == destination  # the running form stays as it is
     answers.next = QMessageBox.StandardButton.Yes
     tab.stop()
     env.idle(tab)
@@ -1060,17 +1065,133 @@ def test_an_edit_dropped_for_another_recording_frees_its_place(env, make_recordi
     assert [i.recording_id for i in tab.queue] == [other, third]
 
 
-def test_viewer_items_need_a_nas_folder_and_an_archive_to_check(env):
+def test_check_archive_needs_an_archived_recording(env):
     tab = env.tab()
-    tab.add_recordings([env.rid])
-    env.idle(tab)
-    assert tab.queue == []
-    assert tab.result[0] is ItemState.ERROR
-    assert "Choose the NAS folder for archives" in tab.result[1]
     tab.add_recordings([env.rid], check_archive=True)
     env.idle(tab)
     assert tab.queue == []
+    assert tab.result[0] is ItemState.ERROR
     assert "is not archived" in tab.result[1]
+
+
+def test_viewer_archives_wait_for_the_nas_folder(env, make_recording):
+    """D98: the items join the queue, the Archive page asks for the folder, and Start
+    waits until it is chosen."""
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    tab.show_page(Page.COPY)
+    tab.add_recordings([env.rid, other])
+    env.idle(tab)
+    assert states(tab) == [QueueState.NEEDS_NAS_FOLDER] * 2
+    assert all(i.destination == "" and i.size_bytes is None for i in tab.queue)
+    assert tab.result == (
+        ItemState.INFO,
+        "Added 2 items to the queue. 2 items wait for the NAS folder for archives. Choose "
+        "it on the Archive page, then click Start.",
+    )
+    assert tab.page() is Page.ARCHIVE
+    assert tab.nas_folder_edit.property(tab_module.MARK_PROPERTY) == "todo"
+    assert "border: 2px solid" in tab.nas_folder_edit.styleSheet()
+    assert tab.nas_folder_edit.placeholderText() == tab_module.FOLDER_REQUIRED
+    assert not tab.queue_folder_label.isHidden()
+    assert tab.queue_folder_label.text().endswith(
+        tab_module.folder_wait_text(QueueState.NEEDS_NAS_FOLDER, 2)
+    )
+    assert tab.queue_table.item(0, 1).text() == f"{MARKS[ItemState.TODO]}  Needs a NAS folder"
+    assert not tab.start_queue_button.isEnabled()
+    tab.start_queue()  # refused when called directly
+    assert not tab.queue_running
+    assert tab.queue_waiting() == 2  # closing the window asks first
+
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
+    tab.nas_folder_edit.editingFinished.emit()
+    env.idle(tab)
+    assert states(tab) == [QueueState.WAITING] * 2
+    assert tab.queue[0].destination == str(env.nas / "2026" / env.source.name)
+    assert all(i.size_bytes for i in tab.queue)  # previewed when the folder came
+    assert tab.nas_folder_edit.property(tab_module.MARK_PROPERTY) == ""
+    assert tab.nas_folder_edit.styleSheet() == ""
+    assert tab.queue_folder_label.isHidden()
+    assert tab.start_queue_button.isEnabled()
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE, QueueState.DONE]
+
+
+def test_start_takes_a_folder_typed_without_enter(env):
+    """A disabled button takes no click and no focus, so the field would not finish its
+    edit. Start is on once the field holds text, and fills the items in itself (D98)."""
+    tab = env.tab()
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    assert not tab.start_queue_button.isEnabled()
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
+    tab.nas_folder_edit.textEdited.emit(tab.nas_folder_edit.text())
+    assert tab.queue[0].state is QueueState.NEEDS_NAS_FOLDER  # not filled yet
+    assert tab.start_queue_button.isEnabled()
+    tab.start_queue_button.click()
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE]
+    assert tab.queue[0].destination == str(env.nas / "2026" / env.source.name)
+
+
+def test_a_waiting_items_recording_is_not_archived_from_the_form(env):
+    """D86 with D98: the queue holds the archive while it waits for its folder."""
+    tab = env.loaded(env.tab())
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    tab.archive_dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    env.previewed(tab)
+    assert tab.preview.ok
+    assert not tab.run_button.isEnabled() and not tab.add_queue_button.isEnabled()
+    assert tab.queued_label.text().endswith(
+        tab_module.QUEUED_TEXT[QueueState.NEEDS_NAS_FOLDER]
+    )
+
+
+def test_viewer_copies_wait_for_the_copy_folder(env):
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    tab.copy_folder_edit.clear()
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    (item,) = tab.queue
+    assert item.state is QueueState.NEEDS_COPY_FOLDER
+    assert tab.page() is Page.COPY
+    assert tab.copy_folder_edit.property(tab_module.MARK_PROPERTY) == "todo"
+    tab.add_recordings([env.rid])  # the same copy again, also without a folder
+    env.idle(tab)
+    assert len(tab.queue) == 1
+    assert f"Recording {env.rid} is already in the queue for this." in tab.result[1]
+    tab.copy_folder_edit.setText(str(env.tmp / "pc2"))
+    tab.copy_folder_edit.editingFinished.emit()
+    env.idle(tab)
+    (item,) = tab.queue
+    assert item.state is QueueState.WAITING
+    assert item.destination == str(env.tmp / "pc2" / tab.recording.rel_path)
+
+
+def test_items_added_while_the_queue_runs_get_their_folder_meanwhile(
+    env, slow_queue, make_recording
+):
+    """D98: the folder fields stay usable during a run, and the running queue takes the
+    filled items in their turn."""
+    other = second_recording(env, make_recording)
+    tab = env.tab()
+    queued_from_viewer(env, tab, env.rid)
+    tab.start_queue_button.click()
+    env.qtbot.waitUntil(lambda: tab.progress_label.text().startswith("1 of"), timeout=10_000)
+    tab.nas_folder_edit.clear()
+    tab.add_recordings([other])
+    env.qtbot.waitUntil(lambda: len(tab.queue) == 2, timeout=10_000)
+    assert tab.queue[1].state is QueueState.NEEDS_NAS_FOLDER
+    assert tab.nas_folder_edit.isEnabled()
+    tab.nas_folder_edit.setText(str(env.nas / "2027"))
+    tab.nas_folder_edit.editingFinished.emit()
+    assert tab.queue[1].state is QueueState.WAITING
+    queue_idle(env, tab)
+    assert states(tab) == [QueueState.DONE, QueueState.DONE]
+    assert tab.queue[1].destination.startswith(str(env.nas / "2027"))
 
 
 def test_viewer_copies_go_to_the_copy_pages_folder(env):
@@ -1090,10 +1211,6 @@ def test_viewer_copies_go_to_the_copy_pages_folder(env):
     assert item.kind is QueueKind.COPY
     assert item.destination == expected
     assert item.request.hash_mode is HashMode.NONE  # the Copy page's choice
-    tab.copy_folder_edit.clear()
-    tab.add_recordings([env.rid])
-    env.idle(tab)
-    assert "no folder for copies is chosen" in tab.result[1]
 
 
 def test_a_new_copy_folder_in_settings_reaches_the_copy_page(env):

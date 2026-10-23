@@ -54,7 +54,7 @@ from PySide6.QtWidgets import (
 from iqdm import movecopy, transferqueue, viewer
 from iqdm.config import Config
 from iqdm.entry import ChecklistItem, ItemState, default_logged_by, format_mhz, format_size
-from iqdm.gui.log_tab import NO_DATABASE
+from iqdm.gui.log_tab import MARK_PROPERTY, NO_DATABASE, mark_style
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.timeline import TimelineView
 from iqdm.gui.workers import Task, TaskRunner
@@ -100,7 +100,33 @@ QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
         "This transfer is paused in the queue. Click Resume under the queue to continue "
         "it, or remove it from the queue to run it here."
     ),
+    QueueState.NEEDS_NAS_FOLDER: (
+        "This transfer waits in the queue for the NAS folder for archives. Choose the "
+        "folder, then click Start under the queue, or remove it from the queue to run it "
+        "here."
+    ),
+    QueueState.NEEDS_COPY_FOLDER: (
+        "This transfer waits in the queue for the folder for copies. Choose the folder, "
+        "then click Start under the queue, or remove it from the queue to run it here."
+    ),
 }
+FOLDER_REQUIRED = "Required for the items that wait in the queue"
+NAS_FOLDER_PLACEHOLDER = "A folder in one of the NAS locations"
+COPY_FOLDER_PLACEHOLDER = "A folder on this PC"
+SUMMARY_WORDS = {  # the end-of-queue summary; "; " between parts (D85)
+    QueueState.DONE: "done",
+    QueueState.CHECK_NEEDED: "archived, check needed",
+    QueueState.FAILED: "failed",
+    QueueState.NOT_STARTED: "not started",
+    QueueState.NEEDS_NAS_FOLDER: "waiting for a NAS folder",
+    QueueState.NEEDS_COPY_FOLDER: "waiting for a copy folder",
+}
+AMBER_AT_THE_END = (  # states that make the summary amber, when no item failed
+    QueueState.CHECK_NEEDED,
+    QueueState.NOT_STARTED,
+    QueueState.NEEDS_NAS_FOLDER,
+    QueueState.NEEDS_COPY_FOLDER,
+)
 QUEUE_HINT = (
     "Add recordings with Add to queue in the Viewer, or set one up on the Archive or Copy "
     "page and click Add to queue under the preview. Start runs them one after another."
@@ -172,6 +198,16 @@ def hash_mode_text(mode: HashMode, fraction: float) -> str:
     if mode is HashMode.SAMPLE:
         return f"Sizes, and hashes of {fraction * 100:g} % of the files"
     return "Sizes and hashes of every file"
+
+
+def folder_wait_text(state: QueueState, count: int) -> str:
+    """Which folder the waiting items need, and where to choose it (D98)."""
+    items = "1 item waits" if count == 1 else f"{count} items wait"
+    if state is QueueState.NEEDS_NAS_FOLDER:
+        where = "the NAS folder for archives. Choose it on the Archive page"
+    else:
+        where = "the folder for copies. Choose it on the Copy page"
+    return f"{items} for {where}, then click Start."
 
 
 def queue_holds_text(recording_id: int) -> str:
@@ -364,9 +400,12 @@ class TransferTab(QWidget):
         self.archived_label = QLabel(ALREADY_ARCHIVED)  # for an archived recording
         self.archived_label.setWordWrap(True)
         self.nas_folder_edit = QLineEdit()
-        self.nas_folder_edit.setPlaceholderText("A folder in one of the NAS locations")
+        self.nas_folder_edit.setPlaceholderText(NAS_FOLDER_PLACEHOLDER)
         self.nas_folder_edit.setToolTip(NAS_FOLDER_TOOLTIP)
         self.nas_folder_edit.textEdited.connect(self._nas_folder_changed)
+        self.nas_folder_edit.editingFinished.connect(
+            lambda: self._fill_waiting(QueueKind.ARCHIVE)
+        )
         self.nas_folder_button = QPushButton("Browse...")
         self.nas_folder_button.clicked.connect(self.browse_nas_folder)
         self.archive_dest_edit = QLineEdit()
@@ -426,9 +465,10 @@ class TransferTab(QWidget):
         note = QLabel(COPY_NOTE)
         note.setWordWrap(True)
         self.copy_folder_edit = QLineEdit(self.config.default_local_copy_root or "")
-        self.copy_folder_edit.setPlaceholderText("A folder on this PC")
+        self.copy_folder_edit.setPlaceholderText(COPY_FOLDER_PLACEHOLDER)
         self.copy_folder_edit.setToolTip(COPY_FOLDER_TOOLTIP)
         self.copy_folder_edit.textEdited.connect(self._copy_folder_changed)
+        self.copy_folder_edit.editingFinished.connect(lambda: self._fill_waiting(QueueKind.COPY))
         self.copy_folder_button = QPushButton("Browse...")
         self.copy_folder_button.clicked.connect(self.browse_copy_folder)
         self.copy_dest_edit = QLineEdit()
@@ -529,6 +569,9 @@ class TransferTab(QWidget):
         self.queue_note = QLabel(QUEUE_NOTE_HINT)  # the selected item's state in full
         self.queue_note.setWordWrap(True)
         self.queue_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.queue_folder_label = QLabel()  # items that wait for a folder (D98)
+        self.queue_folder_label.setWordWrap(True)
+        self.queue_folder_label.setVisible(False)
         self.start_queue_button = QPushButton("Start")
         self.start_queue_button.clicked.connect(self.start_queue)
         self.pause_queue_button = QPushButton("Pause")
@@ -555,6 +598,7 @@ class TransferTab(QWidget):
         layout.addWidget(hint)
         layout.addWidget(self.queue_table)
         layout.addWidget(self.queue_note)
+        layout.addWidget(self.queue_folder_label)
         layout.addLayout(buttons)
         return box
 
@@ -730,8 +774,9 @@ class TransferTab(QWidget):
         return self._queue_running
 
     def queue_waiting(self) -> int:
-        """Items that have not run, or were paused. Closing the app drops them."""
-        return self._queue.runnable_count()
+        """Items that have not run, were paused, or wait for a folder. Closing the app
+        drops them."""
+        return self._queue.runnable_count() + self._queue.waiting_for_folder()
 
     @property
     def job(self) -> str:
@@ -798,6 +843,7 @@ class TransferTab(QWidget):
             self._show_time_errors()
             self._show_laptop()
             self._show_check()
+            self._show_folder_marks()
         super().changeEvent(event)
 
     def _colours(self) -> dict[ItemState, QColor]:
@@ -1008,7 +1054,8 @@ class TransferTab(QWidget):
             self._set_times(request.start_unix, request.end_unix)
         for index, box in self._channel_boxes.items():
             box.setChecked(request.channels is None or index in request.channels)
-        self.dest_edit.setText(request.destination)
+        if request.destination:  # an item that waits for its folder has none (D98)
+            self.dest_edit.setText(request.destination)
         self.hash_combo.setCurrentIndex(max(0, self.hash_combo.findData(request.hash_mode)))
         self._invalidate()
 
@@ -1706,6 +1753,7 @@ class TransferTab(QWidget):
         if folder:
             self.nas_folder_edit.setText(str(Path(folder)))
             self._nas_folder_changed()
+            self._fill_waiting(QueueKind.ARCHIVE)
 
     def browse_copy_folder(self) -> None:
         start = self.copy_folder_edit.text().strip()
@@ -1713,6 +1761,19 @@ class TransferTab(QWidget):
         if folder:
             self.copy_folder_edit.setText(str(Path(folder)))
             self._copy_folder_changed()
+            self._fill_waiting(QueueKind.COPY)
+
+    def _fill_waiting(self, kind: QueueKind) -> None:
+        """Give the queue items that wait for this folder their destination, and preview
+        them when the tab is idle (D98). A running queue runs them in their turn."""
+        edit = self.nas_folder_edit if kind is QueueKind.ARCHIVE else self.copy_folder_edit
+        ready = self._queue.fill_folder(kind, edit.text())
+        if not ready and not self._queue.items:
+            return
+        self._show_queue()
+        self._update_buttons()
+        if ready and not self.is_busy:
+            self._check_queue_items([i.key for i in ready])
 
     def add_current_to_queue(self) -> None:
         """Add the previewed transfer of the form to the queue, in place of Run."""
@@ -1793,15 +1854,41 @@ class TransferTab(QWidget):
                 problems.append(str(exc))
         count = len(added)
         text = f"Added {count} {'item' if count == 1 else 'items'} to the queue."
+        waiting = {
+            s: sum(1 for i in added if i.state is s)
+            for s in (QueueState.NEEDS_NAS_FOLDER, QueueState.NEEDS_COPY_FOLDER)
+        }
+        for s, n in waiting.items():
+            if n:
+                text += " " + folder_wait_text(s, n)
         if problems:
             text += " Not added: " + " ".join(problems)
-        state = ItemState.OK if not problems else ItemState.INFO if added else ItemState.ERROR
+        if problems and not added:
+            state = ItemState.ERROR
+        elif problems or any(waiting.values()):
+            state = ItemState.INFO
+        else:
+            state = ItemState.OK
         self._set_result(state, text)
         self._show_queue()
         self._update_buttons()
-        keys = [i.key for i in added if i.request is not None]
+        self._ask_for_folder(waiting)
+        keys = [i.key for i in added if i.request is not None and i.state is QueueState.WAITING]
         if keys and not self.is_busy:
             self._check_queue_items(keys)
+
+    def _ask_for_folder(self, waiting: Mapping[QueueState, int]) -> None:
+        """Show the page whose folder new items wait for, with the cursor in the field
+        (D98). While an operation runs the pages stay as they are; the result line and
+        the line under the queue name the page."""
+        if self.is_busy:
+            return
+        if waiting.get(QueueState.NEEDS_NAS_FOLDER):
+            self.show_page(Page.ARCHIVE)
+            self.nas_folder_edit.setFocus()
+        elif waiting.get(QueueState.NEEDS_COPY_FOLDER):
+            self.show_page(Page.COPY)
+            self.copy_folder_edit.setFocus()
 
     def _check_queue_items(self, keys: Sequence[int]) -> None:
         """Preview new queue items, for their size and any problem. Writes nothing."""
@@ -1851,6 +1938,14 @@ class TransferTab(QWidget):
             return
         if self.manifests_dir is None:
             self._set_result(ItemState.ERROR, NO_MANIFEST_FOLDER)
+            return
+        # A folder typed but not yet confirmed with Enter counts (D98)
+        self._queue.fill_folder(QueueKind.ARCHIVE, self.nas_folder_edit.text())
+        self._queue.fill_folder(QueueKind.COPY, self.copy_folder_edit.text())
+        self._show_queue()
+        if self._queue.waiting_for_folder():
+            self._set_result(ItemState.TODO, self._folder_wait_lines())
+            self._update_buttons()
             return
         if not self._queue.runnable_count():
             self._set_result(ItemState.TODO, "The queue has nothing to run.")
@@ -1941,14 +2036,8 @@ class TransferTab(QWidget):
         self._queue_status = ""
         items = self._queue.items
         counts = {s: sum(1 for i in items if i.state is s) for s in QueueState}
-        shown_states = (
-            QueueState.DONE,
-            QueueState.CHECK_NEEDED,
-            QueueState.FAILED,
-            QueueState.NOT_STARTED,
-        )
         # "; " between parts: "archived, check needed" holds a comma (D85).
-        parts = [f"{counts[s]} {str(s).lower()}" for s in shown_states if counts[s]]
+        parts = [f"{counts[s]} {word}" for s, word in SUMMARY_WORDS.items() if counts[s]]
         waiting = counts[QueueState.WAITING] + counts[QueueState.PAUSED]
         if self._pause_requested and waiting:
             text = f"Queue paused. {waiting} left; Resume continues."
@@ -1957,7 +2046,7 @@ class TransferTab(QWidget):
             text = "Queue finished."
             if counts[QueueState.FAILED]:
                 state = ItemState.ERROR
-            elif counts[QueueState.CHECK_NEEDED] or counts[QueueState.NOT_STARTED]:
+            elif any(counts[s] for s in AMBER_AT_THE_END):
                 state = ItemState.INFO
             else:
                 state = ItemState.OK
@@ -2062,6 +2151,8 @@ class TransferTab(QWidget):
             QueueState.NOT_STARTED: ItemState.ERROR,
             QueueState.PAUSED: ItemState.TODO,
             QueueState.RUNNING: ItemState.INFO,
+            QueueState.NEEDS_NAS_FOLDER: ItemState.TODO,  # D98
+            QueueState.NEEDS_COPY_FOLDER: ItemState.TODO,
         }
         for row, item in enumerate(self._queue.items):
             table.insertRow(row)
@@ -2088,6 +2179,44 @@ class TransferTab(QWidget):
         count = len(self._queue)
         self.lists.setTabText(0, f"Queue ({count})" if count else "Queue")
         self._show_queue_note()
+        self._show_folder_marks()
+
+    def _folder_missing(self) -> bool:
+        """True while items wait for a folder whose field is empty. Start stays off then;
+        once the field holds text, Start fills the items in and runs (D98)."""
+        return any(
+            self._queue.waiting_for(state) and not edit.text().strip()
+            for state, edit in (
+                (QueueState.NEEDS_NAS_FOLDER, self.nas_folder_edit),
+                (QueueState.NEEDS_COPY_FOLDER, self.copy_folder_edit),
+            )
+        )
+
+    def _folder_wait_lines(self) -> str:
+        """Which folders the waiting items need, or '' (D98)."""
+        return " ".join(
+            folder_wait_text(s, n)
+            for s in (QueueState.NEEDS_NAS_FOLDER, QueueState.NEEDS_COPY_FOLDER)
+            if (n := self._queue.waiting_for(s))
+        )
+
+    def _show_folder_marks(self) -> None:
+        """Frame each folder field that queue items wait for, and say so under the queue
+        (D98). The frame is the Log tab's for a required field (D95); the placeholder
+        and the line say it in words too."""
+        for edit, state, placeholder in (
+            (self.nas_folder_edit, QueueState.NEEDS_NAS_FOLDER, NAS_FOLDER_PLACEHOLDER),
+            (self.copy_folder_edit, QueueState.NEEDS_COPY_FOLDER, COPY_FOLDER_PLACEHOLDER),
+        ):
+            waiting = self._queue.waiting_for(state)
+            mark = ChecklistItem(ItemState.TODO, FOLDER_REQUIRED) if waiting else None
+            edit.setStyleSheet(mark_style(edit, mark))
+            edit.setProperty(MARK_PROPERTY, str(ItemState.TODO) if waiting else "")
+            edit.setPlaceholderText(FOLDER_REQUIRED if waiting else placeholder)
+        text = self._folder_wait_lines()
+        self.queue_folder_label.setText(f"{MARKS[ItemState.TODO]}  {text}" if text else "")
+        self.queue_folder_label.setStyleSheet(f"color: {self._colours()[ItemState.TODO].name()};")
+        self.queue_folder_label.setVisible(bool(text))
 
     def _show_queue_note(self) -> None:
         item = self._selected_queue_item()
@@ -2305,8 +2434,8 @@ class TransferTab(QWidget):
         loaded = self._rec is not None
         page = self.page()
         self.run_button.setText("Run archive" if page is Page.ARCHIVE else "Run copy")
-        # The pages are locked while an operation runs (D96). The NAS folder field stays
-        # usable, so recordings added from the Viewer meanwhile can use it.
+        # The pages are locked while an operation runs (D96). The two folder fields stay
+        # usable, so recordings added from the Viewer meanwhile can get their folder (D98).
         self.pages.tabBar().setEnabled(not busy)
         for widget in (
             self.id_spin,
@@ -2314,8 +2443,6 @@ class TransferTab(QWidget):
             self.pick_button,
             self.copy_dest_edit,
             self.copy_browse_button,
-            self.copy_folder_edit,
-            self.copy_folder_button,
             self.archive_hash_combo,
             self.check_hash_combo,
             self.copy_hash_combo,
@@ -2358,7 +2485,10 @@ class TransferTab(QWidget):
         chosen = self._selected_queue_item()
         self.start_queue_button.setText("Resume" if self._queue.has_paused() else "Start")
         self.start_queue_button.setEnabled(
-            not busy and has_db and self._queue.runnable_count() > 0
+            not busy
+            and has_db
+            and (self._queue.runnable_count() > 0 or self._queue.waiting_for_folder() > 0)
+            and not self._folder_missing()  # D98
         )
         self.pause_queue_button.setEnabled(self._queue_running and not self._pause_requested)
         self.edit_queue_button.setEnabled(  # an archive already done cannot run again

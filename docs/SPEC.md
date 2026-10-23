@@ -618,7 +618,8 @@ a preview, a copy, an archive, a check or a deletion. All run in a worker thread
 queue (below) runs its items one after another, each as one such operation.
 
 - **Locked form.** While an operation runs, the tab's inputs and pages are locked.
-  The NAS folder for archives stays usable, for recordings added from the Viewer. The
+  The NAS folder for archives and the folder for copies stay usable, for recordings
+  added from the Viewer (D98). The
   Viewer
   and the Log tab stay usable. The Viewer's "Archive / copy" button opens no other
   recording until the operation ends. Settings Save waits for it.
@@ -661,9 +662,20 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   copied to the Copy page's folder for copies plus its relative path, with the Copy
   page's Compare choice (D96). Each item holds its own request; Edit takes it back
   into the form, and "Add to queue" puts it back in its place.
+- Without that folder, the item joins the queue without a destination, as ○ "Needs a
+  NAS folder" or ○ "Needs a copy folder" (D98). The tab shows the page with the
+  folder, unless an operation runs, and frames the field as a required field (D95). A
+  line under the queue names the folder and the page. Choosing the folder (Enter,
+  leaving the field, or Browse) gives each such item the folder plus its relative path
+  as destination; the item then waits to run and is previewed if the tab is idle.
+  Start stays disabled while a folder that items wait for is empty. Once the field
+  holds text, Start fills the items in before it runs. A running queue skips such
+  items until their folder is chosen. Both folder fields stay usable while an
+  operation runs. `run_item()` refuses an item without a destination.
 - An item that repeats an active item is refused: an archive or Check archive of the
   same recording, or any item to the same destination. Two copies of one recording to
-  different folders are allowed.
+  different folders are allowed; two that both wait for the copy folder repeat each
+  other (D98). An item that waits for its folder counts as active.
 - New archives and copies from the Viewer are previewed when added, if the tab is
   idle. Each is previewed again just before it runs; a preview with errors gives "Not
   started" and the queue moves on. A failed item does not stop the queue.
