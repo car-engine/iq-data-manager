@@ -4,11 +4,16 @@ SPEC section 8. The logic lives in iqdm.movecopy and iqdm.transfer, which have n
 This module builds the tab and runs every preview, transfer, check and deletion in
 the TaskRunner.
 
-One operation runs at a time. While it runs, the form is locked, a progress bar and
-a Stop button show, and the other tabs stay usable. A stopped copy or archive is
-listed under "Unfinished transfers", from where it can be resumed (D51) or forgotten.
-Deleting the laptop copy needs a passed "Check before delete" (D55) and a Yes in a
-dialog whose default is No.
+The tab has three pages under the recording (D96): Archive (with Check before delete
+and Delete laptop copy), Check (Check archive, Compare with laptop copy) and Copy. The
+page sets the operation. The preview is at the right; the queue and the unfinished
+transfers are two tabs below.
+
+One operation runs at a time. While it runs, the form and the pages are locked, a
+progress bar and a Stop button show, and the other tabs stay usable. A stopped copy or
+archive is listed under "Unfinished transfers", from where Open in form loads it again
+(D51) or Forget hides it. Deleting the laptop copy needs a passed "Check before delete"
+(D55) and a Yes in a dialog whose default is No.
 """
 
 import time
@@ -38,8 +43,10 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSpinBox,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -52,6 +59,7 @@ from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.timeline import TimelineView
 from iqdm.gui.workers import Task, TaskRunner
 from iqdm.models import ArchiveState, HashMode, Operation, Recording, TransferEntry, Verification
+from iqdm.movecopy import Page
 from iqdm.scan.scanner import ScanCancelled, ScanError
 from iqdm.timeutil import display_time, offset_label, utc_now_iso
 from iqdm.transfer.copier import CopyProgress, RetryNotice
@@ -94,9 +102,44 @@ QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
     ),
 }
 QUEUE_HINT = (
-    "Add recordings with Add to queue in the Viewer, or set one up in the form above "
-    "and click Add to queue under the preview. Start runs them one after another."
+    "Add recordings with Add to queue in the Viewer, or set one up on the Archive or Copy "
+    "page and click Add to queue under the preview. Start runs them one after another."
 )
+ARCHIVE_NOTE = (
+    "Copies the whole recording to the NAS and checks the copy. The recording then points "
+    "at the NAS copy. The laptop copy stays until you delete it below."
+)
+ALREADY_ARCHIVED = "This recording is already archived. To copy it, use the Copy page."
+COPY_NOTE = "Copies the files to a folder on a PC. The recording entry stays as it is."
+NAS_FOLDER_TOOLTIP = (
+    "Each recording on the laptop is archived into a folder of its own name in this "
+    "folder, from this page and from Add to queue in the Viewer. To archive a queue item "
+    "elsewhere, select it in the queue and click Edit."
+)
+COPY_FOLDER_TOOLTIP = (
+    "Each recording is copied into a folder of its own name in this folder, from this page "
+    "and from Add to queue in the Viewer. It starts as the default copy folder in Settings."
+)
+COMPARE_TOOLTIP = (
+    "Every check compares the number of files and each file's size. A hash also "
+    "compares the content, and reads each hashed file again."
+)
+NOT_ARCHIVED_BY_APP = (
+    "The app did not archive this recording to its NAS folder, so it has no laptop copy "
+    "to check or delete here."
+)
+CHECK_ARCHIVE_NOTE = (
+    "Compares the NAS folder with the database entry: channels, file counts and sizes. "
+    "Nothing is changed, except counts the database does not hold yet."
+)
+COMPARE_NOTE = (
+    "For a recording logged where it lies on the NAS: compares the NAS folder with a "
+    "folder on this laptop. A passed comparison removes the not-verified mark."
+)
+ON_LAPTOP_CHECKS = (
+    "The recording is on the laptop. These checks work on a recording archived on the NAS."
+)
+CHECK_PAGE_PREVIEW = "The checks on the Check page start from their own buttons."
 QUEUE_EDIT_NOTE = (
     "The queue item is in the form. Change it, click Preview, then Add to queue puts it "
     "back in its place."
@@ -158,6 +201,22 @@ def _bold(text: str) -> QLabel:
     return label
 
 
+def _row(field: QWidget, button: QPushButton) -> QWidget:
+    """A field and its Browse button on one line, for a form row."""
+    holder = QWidget()
+    row = QHBoxLayout(holder)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.addWidget(field, 1)
+    row.addWidget(button)
+    return holder
+
+
+def _mode_of(combo: QComboBox) -> HashMode:
+    """The hash mode a Compare dropdown holds. QComboBox keeps a StrEnum as plain text,
+    so the text is turned back into a HashMode here."""
+    return HashMode(combo.currentData() or HashMode.SAMPLE)
+
+
 class TransferTab(QWidget):
     """Archive to the NAS, copy to a PC, check, compare and delete the laptop copy."""
 
@@ -212,7 +271,10 @@ class TransferTab(QWidget):
         self._edit_position: int | None = None  # where Add to queue puts it back
 
         self._build()
+        self._fill_hash_modes()
+        self._hide_progress()  # until an operation starts
         self._clear_recording()
+        self._show_preview()
         self.refresh_unfinished()
 
     # =====================================================================
@@ -220,24 +282,33 @@ class TransferTab(QWidget):
     # =====================================================================
 
     def _build(self) -> None:
+        """The recording and the pages on the left, the preview on the right, and the
+        queue and the unfinished transfers below them (D96)."""
         form = QWidget()
         column = QVBoxLayout(form)
         column.addWidget(self._build_source())
-        column.addWidget(self._build_operation())
-        column.addWidget(self._build_scope())
-        column.addWidget(self._build_destination())
-        column.addWidget(self._build_verification())
-        column.addWidget(self._build_queue())
-        column.addWidget(self._build_laptop())
-        column.addWidget(self._build_unfinished())
-        column.addStretch(1)
+        column.addWidget(self._build_pages(), 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(form)
 
-        layout = QHBoxLayout(self)
-        layout.addWidget(scroll, 3)
-        layout.addWidget(self._build_preview(), 2)
+        upper = QWidget()
+        top = QHBoxLayout(upper)
+        top.setContentsMargins(0, 0, 0, 0)
+        top.addWidget(scroll, 3)
+        top.addWidget(self._build_preview(), 2)
+
+        self.lists = QTabWidget()
+        self.lists.addTab(self._build_queue(), "Queue")
+        self.lists.addTab(self._build_unfinished(), "Unfinished transfers")
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.addWidget(upper)
+        splitter.addWidget(self.lists)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        layout = QVBoxLayout(self)
+        layout.addWidget(splitter)
 
     def _build_source(self) -> QGroupBox:
         box = QGroupBox("Recording")
@@ -266,31 +337,119 @@ class TransferTab(QWidget):
         layout.addWidget(self.path_label)
         return box
 
-    def _build_operation(self) -> QGroupBox:
-        box = QGroupBox("Operation")
-        self.copy_radio = QRadioButton("Copy to a PC")
-        self.archive_radio = QRadioButton("Archive to the NAS")
-        self.copy_radio.setChecked(True)
-        self.operation_group = QButtonGroup(self)
-        self.operation_group.addButton(self.copy_radio)
-        self.operation_group.addButton(self.archive_radio)
-        self.copy_radio.toggled.connect(self._operation_changed)
-        copy_note = QLabel(
-            "Copies the files to a folder on a PC. The recording entry stays as it is."
+    def _build_pages(self) -> QTabWidget:
+        """The pages set the operation (D96)."""
+        self.pages = QTabWidget()
+        self.pages.addTab(self._build_archive_page(), str(Page.ARCHIVE))
+        self.pages.addTab(self._build_check_page(), str(Page.CHECK))
+        self.pages.addTab(self._build_copy_page(), str(Page.COPY))
+        self.pages.currentChanged.connect(self._page_changed)
+        return self.pages
+
+    def _hash_combo(self, tooltip: str) -> QComboBox:
+        combo = QComboBox()
+        combo.setToolTip(tooltip)
+        combo.currentIndexChanged.connect(self._invalidate)
+        return combo
+
+    def _build_archive_page(self) -> QWidget:
+        page = QWidget()
+        note = QLabel(ARCHIVE_NOTE)
+        note.setWordWrap(True)
+        self.archived_label = QLabel(ALREADY_ARCHIVED)  # for an archived recording
+        self.archived_label.setWordWrap(True)
+        self.nas_folder_edit = QLineEdit()
+        self.nas_folder_edit.setPlaceholderText("A folder in one of the NAS locations")
+        self.nas_folder_edit.setToolTip(NAS_FOLDER_TOOLTIP)
+        self.nas_folder_edit.textEdited.connect(self._nas_folder_changed)
+        self.nas_folder_button = QPushButton("Browse...")
+        self.nas_folder_button.clicked.connect(self.browse_nas_folder)
+        self.archive_dest_edit = QLineEdit()
+        self.archive_dest_edit.setPlaceholderText("A new folder in one of the NAS locations")
+        self.archive_dest_edit.textEdited.connect(self._invalidate)
+        self.archive_browse_button = QPushButton("Browse...")
+        self.archive_browse_button.clicked.connect(self.browse_destination)
+        self.archive_hash_combo = self._hash_combo(COMPARE_TOOLTIP)
+        self.check_after_box = QCheckBox("After each archive, run Check before delete")
+        self.check_after_box.setToolTip(
+            "Reads each NAS copy again, past this PC's file cache, so the laptop copy can be "
+            "deleted afterwards. Needs a check with hashes."
         )
-        archive_note = QLabel(
-            "Copies the whole recording to the NAS and checks the copy. The recording then "
-            "points at the NAS copy. The laptop copy stays until you delete it below."
+        self.check_after_box.setChecked(True)
+
+        fields = QFormLayout()
+        fields.addRow(
+            "NAS folder for archives", _row(self.nas_folder_edit, self.nas_folder_button)
         )
-        for note in (copy_note, archive_note):
-            note.setWordWrap(True)
-        layout = QGridLayout(box)
-        layout.addWidget(self.copy_radio, 0, 0)
-        layout.addWidget(copy_note, 0, 1)
-        layout.addWidget(self.archive_radio, 1, 0)
-        layout.addWidget(archive_note, 1, 1)
-        layout.setColumnStretch(1, 1)
-        return box
+        fields.addRow("Destination", _row(self.archive_dest_edit, self.archive_browse_button))
+        fields.addRow("Compare", self.archive_hash_combo)
+        layout = QVBoxLayout(page)
+        layout.addWidget(note)
+        layout.addWidget(self.archived_label)
+        layout.addLayout(fields)
+        layout.addWidget(self.check_after_box)
+        layout.addWidget(self._build_laptop())
+        layout.addStretch(1)
+        return page
+
+    def _build_check_page(self) -> QWidget:
+        page = QWidget()
+        self.check_label = QLabel()  # the recording's state for these checks
+        self.check_label.setWordWrap(True)
+        self.check_archive_button = QPushButton("Check archive")
+        self.check_archive_button.clicked.connect(self.start_check_archive)
+        self.compare_button = QPushButton("Compare with laptop copy...")
+        self.compare_button.clicked.connect(self.start_compare)
+        check_note = QLabel(CHECK_ARCHIVE_NOTE)
+        self.compare_note = QLabel(COMPARE_NOTE)
+        for label in (check_note, self.compare_note):
+            label.setWordWrap(True)
+        self.check_hash_combo = self._hash_combo(COMPARE_TOOLTIP)
+        self.compare_row = QWidget()  # shown with Compare with laptop copy
+        compare_fields = QFormLayout(self.compare_row)
+        compare_fields.setContentsMargins(0, 0, 0, 0)
+        compare_fields.addRow("Compare", self.check_hash_combo)
+
+        grid = QGridLayout()
+        grid.addWidget(self.check_archive_button, 0, 0, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(check_note, 0, 1)
+        grid.addWidget(self.compare_button, 1, 0, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(self.compare_note, 1, 1)
+        grid.setColumnStretch(1, 1)
+        layout = QVBoxLayout(page)
+        layout.addWidget(self.check_label)
+        layout.addLayout(grid)
+        layout.addWidget(self.compare_row)
+        layout.addStretch(1)
+        return page
+
+    def _build_copy_page(self) -> QWidget:
+        page = QWidget()
+        note = QLabel(COPY_NOTE)
+        note.setWordWrap(True)
+        self.copy_folder_edit = QLineEdit(self.config.default_local_copy_root or "")
+        self.copy_folder_edit.setPlaceholderText("A folder on this PC")
+        self.copy_folder_edit.setToolTip(COPY_FOLDER_TOOLTIP)
+        self.copy_folder_edit.textEdited.connect(self._copy_folder_changed)
+        self.copy_folder_button = QPushButton("Browse...")
+        self.copy_folder_button.clicked.connect(self.browse_copy_folder)
+        self.copy_dest_edit = QLineEdit()
+        self.copy_dest_edit.setPlaceholderText("A folder on this PC")
+        self.copy_dest_edit.textEdited.connect(self._invalidate)
+        self.copy_browse_button = QPushButton("Browse...")
+        self.copy_browse_button.clicked.connect(self.browse_destination)
+        self.copy_hash_combo = self._hash_combo(COMPARE_TOOLTIP)
+
+        fields = QFormLayout()
+        fields.addRow("Folder for copies", _row(self.copy_folder_edit, self.copy_folder_button))
+        fields.addRow("Destination", _row(self.copy_dest_edit, self.copy_browse_button))
+        fields.addRow("Compare", self.copy_hash_combo)
+        layout = QVBoxLayout(page)
+        layout.addWidget(note)
+        layout.addWidget(self._build_scope())
+        layout.addLayout(fields)
+        layout.addStretch(1)
+        return page
 
     def _build_scope(self) -> QGroupBox:
         self.scope_box = QGroupBox("Scope")
@@ -352,36 +511,9 @@ class TransferTab(QWidget):
         layout.addWidget(self.timeline_note)
         return self.scope_box
 
-    def _build_destination(self) -> QGroupBox:
-        box = QGroupBox("Destination")
-        self.dest_edit = QLineEdit()
-        self.dest_edit.textEdited.connect(self._invalidate)
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.clicked.connect(self.browse_destination)
-        row = QHBoxLayout()
-        row.addWidget(self.dest_edit, 1)
-        row.addWidget(self.browse_button)
-        layout = QVBoxLayout(box)
-        layout.addWidget(QLabel("Destination folder"))
-        layout.addLayout(row)
-        return box
-
-    def _build_verification(self) -> QGroupBox:
-        box = QGroupBox("Check after the copy")
-        self.hash_combo = QComboBox()
-        self.hash_combo.setToolTip(
-            "Every check compares the number of files and each file's size. A hash also "
-            "compares the content, and reads each hashed file again."
-        )
-        self._fill_hash_modes()
-        self.hash_combo.currentIndexChanged.connect(self._invalidate)
-        layout = QFormLayout(box)
-        layout.addRow("Compare", self.hash_combo)
-        return box
-
-    def _build_queue(self) -> QGroupBox:
+    def _build_queue(self) -> QWidget:
         """The queue of transfers that run one after another (D81)."""
-        box = QGroupBox("Queue")
+        box = QWidget()
         hint = QLabel(QUEUE_HINT)
         hint.setWordWrap(True)
         self.queue_table = QTableWidget(0, len(QUEUE_HEADERS))
@@ -399,20 +531,6 @@ class TransferTab(QWidget):
         self.queue_note = QLabel(QUEUE_NOTE_HINT)  # the selected item's state in full
         self.queue_note.setWordWrap(True)
         self.queue_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.queue_nas_edit = QLineEdit()
-        self.queue_nas_edit.setPlaceholderText("A folder in one of the NAS locations")
-        self.queue_nas_edit.setToolTip(
-            "Recordings on the laptop that you add from the Viewer are archived into this "
-            "folder, each in a folder of its own name. Edit an item to change its folder."
-        )
-        self.queue_nas_button = QPushButton("Browse...")
-        self.queue_nas_button.clicked.connect(self.browse_queue_folder)
-        self.check_after_box = QCheckBox("After each archive, run Check before delete")
-        self.check_after_box.setToolTip(
-            "Reads each NAS copy again, past this PC's file cache, so the laptop copy can be "
-            "deleted afterwards. Needs a check with hashes."
-        )
-        self.check_after_box.setChecked(True)
         self.start_queue_button = QPushButton("Start")
         self.start_queue_button.clicked.connect(self.start_queue)
         self.pause_queue_button = QPushButton("Pause")
@@ -425,10 +543,6 @@ class TransferTab(QWidget):
         self.clear_queue_button = QPushButton("Clear finished")
         self.clear_queue_button.clicked.connect(self.clear_finished_queue)
 
-        folder_row = QHBoxLayout()
-        folder_row.addWidget(QLabel("NAS folder for archives"))
-        folder_row.addWidget(self.queue_nas_edit, 1)
-        folder_row.addWidget(self.queue_nas_button)
         buttons = QHBoxLayout()
         for button in (
             self.start_queue_button,
@@ -441,15 +555,14 @@ class TransferTab(QWidget):
         buttons.addStretch(1)
         layout = QVBoxLayout(box)
         layout.addWidget(hint)
-        layout.addLayout(folder_row)
-        layout.addWidget(self.check_after_box)
         layout.addWidget(self.queue_table)
         layout.addWidget(self.queue_note)
         layout.addLayout(buttons)
         return box
 
     def _build_laptop(self) -> QGroupBox:
-        self.laptop_box = QGroupBox("Checks and the laptop copy")
+        """Check before delete and Delete laptop copy, on the Archive page (D55, D96)."""
+        self.laptop_box = QGroupBox("Laptop copy")
         self.laptop_label = QLabel()
         self.laptop_label.setWordWrap(True)
         self.check_delete_button = QPushButton("Check before delete")
@@ -460,34 +573,17 @@ class TransferTab(QWidget):
         self.check_delete_button.clicked.connect(self.start_check_before_delete)
         self.delete_button = QPushButton("Delete laptop copy...")
         self.delete_button.clicked.connect(self.start_delete)
-        self.check_archive_button = QPushButton("Check archive")
-        self.check_archive_button.setToolTip(
-            "Compares the NAS folder with the database entry: channels, file counts and "
-            "sizes. Nothing is changed, except counts the database does not hold yet."
-        )
-        self.check_archive_button.clicked.connect(self.start_check_archive)
-        self.compare_button = QPushButton("Compare with laptop copy...")
-        self.compare_button.setToolTip(
-            "For a recording logged where it lies on the NAS: compares the NAS folder with "
-            "a folder on this laptop. A passed comparison removes the not-verified mark."
-        )
-        self.compare_button.clicked.connect(self.start_compare)
         buttons = QHBoxLayout()
-        for button in (
-            self.check_delete_button,
-            self.delete_button,
-            self.check_archive_button,
-            self.compare_button,
-        ):
-            buttons.addWidget(button)
+        buttons.addWidget(self.check_delete_button)
+        buttons.addWidget(self.delete_button)
         buttons.addStretch(1)
         layout = QVBoxLayout(self.laptop_box)
         layout.addWidget(self.laptop_label)
         layout.addLayout(buttons)
         return self.laptop_box
 
-    def _build_unfinished(self) -> QGroupBox:
-        box = QGroupBox("Unfinished transfers")
+    def _build_unfinished(self) -> QWidget:
+        box = QWidget()
         self.unfinished_table = QTableWidget(0, 7)
         self.unfinished_table.verticalHeader().setVisible(False)
         self.unfinished_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -601,13 +697,14 @@ class TransferTab(QWidget):
         )
 
     def _fill_hash_modes(self) -> None:
-        current = self.hash_combo.currentData() or self.config.default_hash_mode
-        self.hash_combo.blockSignals(True)
-        self.hash_combo.clear()
-        for mode in (HashMode.NONE, HashMode.SAMPLE, HashMode.ALL):
-            self.hash_combo.addItem(hash_mode_text(mode, self.config.hash_sample_fraction), mode)
-        self.hash_combo.setCurrentIndex(max(0, self.hash_combo.findData(current)))
-        self.hash_combo.blockSignals(False)
+        for combo in (self.archive_hash_combo, self.check_hash_combo, self.copy_hash_combo):
+            current = combo.currentData() or self.config.default_hash_mode
+            combo.blockSignals(True)
+            combo.clear()
+            for mode in (HashMode.NONE, HashMode.SAMPLE, HashMode.ALL):
+                combo.addItem(hash_mode_text(mode, self.config.hash_sample_fraction), mode)
+            combo.setCurrentIndex(max(0, combo.findData(current)))
+            combo.blockSignals(False)
 
     # =====================================================================
     # State
@@ -655,13 +752,34 @@ class TransferTab(QWidget):
             return None
         return movecopy.laptop_copy(self._rec, self._transfers)
 
+    def page(self) -> Page:
+        return list(Page)[max(0, self.pages.currentIndex())]
+
+    def show_page(self, page: Page) -> None:
+        self.pages.setCurrentIndex(list(Page).index(page))
+
     def operation(self) -> Operation:
-        return Operation.ARCHIVE if self.archive_radio.isChecked() else Operation.COPY
+        """The Archive page archives; the Copy page copies. The Check page runs no
+        transfer, so its request is None (_current_request)."""
+        return Operation.ARCHIVE if self.page() is Page.ARCHIVE else Operation.COPY
+
+    @property
+    def dest_edit(self) -> QLineEdit:
+        """The destination field of the page shown."""
+        return self.archive_dest_edit if self.page() is Page.ARCHIVE else self.copy_dest_edit
+
+    @property
+    def hash_combo(self) -> QComboBox:
+        """The Compare dropdown of the page shown."""
+        return {
+            Page.ARCHIVE: self.archive_hash_combo,
+            Page.CHECK: self.check_hash_combo,
+            Page.COPY: self.copy_hash_combo,
+        }[self.page()]
 
     def hash_mode(self) -> HashMode:
-        """The chosen hash mode. QComboBox keeps a StrEnum as plain text, so the text is
-        turned back into a HashMode here."""
-        return HashMode(self.hash_combo.currentData() or HashMode.SAMPLE)
+        """The hash mode of the page shown."""
+        return _mode_of(self.hash_combo)
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802  (Qt override)
         """Pick the colour set again after a switch between light and dark."""
@@ -673,6 +791,7 @@ class TransferTab(QWidget):
             self._show_queued(self._queued_item())
             self._show_time_errors()
             self._show_laptop()
+            self._show_check()
         super().changeEvent(event)
 
     def _colours(self) -> dict[ItemState, QColor]:
@@ -695,6 +814,11 @@ class TransferTab(QWidget):
             old.hash_sample_fraction,
         ):
             self._fill_hash_modes()
+        old_root = (old.default_local_copy_root or "").strip()
+        new_root = (config.default_local_copy_root or "").strip()
+        if new_root != old_root and self.copy_folder_edit.text().strip() == old_root:
+            self.copy_folder_edit.setText(new_root)  # the field still held the old setting
+            self._copy_folder_changed()
         if config.db_path != old.db_path:
             self._clear_recording()
             self.refresh_unfinished()
@@ -704,8 +828,12 @@ class TransferTab(QWidget):
     # Loading a recording
     # =====================================================================
 
-    def load_recording(self, recording_id: int) -> bool:
-        """Load a recording into the form. False while an operation runs."""
+    def load_recording(self, recording_id: int, *, choose_page: bool = False) -> bool:
+        """Load a recording into the form. False while an operation runs.
+
+        With choose_page, as from the Viewer's Archive / copy button, the tab shows the
+        page that suits the recording (D96). Otherwise the page stays.
+        """
         if self.is_busy:
             self._set_message(ItemState.INFO, "Wait until the running operation has finished.")
             return False
@@ -721,7 +849,7 @@ class TransferTab(QWidget):
         self.source_label.setText("Loading\N{HORIZONTAL ELLIPSIS}")
         self.runner.start(
             lambda task: viewer.load_details(db, recording_id),
-            on_success=lambda result: self._loaded(load_id, result),
+            on_success=lambda result: self._loaded(load_id, result, choose_page=choose_page),
             on_failure=lambda exc: self._load_failed(load_id, exc),
         )
         return True
@@ -766,7 +894,14 @@ class TransferTab(QWidget):
                 ItemState.INFO, f"Recording {recording_id} was deleted from the catalogue."
             )
 
-    def _loaded(self, load_id: int, result: object, *, keep_form: bool = False) -> None:
+    def _loaded(
+        self,
+        load_id: int,
+        result: object,
+        *,
+        keep_form: bool = False,
+        choose_page: bool = False,
+    ) -> None:
         if load_id != self._load_id or not isinstance(result, viewer.Details):
             return
         same = self._rec is not None and self._rec.id == result.recording.id
@@ -778,9 +913,12 @@ class TransferTab(QWidget):
         self._project = result.project_name
         self._set_message(ItemState.OK, "")
         if not (keep_form and same):
+            if choose_page:
+                self.show_page(movecopy.page_for(result.recording, self._transfers))
             self._fill_form_for(result.recording)
         self._show_recording()
         self._show_laptop()
+        self._show_check()
         resume, self._pending_resume = self._pending_resume, None
         if resume is not None and resume.recording_id == result.recording.id:
             self._fill_form_from(resume)
@@ -812,7 +950,8 @@ class TransferTab(QWidget):
         self._project = None
         self._set_channel_boxes(())
         self.id_spin.setValue(0)
-        self.dest_edit.clear()
+        self.archive_dest_edit.clear()
+        self.copy_dest_edit.clear()
         self.from_edit.clear()
         self.to_edit.clear()
         self.from_unix_edit.clear()
@@ -821,28 +960,28 @@ class TransferTab(QWidget):
         self._show_time_errors()
         self._show_recording()
         self._show_laptop()
+        self._show_check()
         self._invalidate()
 
     def _fill_form_for(self, rec: Recording) -> None:
         """Defaults for a newly loaded recording."""
         self.id_spin.setValue(rec.id or 0)
-        local = rec.archive_state is ArchiveState.LOCAL
-        (self.archive_radio if local else self.copy_radio).setChecked(True)
         self.whole_radio.setChecked(True)
         self._set_channel_boxes([c.channel_index for c in rec.channels])
         start, end = rec.start_unix, rec.end_unix
         self._set_times(start, end)
-        self._fill_destination()
+        self._fill_destinations()
         self._invalidate()
 
+    def _show_operation(self, operation: Operation) -> None:
+        self.show_page(Page.ARCHIVE if operation is Operation.ARCHIVE else Page.COPY)
+
     def _fill_form_from(self, entry: TransferEntry) -> None:
-        """The form of a stored transfer, for Resume."""
+        """The form of a stored transfer, for Open in form."""
         if self._rec is None:
             return
         values = movecopy.form_from_transfer(entry, self._rec)
-        (
-            self.archive_radio if values.operation is Operation.ARCHIVE else self.copy_radio
-        ).setChecked(True)
+        self._show_operation(values.operation)
         (self.whole_radio if values.whole else self.range_radio).setChecked(True)
         if not values.whole:
             self._set_times(values.start_unix, values.end_unix)
@@ -856,8 +995,7 @@ class TransferTab(QWidget):
         """The form of a queue item, for Edit (D81)."""
         if self._rec is None:
             return
-        archive = request.operation is Operation.ARCHIVE
-        (self.archive_radio if archive else self.copy_radio).setChecked(True)
+        self._show_operation(request.operation)
         whole = request.start_unix is None and request.end_unix is None
         (self.whole_radio if whole else self.range_radio).setChecked(True)
         if not whole:
@@ -868,22 +1006,40 @@ class TransferTab(QWidget):
         self.hash_combo.setCurrentIndex(max(0, self.hash_combo.findData(request.hash_mode)))
         self._invalidate()
 
-    def _fill_destination(self) -> None:
-        if self._rec is None:
+    def _fill_destinations(self) -> None:
+        """Each page's folder plus the recording's relative path (D60, D96). An archived
+        recording has no archive destination."""
+        self._fill_archive_destination()
+        self._fill_copy_destination()
+
+    def _fill_archive_destination(self) -> None:
+        rec = self._rec
+        if rec is None:
             return
-        if self.operation() is Operation.COPY:
-            self.dest_edit.setText(
-                movecopy.default_copy_destination(
-                    self.config.default_local_copy_root, self._rec.rel_path
-                )
-            )
-        else:
-            self.dest_edit.clear()
-        self.dest_edit.setPlaceholderText(
-            "A folder on this PC"
-            if self.operation() is Operation.COPY
-            else "A new folder in one of the NAS locations"
+        local = rec.archive_state is ArchiveState.LOCAL
+        self.archive_dest_edit.setText(
+            movecopy.archive_destination(self.nas_folder_edit.text(), rec.rel_path)
+            if local
+            else ""
         )
+
+    def _fill_copy_destination(self) -> None:
+        if self._rec is not None:
+            self.copy_dest_edit.setText(
+                movecopy.default_copy_destination(self.copy_folder_edit.text(), self._rec.rel_path)
+            )
+
+    def _nas_folder_changed(self, *_: object) -> None:
+        """A new NAS folder for archives gives the form a new archive destination. While
+        an operation runs, the form stays as it is."""
+        if not self.is_busy:
+            self._fill_archive_destination()
+            self._invalidate()
+
+    def _copy_folder_changed(self, *_: object) -> None:
+        if not self.is_busy:
+            self._fill_copy_destination()
+            self._invalidate()
 
     def _set_channel_boxes(self, indices: Sequence[int]) -> None:
         for box in self._channel_boxes.values():
@@ -964,15 +1120,11 @@ class TransferTab(QWidget):
     # Form
     # =====================================================================
 
-    def _operation_changed(self) -> None:
-        archive = self.operation() is Operation.ARCHIVE
-        if archive:
-            self.whole_radio.setChecked(True)
-            for box in self._channel_boxes.values():
-                box.setChecked(True)
-        self._fill_destination()
-        self.run_button.setText("Run archive" if archive else "Run copy")
+    def _page_changed(self, *_: object) -> None:
+        """The page sets the operation, so a preview of the other one is dropped."""
         self._invalidate()
+        if self._preview is None:
+            self._show_preview()
 
     def _scope_changed(self) -> None:
         self._invalidate()
@@ -1047,6 +1199,8 @@ class TransferTab(QWidget):
         )
 
     def _current_request(self) -> TransferRequest | None:
+        if self.page() is Page.CHECK:
+            return None
         try:
             return movecopy.request_from_form(self.form_input())
         except movecopy.FormError:
@@ -1078,7 +1232,7 @@ class TransferTab(QWidget):
     # =====================================================================
 
     def start_preview(self) -> None:
-        if self.is_busy or not self.config.db_path:
+        if self.is_busy or not self.config.db_path or self.page() is Page.CHECK:
             return
         try:
             request = movecopy.request_from_form(self.form_input())
@@ -1143,7 +1297,12 @@ class TransferTab(QWidget):
                 label.setText("")
             lines = [ChecklistItem(ItemState.ERROR, p) for p in problems]
             if not lines:
-                lines = [ChecklistItem(ItemState.TODO, "Click Preview to check the transfer.")]
+                text = (
+                    CHECK_PAGE_PREVIEW
+                    if self.page() is Page.CHECK
+                    else "Click Preview to check the transfer."
+                )
+                lines = [ChecklistItem(ItemState.TODO, text)]
             self.preview_lines.set_items(lines)
             self.preview_lines.setToolTip(tooltip)
             return
@@ -1318,7 +1477,7 @@ class TransferTab(QWidget):
         if state.archive.id is None or not self.config.db_path:
             return
         db, archive_id = self.config.db_path, state.archive.id
-        mode = self.hash_mode()
+        mode = _mode_of(self.archive_hash_combo)
         if mode is HashMode.NONE:  # sizes alone read no content (D55)
             self._set_result(ItemState.ERROR, CHECK_NEEDS_HASHES)
             return
@@ -1374,7 +1533,7 @@ class TransferTab(QWidget):
         if not folder:
             return
         db, rid, user = self.config.db_path, rec.id, self._performed_by()
-        mode = self.hash_mode()
+        mode = _mode_of(self.check_hash_combo)
         fraction = self.config.hash_sample_fraction
         self._begin("compare", "Compare with laptop copy")
         self.phase_label.setText("Scanning both folders")
@@ -1474,28 +1633,53 @@ class TransferTab(QWidget):
         self._after_change()
 
     def _show_laptop(self) -> None:
+        """The laptop copy's state, on the Archive page."""
         state = self.laptop_state()
         rec = self._rec
-        text = "" if state is None else state.text
-        if rec is not None and rec.archive_state is ArchiveState.ARCHIVED:
-            if viewer.is_unverified(rec, self._transfers):
-                note = f"{MARKS[ItemState.INFO]}  Not verified. {viewer.NOT_VERIFIED_NOTE}"
-                text = f"{text}\n{note}".strip()
-        elif rec is not None:
+        if rec is None or state is None:
+            text = "Load a recording."
+        elif rec.archive_state is ArchiveState.LOCAL:
             text = "The recording is on the laptop. Archive it to the NAS first."
-        self.laptop_label.setText(text or "Load a recording.")
+        else:
+            text = state.text or NOT_ARCHIVED_BY_APP
+        self.laptop_label.setText(text)
+        self.archived_label.setVisible(
+            rec is not None and rec.archive_state is ArchiveState.ARCHIVED
+        )
+
+    def _show_check(self) -> None:
+        """The recording's state for Check archive and Compare with laptop copy."""
+        rec = self._rec
+        if rec is None:
+            text = "Load a recording."
+        elif rec.archive_state is ArchiveState.LOCAL:
+            text = ON_LAPTOP_CHECKS
+        elif viewer.is_unverified(rec, self._transfers):
+            text = f"{MARKS[ItemState.INFO]}  Not verified. {viewer.NOT_VERIFIED_NOTE}"
+        else:
+            text = ""
+        self.check_label.setText(text)
+        self.check_label.setVisible(bool(text))
 
     # =====================================================================
     # Queue (D81)
     # =====================================================================
 
-    def browse_queue_folder(self) -> None:
-        start = self.queue_nas_edit.text().strip() or (
+    def browse_nas_folder(self) -> None:
+        start = self.nas_folder_edit.text().strip() or (
             self.config.nas_roots[0] if self.config.nas_roots else ""
         )
         folder = QFileDialog.getExistingDirectory(self, "Choose the NAS folder for archives", start)
         if folder:
-            self.queue_nas_edit.setText(str(Path(folder)))
+            self.nas_folder_edit.setText(str(Path(folder)))
+            self._nas_folder_changed()
+
+    def browse_copy_folder(self) -> None:
+        start = self.copy_folder_edit.text().strip()
+        folder = QFileDialog.getExistingDirectory(self, "Choose the folder for copies", start)
+        if folder:
+            self.copy_folder_edit.setText(str(Path(folder)))
+            self._copy_folder_changed()
 
     def add_current_to_queue(self) -> None:
         """Add the previewed transfer of the form to the queue, in place of Run."""
@@ -1560,13 +1744,15 @@ class TransferTab(QWidget):
         for details in result:
             rec = details.recording
             label = transferqueue.recording_label(rec, details.site_name, self._offset)
+            local = rec.archive_state is ArchiveState.LOCAL
+            combo = self.archive_hash_combo if local else self.copy_hash_combo
             try:
                 item = transferqueue.item_for_recording(
                     rec,
                     check_archive_only=check_archive,
-                    nas_folder=self.queue_nas_edit.text(),
-                    config=self.config,
-                    hash_mode=self.hash_mode(),
+                    nas_folder=self.nas_folder_edit.text(),
+                    copy_folder=self.copy_folder_edit.text(),
+                    hash_mode=_mode_of(combo),
                     label=label,
                 )
                 added.append(self._queue.add(item))
@@ -1868,6 +2054,8 @@ class TransferTab(QWidget):
                 table.setItem(row, col, cell)
             if selected is not None and item.key == selected.key:
                 table.selectRow(row)
+        count = len(self._queue)
+        self.lists.setTabText(0, f"Queue ({count})" if count else "Queue")
         self._show_queue_note()
 
     def _show_queue_note(self) -> None:
@@ -1914,6 +2102,10 @@ class TransferTab(QWidget):
         table = self.unfinished_table
         table.setRowCount(0)
         self.unfinished_hint.setToolTip("")
+        count = len(self._unfinished)
+        self.lists.setTabText(
+            1, f"Unfinished transfers ({count})" if count else "Unfinished transfers"
+        )
         if not self._unfinished:
             self.unfinished_hint.setText("No unfinished copies or archives.")
             self._update_buttons()
@@ -1997,9 +2189,7 @@ class TransferTab(QWidget):
             widget.setVisible(True)
         self.busy_changed.emit(True)
 
-    def _end(self) -> None:
-        self._task = None
-        self._job = ""
+    def _hide_progress(self) -> None:
         for widget in (
             self.phase_label,
             self.progress_bar,
@@ -2008,6 +2198,11 @@ class TransferTab(QWidget):
             self.retry_label,
         ):
             widget.setVisible(False)
+
+    def _end(self) -> None:
+        self._task = None
+        self._job = ""
+        self._hide_progress()
         self.status_changed.emit(self._queue_status if self._queue_running else "")
         self.busy_changed.emit(self.is_busy)  # still busy between queue items
         self._update_buttons()
@@ -2077,29 +2272,33 @@ class TransferTab(QWidget):
         busy = self.is_busy
         has_db = bool(self.config.db_path)
         loaded = self._rec is not None
-        archive = self.operation() is Operation.ARCHIVE
+        page = self.page()
+        self.run_button.setText("Run archive" if page is Page.ARCHIVE else "Run copy")
+        # The pages are locked while an operation runs (D96). The NAS folder field stays
+        # usable, so recordings added from the Viewer meanwhile can use it.
+        self.pages.tabBar().setEnabled(not busy)
         for widget in (
             self.id_spin,
             self.load_button,
             self.pick_button,
-            self.copy_radio,
-            self.archive_radio,
-            self.dest_edit,
-            self.browse_button,
-            self.hash_combo,
+            self.copy_dest_edit,
+            self.copy_browse_button,
+            self.copy_folder_edit,
+            self.copy_folder_button,
+            self.archive_hash_combo,
+            self.check_hash_combo,
+            self.copy_hash_combo,
             self.resume_button,
             self.forget_button,
             self.refresh_list_button,
             self.others_check,
         ):
             widget.setEnabled(not busy)
-        self.archive_radio.setEnabled(
-            not busy
-            and loaded
-            and self._rec is not None
-            and self._rec.archive_state is ArchiveState.LOCAL
-        )
-        range_ok = not busy and loaded and not archive
+        local = self._rec is not None and self._rec.archive_state is ArchiveState.LOCAL
+        archivable = not busy and (local or not loaded)
+        self.archive_dest_edit.setEnabled(archivable)
+        self.archive_browse_button.setEnabled(archivable)
+        range_ok = not busy and loaded
         self.whole_radio.setEnabled(range_ok)
         self.range_radio.setEnabled(range_ok)
         timed = range_ok and self.range_radio.isChecked()
@@ -2107,7 +2306,11 @@ class TransferTab(QWidget):
             edit.setEnabled(timed)
         for box in self._channel_boxes.values():
             box.setEnabled(range_ok)
-        self.preview_button.setEnabled(not busy and loaded and has_db)
+        on_check = page is Page.CHECK
+        for button in (self.preview_button, self.run_button, self.add_queue_button):
+            button.setVisible(not on_check)
+        previewable = page is Page.COPY or (page is Page.ARCHIVE and local)
+        self.preview_button.setEnabled(not busy and loaded and has_db and previewable)
         preview = self._preview
         runnable = (
             not busy
@@ -2151,6 +2354,8 @@ class TransferTab(QWidget):
         )
         self.compare_button.setEnabled(not busy and unverified)
         self.compare_button.setVisible(unverified)
+        self.compare_note.setVisible(unverified)
+        self.compare_row.setVisible(unverified)
         selected = self._selected_unfinished() is not None
         self.resume_button.setEnabled(not busy and selected)
         self.forget_button.setEnabled(not busy and selected)

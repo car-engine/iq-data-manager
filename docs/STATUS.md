@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-23 (version 1.2.1 released).
+its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
 
 ## Current state
 
@@ -68,8 +68,10 @@ its report. Last updated: 2026-10-23 (version 1.2.1 released).
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,959 tests pass and 4
   skip; `ruff check` is clean. The schema is unchanged (version 1).
-- **The next work** is version 1.3.0: O57 to O59, the Archive / copy tab. The ready
-  prompt is "Version 1.3.0" in [KICKOFF.md](KICKOFF.md).
+- **Version 1.3.0 is in progress**: O57 to O59, the Archive / copy tab. The user
+  approved the plan on 2026-10-23, with the recommended answers to its seven
+  questions; the reports of the three branches record them. O58 is done on
+  `transfer-pages` (D96).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -141,6 +143,7 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O53, Logged by is typed by the user (D94) | Done, merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
 | O54, fields to fill in or correct are framed (D95) | Done, merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | `b29c497` (with its report), `0de5087` (the manual test), `808b97b` (the tooltip), `101ac99` (the dropdown frame), `b3b3bec` (STATUS) | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
 | Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+| O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `0a5b3cd` | The commit of this work, with its report | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -195,13 +198,12 @@ user's answers so far are in the "Proposed default" column.
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
 | O57 | Run archive in the form runs no Check before delete afterwards. The user's case was a queue run, with Compare at hashes of 0.5 % of the files; the box "After each archive, run Check before delete" may not have been ticked. | 1.3.0 | Check before delete runs straight after each archive, from the form and from the queue. The user chose this over one check pass at the end of the queue, and asked that the check-after box be removed (2026-10-23). Still to decide: an archive with "Sizes only", for which the check cannot run (D55). | Team feedback on 1.2, 2026-10-23 |
-| O58 | The Archive / copy tab shows the controls for copies, archives and checks at once | 1.3.0 | Pages Archive, Check and Copy under a shared recording row, with the preview at the right and the queue and unfinished transfers in two tabs below. The user found this layout fine for now (2026-10-23); the mock-up and the plan notes are in [reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md), "Notes for version 1.3.0". Still to decide: where Check before delete and Delete laptop copy go, which page the Viewer's "Archive / copy" button opens, and the tab's name. | Team feedback on 1.2, 2026-10-23 |
 | O59 | Adding recordings from the Viewer to the queue without a NAS folder for archives, or without a default copy folder, is refused; the user must choose the folder and add them again | 1.3.0 | The items join the queue and wait for the folder; the tab opens the page with the missing field. Start stays disabled while an item waits. Not yet discussed with the user. | Team feedback on 1.2, 2026-10-23 |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D96). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -258,6 +260,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
 | O55 | "Several folders" saves but does not show each folder's RF chain rows and sample type from its log | D93 (2026-10-23) |
 | O53 | "Logged by" is filled in with the Windows login | D94 (2026-10-23) |
 | O54 | An empty or wrong required field is not marked on the field | D95 (2026-10-23) |
+| O58 | The Archive / copy tab shows the controls for copies, archives and checks at once | D96 (2026-10-23) |
 
 ## Pending checks for the user
 
@@ -349,7 +352,8 @@ that (checked on 2026-10-23).
   data of earlier milestones and versions). From the 1.2.1 work: `o54-debug.py` and
   the folders `o54-shots` and `o55-shots` (probe and screenshot scripts), and, after
   the manual test, `test-1.2.1` (the checklist, its data and scripts, and `harness`,
-  which holds a copy of the page, a headless Edge profile and a screenshot).
+  which holds a copy of the page, a headless Edge profile and a screenshot). From the
+  1.3.0 work: `o58-shots` (a screenshot script and its output).
 - The test builds of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/`,
   `build/test-1.2.1-build.log`, `dist/test-1.2.1-2/`, `build/work-test-1.2.1-2/` and
   `build/test-1.2.1-2-build.log`, after the manual test. Also `dev/o56-popup/`.

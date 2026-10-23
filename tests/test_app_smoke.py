@@ -34,6 +34,7 @@ from iqdm.config import Config, load_config
 from iqdm.db import repository as repo
 from iqdm.db.connection import schema_sql, write_transaction
 from iqdm.models import Channel, Recording
+from iqdm.movecopy import Page
 from iqdm.transferqueue import QueueItem, QueueKind
 
 
@@ -617,6 +618,7 @@ def test_archive_copy_opens_the_recording_in_its_tab(qtbot, tmp_path, db_path):
     assert window.transfer_tab.recording is not None
     assert window.transfer_tab.recording.id == rid
     assert window.transfer_tab.manifests_dir == tmp_path / "manifests"
+    assert window.transfer_tab.page() is Page.ARCHIVE  # a laptop recording (D96)
 
 
 def test_archive_copy_waits_for_a_running_operation(qtbot, tmp_path, db_path, monkeypatch):
@@ -684,7 +686,7 @@ def test_viewer_recordings_go_to_the_queue(qtbot, tmp_path, db_path):
     assert window.tabs.currentWidget() is window.transfer_tab
     assert window.transfer_tab.queue == []
     assert "Choose the NAS folder for archives" in window.transfer_tab.result[1]
-    window.transfer_tab.queue_nas_edit.setText(str(tmp_path / "nas"))
+    window.transfer_tab.nas_folder_edit.setText(str(tmp_path / "nas"))
     window.viewer_tab.queue_requested.emit([rid], False)
     wait_window(qtbot, window)
     (item,) = window.transfer_tab.queue

@@ -17,12 +17,15 @@ from iqdm.movecopy import (
     FormError,
     FormInput,
     LaptopStep,
+    Page,
     RateMeter,
+    archive_destination,
     default_copy_destination,
     form_from_transfer,
     format_time_input,
     format_unix_input,
     laptop_copy,
+    page_for,
     parse_time_input,
     parse_unix_input,
     preview_summary,
@@ -443,6 +446,40 @@ def test_the_latest_archive_at_the_location_counts(archived_rec):
     state = laptop_copy(archived_rec, [old, check(2, parent=1), new])
     assert state.archive == new
     assert state.step is LaptopStep.CHECK_NEEDED
+
+
+# ---------------------------------------------------------------------------
+# The tab's pages (D96)
+# ---------------------------------------------------------------------------
+
+
+def test_a_laptop_recording_opens_on_the_archive_page(rec):
+    assert page_for(rec, []) is Page.ARCHIVE
+
+
+@pytest.mark.parametrize(
+    ("transfers", "page"),
+    [
+        ([archive()], Page.ARCHIVE),  # check needed
+        ([archive(), check()], Page.ARCHIVE),  # ready to delete
+        ([archive(), check(), delete(3, 4)], Page.ARCHIVE),  # partly deleted
+        ([archive(), check(), delete(3, 9, passed=True)], Page.COPY),  # deleted
+        ([], Page.COPY),  # archived by another way, for example logged on the NAS
+    ],
+)
+def test_an_archived_recording_opens_on_the_page_its_laptop_copy_needs(
+    archived_rec, transfers, page
+):
+    assert page_for(archived_rec, transfers) is page
+
+
+def test_the_pages_in_their_order():
+    assert [str(p) for p in Page] == ["Archive", "Check", "Copy"]
+
+
+def test_the_archive_destination_keeps_the_relative_path():
+    assert archive_destination("N:\\iq\\2026", "day1\\rec01") == "N:\\iq\\2026\\day1\\rec01"
+    assert archive_destination(" ", "rec01") == ""
 
 
 # ---------------------------------------------------------------------------

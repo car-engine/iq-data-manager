@@ -237,16 +237,17 @@ def item_for_recording(
     *,
     check_archive_only: bool,
     nas_folder: str,
-    config: Config,
+    copy_folder: str,
     hash_mode: HashMode,
     label: str,
 ) -> QueueItem:
     """A queue item for a recording chosen in the Viewer (D81).
 
     A recording on the laptop is archived to `nas_folder` plus its relative path. An
-    archived recording is copied to the default copy folder plus its relative path
-    (D60). Both take the whole recording. With check_archive_only, the item is a Check
-    archive (O41). Raises QueueError with a plain reason.
+    archived recording is copied to `copy_folder` plus its relative path (D60); the
+    Copy page's folder starts from the setting (D96). Both take the whole recording.
+    With check_archive_only, the item is a Check archive (O41). Raises QueueError with a
+    plain reason.
     """
     if rec.id is None:
         raise QueueError("The recording has no ID.")
@@ -263,15 +264,15 @@ def item_for_recording(
         )
     if rec.archive_state is ArchiveState.LOCAL:
         if not nas_folder.strip():
-            raise QueueError("Choose the NAS folder for archives in the queue first.")
+            raise QueueError("Choose the NAS folder for archives on the Archive page first.")
         destination = ntpath.normpath(ntpath.join(nas_folder.strip(), rec.rel_path))
         operation, kind = Operation.ARCHIVE, QueueKind.ARCHIVE
     else:
-        destination = default_copy_destination(config.default_local_copy_root, rec.rel_path)
+        destination = default_copy_destination(copy_folder, rec.rel_path)
         if not destination:
             raise QueueError(
                 f"Recording {rec.id} is archived, so it would be copied to this PC, but no "
-                "default copy folder is set in Settings. Add it from the form instead."
+                "folder for copies is chosen. Choose it on the Copy page first."
             )
         operation, kind = Operation.COPY, QueueKind.COPY
     request = TransferRequest(

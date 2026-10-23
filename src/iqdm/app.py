@@ -259,12 +259,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(status_text(self.config, None))
 
     def open_transfer(self, recording_id: int) -> None:
-        """Open a recording from the Viewer in the Archive / copy tab (D42)."""
+        """Open a recording from the Viewer in the Archive / copy tab (D42), on the page
+        that suits it (D96)."""
         self.tabs.setCurrentWidget(self.transfer_tab)
         if self.transfer_tab.is_busy:
             QMessageBox.information(self, "Recording not opened", TRANSFER_BUSY)
             return
-        self.transfer_tab.load_recording(recording_id)
+        self.transfer_tab.load_recording(recording_id, choose_page=True)
 
     def add_to_queue(self, recording_ids: list[int], check_archive: bool) -> None:
         """Add recordings chosen in the Viewer to the Archive / copy queue (D81)."""

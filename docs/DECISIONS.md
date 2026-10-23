@@ -113,6 +113,7 @@ Rules for this file:
 | D93 | "Several folders" shows each folder's log rows | 2026-10-23, version 1.2.1 | Active; amends D90 |
 | D94 | Logged by is typed by the user | 2026-10-23, version 1.2.1 | Active |
 | D95 | Fields to fill in or correct are framed | 2026-10-23, version 1.2.1 | Active; amends D23 |
+| D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active |
 
 ## D1. Sample types
 
@@ -2289,3 +2290,63 @@ Save button, so the field itself was hard to find. The user chose an amber frame
 
 Affects: SPEC section 6, `entry.py` (`FieldName`, `field_marks()`), `gui/log_tab.py`,
 `gui/widgets/mark_frame.py`, `gui/widgets/param_table.py`, the user guide.
+
+## D96. The Archive / copy tab in three pages
+
+Closes O58. Team feedback on 1.2 (2026-10-23): the tab showed the controls for copies,
+archives and checks at once. The user found the layout of the mock-up fine on
+2026-10-23 ([reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md),
+"Notes for version 1.3.0"). The user approved the plan for version 1.3.0 on
+2026-10-23, with the recommended answers to the three questions below.
+
+- Under the recording row the tab has three pages: Archive, Check and Copy. The page
+  sets the operation. The Copy and Archive radio buttons are gone.
+- **Archive** holds "NAS folder for archives", the destination, Compare, and a
+  "Laptop copy" section with Check before delete and Delete laptop copy. The NAS
+  folder is the one that the Viewer's Add to queue uses (D81). The destination is
+  filled in as that folder plus the recording's relative path, and it can be changed.
+  For an archived recording the page says that it is archived, and Preview is
+  disabled.
+- **Check** holds Check archive, and Compare with laptop copy with a Compare dropdown
+  of its own. Compare with laptop copy and its dropdown show only for a recording with
+  the "not verified" mark (D56).
+- **Copy** holds the scope, the channels, the timeline, "Folder for copies", the
+  destination and Compare. "Folder for copies" starts as the default copy folder in
+  Settings (D60). The destination is filled in as that folder plus the recording's
+  relative path. The Viewer's Add to queue also copies into this folder. A change of
+  the folder lasts for the session and does not change Settings. A new value in
+  Settings replaces it only while the field still holds the old value.
+- Each page keeps its own Compare choice. Check before delete uses the Archive page's
+  choice, and Compare with laptop copy the Check page's, whatever page is shown.
+  Archives from the Viewer take the Archive page's choice; copies from the Viewer take
+  the Copy page's.
+- The preview stays at the right. On the Check page, Preview, Run and Add to queue
+  are hidden; the progress and the result stay. A change of page drops the preview,
+  as any other change to the form does.
+- The queue and the unfinished transfers are two tabs below the pages and the
+  preview, with their counts in the tab names. A splitter separates them from the
+  upper part.
+- The pages are locked while an operation runs. The NAS folder field stays usable, as
+  it was in the queue group, so recordings added from the Viewer meanwhile can use
+  it. It changes the form's destination only when no operation runs.
+- "After each archive, run Check before delete" moved from the queue group to the
+  Archive page. D97 removes it.
+- **Where Check before delete and Delete laptop copy go:** on the Archive page.
+  Moving the buttons changes no code path that deletes a file: `start_delete()`, its
+  question (default No) and its rule (a passed Check before delete, D55) are
+  unchanged.
+- **The page that the Viewer's Archive / copy button opens:** Archive for a laptop
+  recording, and for an archived recording whose laptop copy the app archived and has
+  not fully deleted. Copy for every other recording (`movecopy.page_for()`). Only
+  that button uses the rule. Load keeps the page shown. Open in form and Edit show
+  the page of the transfer's operation.
+- **The tab's name:** "Archive / copy", unchanged. The Viewer's button, the messages,
+  the close questions and the user guide use it.
+- **Found in the screenshots:** a new tab showed an empty progress bar and an empty
+  preview list until the first operation. The progress now shows only while an
+  operation runs, and the preview list starts with "Click Preview to check the
+  transfer."
+
+Affects: SPEC sections 5 and 8, `movecopy.py` (`Page`, `page_for()`,
+`archive_destination()`), `transferqueue.py` (`item_for_recording()` takes the copy
+folder), `gui/transfer_tab.py`, `app.py`, the user guide.

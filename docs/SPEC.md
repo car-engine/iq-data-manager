@@ -255,7 +255,8 @@ Built in Milestone 4. The logic lives in `viewer.py` (no Qt), the tab in
   and the selection), Open folder (the recording folder, or the channel folder when a
   channel is selected), Edit entry (D45: opens the Log tab in edit mode, and asks
   first when the Log tab form holds input that is not saved). "Archive / copy" comes
-  with the Archive / copy tab in Milestone 6 (D42, D64). The Viewer does not delete
+  with the Archive / copy tab in Milestone 6 (D42, D64). It opens the recording on the
+  page that suits it (D96, section 8, "Pages"). The Viewer does not delete
   recordings; the Log tab's edit mode does (D89, section 6).
 - **Database states**: no database path gives a line that points to the Settings
   tab. A database from a newer app version is shown with an amber line (D6). A file
@@ -532,12 +533,40 @@ the NAS, and the recording then points at it. A **delete** removes the laptop co
 after a passed archive. The app never moves files: an archive leaves the laptop copy
 in place until the user deletes it.
 
+### Pages
+
+D96. Under the recording row the tab has three pages. The page sets the operation.
+
+- **Archive**: "NAS folder for archives", the destination (that folder plus the
+  recording's relative path, which the user can change), Compare, and a "Laptop copy"
+  section with Check before delete and Delete laptop copy. For an archived recording
+  the page says so and Preview is disabled.
+- **Check**: Check archive, and Compare with laptop copy with a Compare dropdown of its
+  own. Compare with laptop copy and its dropdown show only for a recording with the
+  "not verified" mark (D56).
+- **Copy**: the scope, the channels, the timeline, "Folder for copies", the
+  destination (that folder plus the recording's relative path) and Compare. "Folder
+  for copies" starts as `default_local_copy_root` and lasts for the session. A new
+  value in Settings replaces it only while the field still holds the old value.
+- Each page keeps its own Compare choice. Check before delete uses the Archive page's
+  choice, and Compare with laptop copy the Check page's.
+- The preview is at the right. On the Check page, Preview, Run and Add to queue are
+  hidden. A change of page drops the preview.
+- The queue and the unfinished transfers are two tabs below, with their counts in the
+  tab names.
+- The Viewer's "Archive / copy" button opens the Archive page for a laptop recording,
+  and for an archived recording whose laptop copy the app archived and has not fully
+  deleted (`movecopy.page_for()`). It opens the Copy page for every other recording.
+  Load keeps the page shown. Open in form and Edit show the page of the transfer's
+  operation.
+
 ### Operations
 
 - **Copy to a local PC**: source is a recording (usually archived on the NAS). The
   recording entry is unchanged; a `transfer_log` row is added with `operation =
-  'copy'`. The destination field starts with `default_local_copy_root` and the
-  recording's relative path, which the user can change (D60).
+  'copy'`. The destination field starts with the Copy page's "Folder for copies"
+  (which starts with `default_local_copy_root`) and the recording's relative path,
+  which the user can change (D60, D96).
 - **Archive to the NAS**: source is a `local` recording on the laptop, whole,
   with all channels, and its folder must match the database entry (D50). Steps: copy,
   verify, then on success update `storage_root`, `rel_path`,
@@ -581,7 +610,9 @@ The tab (`gui/transfer_tab.py`, logic in `movecopy.py`) runs one operation at a 
 a preview, a copy, an archive, a check or a deletion. All run in a worker thread. The
 queue (below) runs its items one after another, each as one such operation.
 
-- **Locked form.** While an operation runs, the tab's inputs are locked. The Viewer
+- **Locked form.** While an operation runs, the tab's inputs and pages are locked.
+  The NAS folder for archives stays usable, for recordings added from the Viewer. The
+  Viewer
   and the Log tab stay usable. The Viewer's "Archive / copy" button opens no other
   recording until the operation ends. Settings Save waits for it.
 - **Progress.** A copy shows a bar by bytes, files and bytes done, the speed over the
@@ -617,10 +648,11 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
 
 - Items come from the Viewer ("Add to queue": "Archive or copy", or "Check archive")
   or from the form ("Add to queue" next to Run, after a passed preview). From the
-  Viewer, a laptop recording is archived to the queue's NAS folder plus its relative
-  path, and an archived one is copied to the default copy folder plus its relative
-  path. Each item holds its own request; Edit takes it back into the form, and "Add
-  to queue" puts it back in its place.
+  Viewer, a laptop recording is archived to the Archive page's NAS folder for archives
+  plus its relative path, with the Archive page's Compare choice. An archived one is
+  copied to the Copy page's folder for copies plus its relative path, with the Copy
+  page's Compare choice (D96). Each item holds its own request; Edit takes it back
+  into the form, and "Add to queue" puts it back in its place.
 - An item that repeats an active item is refused: an archive or Check archive of the
   same recording, or any item to the same destination. Two copies of one recording to
   different folders are allowed.
@@ -628,7 +660,8 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   idle. Each is previewed again just before it runs; a preview with errors gives "Not
   started" and the queue moves on. A failed item does not stop the queue.
 - After a passed archive, Check before delete runs when "After each archive, run Check
-  before delete" is ticked (the default), except with "Sizes only". An archive that
+  before delete" on the Archive page is ticked (the default), except with "Sizes
+  only". An archive that
   passed but whose check did not (failed, stopped, could not run, or skipped for
   "Sizes only") gets the state ⓘ "Archived, check needed" in amber, with a note that
   the recording points at the NAS copy and the laptop copy stays (D85). Clear

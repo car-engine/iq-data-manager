@@ -112,6 +112,7 @@ from iqdm.models import (
     SampleType,
     TransferEntry,
 )
+from iqdm.movecopy import Page
 from iqdm.scan.scanner import scan_recording
 from iqdm.transfer.operations import FILE_LIST_UNUSABLE, TransferRequest, preview_transfer
 from iqdm.transfer.pathcheck import DiskUsage
@@ -623,7 +624,9 @@ def test_transfer_tab_text_is_plain(qtbot, tmp_path, db_path, make_recording):
     tab.preview_button.click()  # archive errors: not on the NAS, folder differs
     idle()
     texts += texts_now()
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.CHECK)  # a laptop recording on the Check page
+    texts += texts_now()
+    tab.show_page(Page.COPY)
     tab.preview_button.click()  # a copy preview with missing seconds and a difference
     idle()
     texts += texts_now()
@@ -631,9 +634,12 @@ def test_transfer_tab_text_is_plain(qtbot, tmp_path, db_path, make_recording):
     tab.from_edit.setText("wrong")
     tab.from_edit.editingFinished.emit()  # a time error
     texts += texts_now()
-    tab.load_recording(archived)  # not verified: the comparison and the laptop note
+    tab.load_recording(archived, choose_page=True)  # not verified, not archived by the app
     idle()
-    texts += texts_now()
+    for page in Page:  # D96: every page of an archived recording
+        tab.show_page(page)
+        texts += texts_now()
     assert tab.preview_lines.items
-    assert tab.laptop_label.text()
+    assert tab.laptop_label.text() and tab.check_label.text()
+    assert not tab.compare_button.isHidden()
     assert offending(texts) == []

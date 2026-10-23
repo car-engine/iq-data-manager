@@ -187,7 +187,7 @@ def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
         rec,
         check_archive_only=False,
         nas_folder="D:\\nas\\2026",
-        config=Config(),
+        copy_folder="",
         hash_mode=HashMode.SAMPLE,
         label="r5",
     )
@@ -204,7 +204,7 @@ def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
             rec,
             check_archive_only=False,
             nas_folder=" ",
-            config=Config(),
+            copy_folder="C:\\copies",
             hash_mode=HashMode.ALL,
             label="",
         )
@@ -213,7 +213,7 @@ def test_a_laptop_recording_is_archived_into_the_nas_folder(make_recording):
             rec,
             check_archive_only=True,
             nas_folder="",
-            config=Config(),
+            copy_folder="",
             hash_mode=HashMode.ALL,
             label="",
         )
@@ -226,23 +226,22 @@ def test_an_archived_recording_is_copied_to_the_copy_folder(make_recording):
         archived_at="2026-10-01T00:00:00Z",
         rel_path="2026\\rec6",
     )
-    config = Config(default_local_copy_root="C:\\copies")
     got = item_for_recording(
         rec,
         check_archive_only=False,
         nas_folder="",
-        config=config,
+        copy_folder="C:\\copies",
         hash_mode=HashMode.ALL,
         label="",
     )
     assert (got.kind, got.destination) == (QueueKind.COPY, "C:\\copies\\2026\\rec6")
     assert got.request.operation is Operation.COPY
-    with pytest.raises(QueueError, match="no default copy folder"):
+    with pytest.raises(QueueError, match="no folder for copies is chosen"):
         item_for_recording(
             rec,
             check_archive_only=False,
-            nas_folder="",
-            config=Config(),
+            nas_folder="D:\\nas",
+            copy_folder=" ",
             hash_mode=HashMode.ALL,
             label="",
         )
@@ -250,7 +249,7 @@ def test_an_archived_recording_is_copied_to_the_copy_folder(make_recording):
         rec,
         check_archive_only=True,
         nas_folder="",
-        config=Config(),
+        copy_folder="",
         hash_mode=HashMode.ALL,
         label="",
     )

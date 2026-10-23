@@ -6,6 +6,7 @@
 - The destination filled in for a copy to a PC (D60).
 - The preview as lines for the checklist widget.
 - The state of the laptop copy after an archive: check before delete, delete (D55).
+- The tab's pages, and the page the Viewer's button opens (D96).
 - The state of an unfinished copy or archive, and progress, speed and time left.
 """
 
@@ -23,7 +24,14 @@ from iqdm.db import repository
 from iqdm.db.connection import open_db, write_transaction
 from iqdm.entry import ChecklistItem, ItemState, format_size, missing_text
 from iqdm.location import join_location
-from iqdm.models import HashMode, Operation, Recording, TransferEntry, Verification
+from iqdm.models import (
+    ArchiveState,
+    HashMode,
+    Operation,
+    Recording,
+    TransferEntry,
+    Verification,
+)
 from iqdm.timeutil import offset_label
 from iqdm.transfer.copier import CopyProgress
 from iqdm.transfer.delete import checked_before_delete
@@ -200,6 +208,12 @@ def default_copy_destination(copy_root: str | None, rel_path: str) -> str:
     if not copy_root or not copy_root.strip():
         return ""
     return ntpath.normpath(ntpath.join(copy_root.strip(), rel_path))
+
+
+def archive_destination(nas_folder: str, rel_path: str) -> str:
+    """The NAS folder for archives and the recording's relative path (D81, D96). '' without
+    a NAS folder."""
+    return default_copy_destination(nas_folder, rel_path)
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +432,34 @@ def laptop_copy(rec: Recording, transfers: Sequence[TransferEntry]) -> LaptopCop
             '"Check before delete" reads the NAS copy again, past this PC\'s file cache.'
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# The tab's pages (D96)
+# ---------------------------------------------------------------------------
+
+
+class Page(StrEnum):
+    """The pages of the Archive / copy tab, in their order on screen."""
+
+    ARCHIVE = "Archive"
+    CHECK = "Check"
+    COPY = "Copy"
+
+
+def page_for(rec: Recording, transfers: Sequence[TransferEntry]) -> Page:
+    """The page that the Viewer's Archive / copy button opens (D96).
+
+    Archive for a recording on the laptop, and for one whose laptop copy the app
+    archived and has not deleted yet, so that Check before delete and Delete laptop copy
+    are at hand. Copy for any other recording.
+    """
+    if rec.archive_state is ArchiveState.LOCAL:
+        return Page.ARCHIVE
+    step = laptop_copy(rec, transfers).step
+    if step in (LaptopStep.CHECK_NEEDED, LaptopStep.READY, LaptopStep.PARTLY_DELETED):
+        return Page.ARCHIVE
+    return Page.COPY
 
 
 # ---------------------------------------------------------------------------

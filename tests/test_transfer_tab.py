@@ -7,6 +7,7 @@ Modal dialogs are replaced with stubs that record their text and answer.
 """
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ from iqdm.entry import ItemState
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.widgets.checklist import DARK_COLOURS, LIGHT_COLOURS, MARKS
 from iqdm.models import IN_PLACE_NOTE, ArchiveState, HashMode, Operation, TransferEntry
-from iqdm.movecopy import LaptopStep
+from iqdm.movecopy import LaptopStep, Page
 from iqdm.transfer.copier import CopyItem, copy_files
 from iqdm.transfer.delete import DeleteResult, KeptFile
 from iqdm.transfer.manifest import read_manifest
@@ -140,7 +141,7 @@ def env(qtbot, tmp_path, db_path, make_recording):
 
 
 def archive_to_nas(env: Env, tab: TransferTab) -> Path:
-    tab.archive_radio.setChecked(True)
+    tab.show_page(Page.ARCHIVE)
     dest = env.nas / "2026" / env.source.name
     tab.dest_edit.setText(str(dest))
     env.previewed(tab)
@@ -191,17 +192,99 @@ def test_an_operation_on_the_recording_holds_it_against_a_delete(env, monkeypatc
 
 def test_loading_a_local_recording_prepares_an_archive(env):
     tab = env.loaded(env.tab())
-    assert tab.archive_radio.isChecked()
+    assert tab.page() is Page.ARCHIVE
+    assert tab.operation() is Operation.ARCHIVE
     assert tab.run_button.text() == "Run archive"
-    assert tab.whole_radio.isChecked() and not tab.range_radio.isEnabled()
     assert sorted(tab.channel_boxes) == [0, 1]
-    assert all(b.isChecked() and not b.isEnabled() for b in tab.channel_boxes.values())
-    assert tab.dest_edit.text() == ""
+    assert tab.dest_edit is tab.archive_dest_edit
+    assert tab.dest_edit.text() == ""  # no NAS folder chosen yet
     assert tab.source_label.text().startswith(f"{env.rid} \N{MIDDLE DOT} 2026-09-30 10:00:00")
+    assert tab.preview_button.isEnabled()
     assert not tab.run_button.isEnabled()  # no preview yet
+    assert tab.archived_label.isHidden()
     assert tab.laptop_label.text() == (
         "The recording is on the laptop. Archive it to the NAS first."
     )
+
+
+def test_the_nas_folder_fills_in_the_archive_destination(env):
+    """D96: the NAS folder for archives and the recording's relative path, as for the
+    queue (D81)."""
+    tab = env.loaded(env.tab())
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
+    tab.nas_folder_edit.textEdited.emit(tab.nas_folder_edit.text())
+    assert tab.archive_dest_edit.text() == str(env.nas / "2026" / env.source.name)
+    env.previewed(tab)
+    assert tab.preview.request.destination == str(env.nas / "2026" / env.source.name)
+    tab.nas_folder_edit.setText(str(env.nas / "2027"))
+    tab.nas_folder_edit.textEdited.emit(tab.nas_folder_edit.text())
+    assert tab.archive_dest_edit.text() == str(env.nas / "2027" / env.source.name)
+    assert tab.preview is None  # the destination changed
+
+
+def test_the_page_sets_the_operation_and_drops_the_other_preview(env):
+    """D96: each page keeps its own destination and Compare choice."""
+    tab = env.loaded(env.tab())
+    tab.show_page(Page.COPY)
+    assert tab.operation() is Operation.COPY
+    assert tab.run_button.text() == "Run copy"
+    assert tab.whole_radio.isEnabled() and tab.range_radio.isEnabled()
+    assert all(b.isEnabled() for b in tab.channel_boxes.values())
+    tab.copy_hash_combo.setCurrentIndex(tab.copy_hash_combo.findData(HashMode.ALL))
+    env.previewed(tab)
+    tab.show_page(Page.ARCHIVE)
+    assert tab.preview is None
+    assert tab.hash_combo is tab.archive_hash_combo
+    assert tab.hash_mode() is HashMode.SAMPLE  # the Copy page's choice stays there
+    tab.show_page(Page.COPY)
+    assert tab.hash_mode() is HashMode.ALL
+    assert tab.dest_edit.text() == str(env.pc / env.source.name)
+
+
+def test_a_new_tab_shows_no_progress_and_asks_for_a_preview(env):
+    """Found in the screenshots of D96: the progress bar showed before any operation."""
+    tab = env.tab()
+    assert tab.progress_bar.isHidden() and tab.phase_label.isHidden()
+    assert [i.text for i in tab.preview_lines.items] == ["Click Preview to check the transfer."]
+
+
+def test_the_check_page_runs_no_transfer(env):
+    tab = env.loaded(env.tab())
+    tab.show_page(Page.CHECK)
+    assert tab.preview_button.isHidden() and tab.run_button.isHidden()
+    assert tab.add_queue_button.isHidden()
+    assert [i.text for i in tab.preview_lines.items] == [tab_module.CHECK_PAGE_PREVIEW]
+    tab.start_preview()  # refused when called directly
+    env.idle(tab)
+    assert tab.preview is None
+    assert tab.check_label.text() == tab_module.ON_LAPTOP_CHECKS
+    assert not tab.check_archive_button.isEnabled()
+    assert tab.compare_button.isHidden() and tab.compare_row.isHidden()
+
+
+def test_the_pages_are_locked_while_an_operation_runs(env, answers, slow):
+    tab = env.loaded(env.tab())
+    tab.show_page(Page.COPY)
+    env.previewed(tab)
+    start_and_wait_for_progress(env, tab)
+    assert not tab.pages.tabBar().isEnabled()
+    assert not tab.copy_folder_edit.isEnabled()
+    assert tab.nas_folder_edit.isEnabled()  # for recordings added from the Viewer
+    answers.next = QMessageBox.StandardButton.Yes
+    tab.stop()
+    env.idle(tab)
+    assert tab.pages.tabBar().isEnabled()
+
+
+def test_load_keeps_the_page_and_the_viewer_button_chooses_it(env):
+    """D96: only the Viewer's Archive / copy button chooses the page."""
+    tab = env.tab()
+    tab.show_page(Page.COPY)
+    env.loaded(tab)
+    assert tab.page() is Page.COPY
+    assert tab.load_recording(env.rid, choose_page=True)
+    env.idle(tab)
+    assert tab.page() is Page.ARCHIVE  # a recording on the laptop
 
 
 def test_the_recording_line_names_its_project(env):
@@ -223,7 +306,7 @@ def test_the_recording_line_names_its_project(env):
 def test_a_copy_fills_in_the_local_copy_folder(env):
     """D60: the local copy folder and the recording's relative path."""
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     assert tab.dest_edit.text() == str(env.pc / env.source.name)
     assert tab.run_button.text() == "Run copy"
     assert tab.range_radio.isEnabled()
@@ -232,7 +315,7 @@ def test_a_copy_fills_in_the_local_copy_folder(env):
 def test_time_fields_read_the_display_offset_and_stay_in_sync(env):
     """D59."""
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     tab.range_radio.setChecked(True)
     assert tab.from_label.text() == "From (UTC+8)"
     assert tab.from_edit.text() == "2026-09-30 10:00:00"
@@ -265,7 +348,7 @@ def test_preview_then_copy_a_range_of_one_channel(env):
     tab = env.loaded(env.tab())
     changed: list[int] = []
     tab.recording_changed.connect(changed.append)
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     tab.range_radio.setChecked(True)
     tab.from_unix_edit.setText(str(int(T0) + 1))
     tab.from_unix_edit.editingFinished.emit()
@@ -291,7 +374,7 @@ def test_preview_then_copy_a_range_of_one_channel(env):
 def test_the_hash_mode_reaches_the_transfer_as_a_hash_mode(env, mode):
     """QComboBox keeps a StrEnum as plain text; the request must hold the HashMode."""
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(mode))
     assert tab.hash_mode() is mode
     env.previewed(tab)
@@ -307,7 +390,7 @@ def test_the_hash_mode_reaches_the_transfer_as_a_hash_mode(env, mode):
 
 def test_a_change_to_the_form_drops_the_preview(env):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     assert tab.run_button.isEnabled()
     tab.dest_edit.setText(str(env.pc / "elsewhere"))
@@ -332,6 +415,9 @@ def test_preview_errors_block_the_run(env):
 
 def test_archive_check_and_delete(env, answers):
     tab = env.loaded(env.tab())
+    archive_page = tab.pages.widget(list(Page).index(Page.ARCHIVE))
+    assert archive_page.isAncestorOf(tab.check_delete_button)  # D96
+    assert archive_page.isAncestorOf(tab.delete_button)
     dest = archive_to_nas(env, tab)
     assert tab.result[1].endswith("The recording now points at the NAS copy.")
     assert env.recording().archive_state is ArchiveState.ARCHIVED
@@ -445,7 +531,7 @@ def start_and_wait_for_progress(env, tab):
 
 def test_stop_asks_first_and_the_run_can_resume(env, answers, slow):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     statuses: list[str] = []
     tab.status_changed.connect(statuses.append)
@@ -478,7 +564,7 @@ def test_stop_asks_first_and_the_run_can_resume(env, answers, slow):
     other.resume_button.click()
     env.idle(other)
     assert other.preview is not None
-    assert other.copy_radio.isChecked()
+    assert other.page() is Page.COPY
     assert len(other.preview.check.existing) == copied
     other.run_button.click()
     env.idle(other, 60_000)
@@ -489,7 +575,7 @@ def test_stop_asks_first_and_the_run_can_resume(env, answers, slow):
 
 def test_another_copy_can_run_before_the_resume(env, answers, slow, make_recording):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     start_and_wait_for_progress(env, tab)
     answers.next = QMessageBox.StandardButton.Yes
@@ -501,7 +587,7 @@ def test_another_copy_can_run_before_the_resume(env, answers, slow, make_recordi
         env.db, lambda c: repo.insert_recording(c, recording_from(second, site_id=1))
     )
     env.loaded(tab, rid2)
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     env.ran(tab)
     assert tab.result[0] is ItemState.OK
@@ -512,7 +598,7 @@ def test_another_copy_can_run_before_the_resume(env, answers, slow, make_recordi
 
 def test_forget_hides_a_stopped_copy_and_keeps_its_files(env, answers, slow):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     start_and_wait_for_progress(env, tab)
     answers.next = QMessageBox.StandardButton.Yes
@@ -535,7 +621,7 @@ def test_forget_hides_a_stopped_copy_and_keeps_its_files(env, answers, slow):
 
 def test_other_users_are_listed_on_request(env, answers, slow):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     start_and_wait_for_progress(env, tab)
     answers.next = QMessageBox.StandardButton.Yes
@@ -588,11 +674,16 @@ def logged_in_place(env) -> int:
 def test_compare_with_laptop_copy_clears_the_mark(env, monkeypatch):
     rid = logged_in_place(env)
     tab = env.loaded(env.tab(), rid)
-    assert tab.copy_radio.isChecked() and not tab.archive_radio.isEnabled()
+    assert tab.page() is Page.ARCHIVE  # Load keeps the page
+    assert not tab.preview_button.isEnabled() and not tab.archived_label.isHidden()
+    assert tab.laptop_label.text() == tab_module.NOT_ARCHIVED_BY_APP
+    tab.show_page(Page.CHECK)
     assert not tab.compare_button.isHidden() and tab.compare_button.isEnabled()
-    assert "Not verified." in tab.laptop_label.text()
+    assert not tab.compare_row.isHidden()
+    assert "Not verified." in tab.check_label.text()
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(env.source))
-    tab.hash_combo.setCurrentIndex(tab.hash_combo.findData(HashMode.ALL))
+    tab.check_hash_combo.setCurrentIndex(tab.check_hash_combo.findData(HashMode.ALL))
+    tab.show_page(Page.COPY)  # the Check page's choice counts, whatever page is shown
     tab.compare_button.click()
     env.idle(tab)
     assert tab.result[0] is ItemState.OK
@@ -601,6 +692,7 @@ def test_compare_with_laptop_copy_clears_the_mark(env, monkeypatch):
     assert tab.compare_button.isHidden()
     rows = env.transfers(rid)
     assert not viewer.is_unverified(tab.recording, rows)
+    assert rows[-1].hash_mode is HashMode.ALL
 
 
 def test_compare_is_offered_only_for_a_recording_not_verified(env):
@@ -632,7 +724,7 @@ def states(tab: TransferTab) -> list[QueueState]:
 
 
 def queued_from_viewer(env: Env, tab: TransferTab, *rids: int) -> None:
-    tab.queue_nas_edit.setText(str(env.nas / "2026"))
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
     tab.add_recordings(list(rids))
     env.idle(tab)
 
@@ -658,7 +750,7 @@ def slow_queue(monkeypatch):
 
 def test_add_to_queue_from_the_form(env):
     tab = env.loaded(env.tab())
-    assert tab.archive_radio.isChecked()
+    assert tab.page() is Page.ARCHIVE
     tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
     assert not tab.add_queue_button.isEnabled()  # a preview comes first
     env.previewed(tab)
@@ -863,7 +955,7 @@ def test_edit_puts_the_item_back_in_its_place(env, make_recording):
     env.idle(tab)
     assert [i.recording_id for i in tab.queue] == [other]
     assert tab.recording.id == env.rid
-    assert tab.archive_radio.isChecked()
+    assert tab.page() is Page.ARCHIVE
     assert tab.preview is not None  # previewed again for the user
     new = env.nas / "elsewhere" / env.source.name
     tab.dest_edit.setText(str(new))
@@ -903,6 +995,39 @@ def test_viewer_items_need_a_nas_folder_and_an_archive_to_check(env):
     env.idle(tab)
     assert tab.queue == []
     assert "is not archived" in tab.result[1]
+
+
+def test_viewer_copies_go_to_the_copy_pages_folder(env):
+    """D96: the Copy page's folder starts from Settings, and a change there counts."""
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    assert tab.copy_folder_edit.text() == str(env.pc)
+    tab.copy_folder_edit.setText(str(env.tmp / "other-pc"))
+    tab.copy_folder_edit.textEdited.emit(tab.copy_folder_edit.text())
+    tab.show_page(Page.COPY)
+    expected = str(env.tmp / "other-pc" / tab.recording.rel_path)  # relative to the NAS root
+    assert tab.dest_edit.text() == expected
+    tab.copy_hash_combo.setCurrentIndex(tab.copy_hash_combo.findData(HashMode.NONE))
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    (item,) = tab.queue
+    assert item.kind is QueueKind.COPY
+    assert item.destination == expected
+    assert item.request.hash_mode is HashMode.NONE  # the Copy page's choice
+    tab.copy_folder_edit.clear()
+    tab.add_recordings([env.rid])
+    env.idle(tab)
+    assert "no folder for copies is chosen" in tab.result[1]
+
+
+def test_a_new_copy_folder_in_settings_reaches_the_copy_page(env):
+    tab = env.tab()
+    new = replace(env.config, default_local_copy_root=str(env.tmp / "new"))
+    tab.apply_config(new)
+    assert tab.copy_folder_edit.text() == str(env.tmp / "new")
+    tab.copy_folder_edit.setText(str(env.tmp / "mine"))
+    tab.apply_config(env.config)  # the user's own folder stays
+    assert tab.copy_folder_edit.text() == str(env.tmp / "mine")
 
 
 def test_check_archive_items(env):
@@ -958,7 +1083,7 @@ def dark_palette() -> QPalette:
 
 def test_result_colours_follow_the_palette(env):
     tab = env.loaded(env.tab())
-    tab.copy_radio.setChecked(True)
+    tab.show_page(Page.COPY)
     env.previewed(tab)
     env.ran(tab)
     light = LIGHT_COLOURS[ItemState.OK].name()
