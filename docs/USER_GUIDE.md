@@ -6,6 +6,9 @@ laptop to the NAS, and copies recordings or time ranges to a PC.
 
 The app has four tabs: Viewer, Log recording, Archive / copy and Settings.
 
+The mouse wheel scrolls the page and never changes a dropdown or a number field. To
+change one, click it and pick from its list, or use its arrows or the arrow keys.
+
 ## 1. Setting up the program
 
 This section is for the person who prepares the program for the team.

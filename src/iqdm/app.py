@@ -27,6 +27,7 @@ from iqdm.gui.log_tab import LogTab
 from iqdm.gui.settings_tab import SettingsTab
 from iqdm.gui.transfer_tab import TransferTab
 from iqdm.gui.viewer_tab import ViewerTab
+from iqdm.gui.widgets import wheel_guard
 from iqdm.transfer.manifest import manifests_dir
 
 APP_NAME = "IQ Data Manager"
@@ -142,6 +143,9 @@ class MainWindow(QMainWindow):
         self.db_override = db_override
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(1280, 800)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            wheel_guard.install(app)  # the wheel scrolls the page, not a field (D92)
 
         self.viewer_tab = ViewerTab(self.config)
         self.log_tab = LogTab(

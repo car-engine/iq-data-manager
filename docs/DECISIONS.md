@@ -109,6 +109,7 @@ Rules for this file:
 | D89 | Deleting an entry added by mistake | 2026-10-23, version 1.2 | Active; replaces D41 |
 | D90 | Logging several folders with one set-up | 2026-10-23, version 1.2 | Active |
 | D91 | A deleted entry's number can be given again | 2026-10-23, version 1.2 | Active; amends D89 |
+| D92 | The mouse wheel never changes a field | 2026-10-23, version 1.2.1 | Active |
 
 ## D1. Sample types
 
@@ -2169,3 +2170,25 @@ user approved the proposed default on 2026-10-23.
 Affects: SPEC sections 6 and 8, `db/repository.py` (`created_at()`,
 `reused_text()`), `transferqueue.py` (`QueueItem.created_at`, `entry_problem()`),
 `transfer/operations.py` (`run_transfer()`), `gui/transfer_tab.py`, the user guide.
+
+## D92. The mouse wheel never changes a field
+
+Closes O56. Team feedback on 1.2 (2026-10-23): while the user scrolled a tab with the
+mouse wheel, the pointer passed over dropdowns and number fields, and the wheel
+changed them. The user chose "never" over "only after the field is clicked"
+(2026-10-23).
+
+- The risk is a wrong value that no check reports. In the Log tab the wheel changed
+  the site, the project, the sample type, the IQ layout, the endianness, the header
+  bytes, the file duration, a channel's band and an RF chain row's "Applies to". A
+  new sample type also changes an fs filled in from the file size (D21), so the size
+  check still passes.
+- An event filter on the application keeps every wheel event from a `QComboBox`
+  (with `CheckComboBox`) and a `QAbstractSpinBox` in every tab. It leaves the event
+  unaccepted, and Qt passes a real wheel event on to the parent, so the page or the
+  table scrolls. An open dropdown list is its own widget and still scrolls.
+- The fields still change by a click on the list, by their arrows and by the arrow
+  keys.
+- The main window installs the filter, once per application.
+
+Affects: SPEC section 9, `gui/widgets/wheel_guard.py`, `app.py`, the user guide.

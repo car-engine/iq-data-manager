@@ -796,6 +796,11 @@ iq-data-manager/
     defaults.example.toml     # template of the defaults file, example values only (D68)
 ```
 
+GUI rule: the mouse wheel never changes a dropdown or a number field. An event filter
+on the application (`gui/widgets/wheel_guard.py`, installed by the main window) keeps
+wheel events from every `QComboBox` and `QAbstractSpinBox` and passes them to the
+parent, so the page scrolls (D92).
+
 Rules: nothing outside `gui/` and `app.py` imports PySide6. All SQL lives in `db/`,
 and only `db/` imports `sqlite3` (DECISIONS.md D7). `transfer/delete.py` is the only
 place that deletes files.
