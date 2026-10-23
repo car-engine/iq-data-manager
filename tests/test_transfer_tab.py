@@ -256,6 +256,78 @@ def test_a_new_tab_shows_no_progress_and_asks_for_a_preview(env):
     assert [i.text for i in tab.preview_lines.items] == ["Click Preview to check the transfer."]
 
 
+def mark(widget) -> str:
+    return widget.property(tab_module.MARK_PROPERTY) or ""
+
+
+def test_the_archive_page_frames_the_field_to_fill_in(env):
+    """D101 (manual test of 1.3.0, step 1.2): amber on the NAS folder until it is chosen,
+    then on the destination if that is cleared."""
+    tab = env.loaded(env.tab())
+    assert mark(tab.nas_folder_edit) == "todo"
+    assert "border: 2px solid" in tab.nas_folder_edit.styleSheet()
+    assert tab.nas_folder_edit.placeholderText() == (
+        "A folder in one of the NAS locations (required)"
+    )
+    assert mark(tab.archive_dest_edit) == ""
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
+    tab.nas_folder_edit.textEdited.emit(tab.nas_folder_edit.text())
+    assert mark(tab.nas_folder_edit) == "" and tab.nas_folder_edit.styleSheet() == ""
+    tab.archive_dest_edit.clear()
+    tab.archive_dest_edit.textEdited.emit("")
+    assert mark(tab.archive_dest_edit) == "todo"
+    assert tab.archive_dest_edit.placeholderText().endswith("(required)")
+    tab.show_page(Page.CHECK)  # no frames on the Check page, or for another page's field
+    assert mark(tab.archive_dest_edit) == "" and mark(tab.nas_folder_edit) == ""
+
+
+def test_a_preview_error_frames_the_destination_in_red(env):
+    tab = env.loaded(env.tab())
+    tab.dest_edit.setText(str(env.tmp / "not-the-nas"))
+    tab.dest_edit.textEdited.emit(tab.dest_edit.text())
+    env.previewed(tab)
+    assert not tab.preview.ok
+    assert mark(tab.archive_dest_edit) == "error"
+    assert tab.archive_dest_edit.toolTip() == " ".join(tab.preview.check.errors)
+    tab.dest_edit.setText(str(env.nas / "2026" / env.source.name))
+    tab.dest_edit.textEdited.emit(tab.dest_edit.text())  # the change drops the preview
+    assert mark(tab.archive_dest_edit) == "" and tab.archive_dest_edit.toolTip() == ""
+
+
+def test_the_copy_page_frames_channels_and_times(env):
+    tab = env.loaded(env.tab())
+    tab.show_page(Page.COPY)
+    for box in tab.channel_boxes.values():
+        box.setChecked(False)
+    assert mark(tab.channels_frame) == "todo"
+    assert tab.channels_frame.toolTip() == "Select at least one channel."
+    tab.channel_boxes[0].setChecked(True)
+    assert mark(tab.channels_frame) == ""
+    tab.range_radio.setChecked(True)
+    tab.from_edit.setText("wrong")
+    tab.from_edit.editingFinished.emit()
+    assert mark(tab.from_edit) == "error" and mark(tab.from_unix_edit) == "error"
+    assert tab.from_edit.toolTip() == "From: Write the time as YYYY-MM-DD HH:MM:SS."
+    tab.from_unix_edit.setText(str(int(T0) + 5))
+    tab.from_unix_edit.editingFinished.emit()
+    tab.to_unix_edit.setText(str(int(T0) + 2))
+    tab.to_unix_edit.editingFinished.emit()
+    assert mark(tab.from_edit) == ""
+    assert mark(tab.to_edit) == "error"
+    assert tab.to_edit.toolTip() == "The end of the range must be after its start."
+    tab.whole_radio.setChecked(True)
+    assert mark(tab.to_edit) == ""
+
+
+def test_an_archived_recording_has_nothing_to_fill_in_on_the_archive_page(env):
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)
+    env.idle(tab)
+    tab.nas_folder_edit.clear()
+    tab.nas_folder_edit.textEdited.emit("")
+    assert mark(tab.nas_folder_edit) == "" and mark(tab.archive_dest_edit) == ""
+
+
 def test_the_check_page_runs_no_transfer(env):
     tab = env.loaded(env.tab())
     tab.show_page(Page.CHECK)

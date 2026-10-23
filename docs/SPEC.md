@@ -553,7 +553,14 @@ D96. Under the recording row the tab has three pages. The page sets the operatio
   "Sizes only", because Check before delete follows each archive and needs hashes; it
   starts at the sampled hashes when that is the default (D97).
 - The preview is at the right. On the Check page, Preview, Run and Add to queue are
-  hidden. A change of page drops the preview.
+  hidden, and the preview list says that the checks need no preview. A change of page
+  drops the preview.
+- The Archive and Copy pages frame each field to fill in (amber, "(required)" in the
+  placeholder) or to correct (red, the reason as tooltip), as the Log tab does (D95,
+  D101): an empty destination's folder field, or the destination when its folder is
+  set; the channels when none is ticked; an empty or wrong time of a range; and the
+  destination errors of a preview made for the form. Errors that belong to no field
+  give no frame.
 - The queue and the unfinished transfers are two tabs below, with their counts in the
   tab names.
 - The Viewer's "Archive / copy" button opens the Archive page for a laptop recording,

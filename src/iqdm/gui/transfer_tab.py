@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -54,7 +55,7 @@ from PySide6.QtWidgets import (
 from iqdm import movecopy, transferqueue, viewer
 from iqdm.config import Config
 from iqdm.entry import ChecklistItem, ItemState, default_logged_by, format_mhz, format_size
-from iqdm.gui.log_tab import MARK_PROPERTY, NO_DATABASE, mark_style
+from iqdm.gui.log_tab import MARK_PROPERTY, NO_DATABASE, mark_colour, mark_style
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.timeline import TimelineView
 from iqdm.gui.workers import Task, TaskRunner
@@ -113,6 +114,9 @@ QUEUED_TEXT = {  # the form's transfer is already in the queue (D86)
 FOLDER_REQUIRED = "Required for the items that wait in the queue"
 NAS_FOLDER_PLACEHOLDER = "A folder in one of the NAS locations"
 COPY_FOLDER_PLACEHOLDER = "A folder on this PC"
+ARCHIVE_DEST_PLACEHOLDER = "A new folder in one of the NAS locations"
+COPY_DEST_PLACEHOLDER = "A folder on this PC"
+UNIX_PLACEHOLDER = "Unix seconds"
 SUMMARY_WORDS = {  # the end-of-queue summary; "; " between parts (D85)
     QueueState.DONE: "done",
     QueueState.CHECK_NEEDED: "archived, check needed",
@@ -170,7 +174,10 @@ COMPARE_NOTE = (
 ON_LAPTOP_CHECKS = (
     "The recording is on the laptop. These checks work on a recording archived on the NAS."
 )
-CHECK_PAGE_PREVIEW = "The checks on the Check page start from their own buttons."
+CHECK_PAGE_PREVIEW = (  # D101
+    '"Check archive" and "Compare with laptop copy" need no preview. Their result shows '
+    "below."
+)
 QUEUE_EDIT_NOTE = (
     "The queue item is in the form. Change it, click Preview, then Add to queue puts it "
     "back in its place."
@@ -250,6 +257,32 @@ def _row(field: QWidget, button: QPushButton) -> QWidget:
     row.addWidget(field, 1)
     row.addWidget(button)
     return holder
+
+
+def _mark_field(
+    edit: QLineEdit,
+    mark: ChecklistItem | None,
+    placeholder: str,
+    tooltip: str,
+    *,
+    restyle: bool = False,
+) -> None:
+    """Frame a text field to fill in (amber) or to correct (red), as the Log tab does
+    (D95, D101). An empty field to fill in says "(required)" in its placeholder; a
+    wrong one gives the reason in its tooltip, and otherwise the field keeps `tooltip`.
+    restyle sets the sheet again, because a field keeps the palette it had when its
+    sheet was set."""
+    sheet = mark_style(edit, mark)
+    if restyle or edit.styleSheet() != sheet:
+        edit.setStyleSheet("")
+        edit.setStyleSheet(sheet)
+    edit.setProperty(MARK_PROPERTY, "" if mark is None else str(mark.state))
+    todo = mark is not None and mark.state is ItemState.TODO
+    if todo and placeholder != FOLDER_REQUIRED:
+        placeholder = f"{placeholder} (required)"
+    edit.setPlaceholderText(placeholder)
+    error = mark is not None and mark.state is ItemState.ERROR
+    edit.setToolTip(mark.text if error and mark is not None else tooltip)
 
 
 def _mode_of(combo: QComboBox) -> HashMode:
@@ -409,7 +442,7 @@ class TransferTab(QWidget):
         self.nas_folder_button = QPushButton("Browse...")
         self.nas_folder_button.clicked.connect(self.browse_nas_folder)
         self.archive_dest_edit = QLineEdit()
-        self.archive_dest_edit.setPlaceholderText("A new folder in one of the NAS locations")
+        self.archive_dest_edit.setPlaceholderText(ARCHIVE_DEST_PLACEHOLDER)
         self.archive_dest_edit.textEdited.connect(self._invalidate)
         self.archive_browse_button = QPushButton("Browse...")
         self.archive_browse_button.clicked.connect(self.browse_destination)
@@ -472,7 +505,7 @@ class TransferTab(QWidget):
         self.copy_folder_button = QPushButton("Browse...")
         self.copy_folder_button.clicked.connect(self.browse_copy_folder)
         self.copy_dest_edit = QLineEdit()
-        self.copy_dest_edit.setPlaceholderText("A folder on this PC")
+        self.copy_dest_edit.setPlaceholderText(COPY_DEST_PLACEHOLDER)
         self.copy_dest_edit.textEdited.connect(self._invalidate)
         self.copy_browse_button = QPushButton("Browse...")
         self.copy_browse_button.clicked.connect(self.browse_destination)
@@ -518,7 +551,10 @@ class TransferTab(QWidget):
         self.range_note.setWordWrap(True)
         self.time_error_label = QLabel()
         self.time_error_label.setWordWrap(True)
-        self.channels_row = QHBoxLayout()
+        self.channels_frame = QFrame()  # framed when no channel is ticked (D101)
+        self.channels_frame.setObjectName("channelsFrame")
+        self.channels_row = QHBoxLayout(self.channels_frame)
+        self.channels_row.setContentsMargins(4, 2, 4, 2)
         self.channels_row.addStretch(1)  # the checkboxes go before it, on the left
         self.timeline = TimelineView()
         self.timeline_note = QLabel()
@@ -544,7 +580,7 @@ class TransferTab(QWidget):
         layout.addWidget(self.range_note)
         layout.addWidget(self.time_error_label)
         layout.addWidget(QLabel("Channels"))
-        layout.addLayout(self.channels_row)
+        layout.addWidget(self.channels_frame)
         layout.addWidget(self.timeline)
         layout.addWidget(self.timeline_note)
         return self.scope_box
@@ -843,7 +879,7 @@ class TransferTab(QWidget):
             self._show_time_errors()
             self._show_laptop()
             self._show_check()
-            self._show_folder_marks()
+            self._show_field_marks(restyle=True)
         super().changeEvent(event)
 
     def _colours(self) -> dict[ItemState, QColor]:
@@ -2180,7 +2216,7 @@ class TransferTab(QWidget):
         count = len(self._queue)
         self.lists.setTabText(0, f"Queue ({count})" if count else "Queue")
         self._show_queue_note()
-        self._show_folder_marks()
+        self._show_field_marks()
 
     def _folder_missing(self) -> bool:
         """True while items wait for a folder whose field is empty. Start stays off then;
@@ -2201,23 +2237,83 @@ class TransferTab(QWidget):
             if (n := self._queue.waiting_for(s))
         )
 
-    def _show_folder_marks(self) -> None:
-        """Frame each folder field that queue items wait for, and say so under the queue
-        (D98). The frame is the Log tab's for a required field (D95); the placeholder
-        and the line say it in words too."""
-        for edit, state, placeholder in (
-            (self.nas_folder_edit, QueueState.NEEDS_NAS_FOLDER, NAS_FOLDER_PLACEHOLDER),
-            (self.copy_folder_edit, QueueState.NEEDS_COPY_FOLDER, COPY_FOLDER_PLACEHOLDER),
+    def _form_marks(self) -> dict[movecopy.FormField, ChecklistItem]:
+        """The marks of the page shown, from the form and from a preview made for it."""
+        page, rec = self.page(), self._rec
+        if rec is None or page is Page.CHECK:
+            return {}
+        if page is Page.ARCHIVE and rec.archive_state is not ArchiveState.LOCAL:
+            return {}  # an archived recording has nothing to fill in here
+        folder = self.nas_folder_edit if page is Page.ARCHIVE else self.copy_folder_edit
+        preview = self._preview
+        if preview is not None and preview.request != self._current_request():
+            preview = None
+        return movecopy.form_marks(
+            self.form_input(), folder=folder.text(), time_errors=self._time_errors, preview=preview
+        )
+
+    def _show_field_marks(self, *, restyle: bool = False) -> None:
+        """Frame each field to fill in (amber) or to correct (red), as the Log tab does
+        (D95, D101), and say under the queue which folder queue items wait for (D98).
+
+        A placeholder with "(required)", or the line under the queue, says it in words
+        too; a red frame's tooltip gives the reason. restyle sets each style sheet
+        again after a switch between light and dark.
+        """
+        Field = movecopy.FormField  # noqa: N806
+        marks = self._form_marks()
+        page = self.page()
+        for edit, state, placeholder, tooltip, own_page in (
+            (
+                self.nas_folder_edit,
+                QueueState.NEEDS_NAS_FOLDER,
+                NAS_FOLDER_PLACEHOLDER,
+                NAS_FOLDER_TOOLTIP,
+                Page.ARCHIVE,
+            ),
+            (
+                self.copy_folder_edit,
+                QueueState.NEEDS_COPY_FOLDER,
+                COPY_FOLDER_PLACEHOLDER,
+                COPY_FOLDER_TOOLTIP,
+                Page.COPY,
+            ),
         ):
-            waiting = self._queue.waiting_for(state)
-            mark = ChecklistItem(ItemState.TODO, FOLDER_REQUIRED) if waiting else None
-            edit.setStyleSheet(mark_style(edit, mark))
-            edit.setProperty(MARK_PROPERTY, str(ItemState.TODO) if waiting else "")
-            edit.setPlaceholderText(FOLDER_REQUIRED if waiting else placeholder)
+            if self._queue.waiting_for(state):
+                mark: ChecklistItem | None = ChecklistItem(ItemState.TODO, FOLDER_REQUIRED)
+                placeholder = FOLDER_REQUIRED
+            else:
+                mark = marks.get(Field.FOLDER) if page is own_page else None
+            _mark_field(edit, mark, placeholder, tooltip, restyle=restyle)
+        for edit, placeholder in (
+            (self.archive_dest_edit, ARCHIVE_DEST_PLACEHOLDER),
+            (self.copy_dest_edit, COPY_DEST_PLACEHOLDER),
+        ):
+            mark = marks.get(Field.DESTINATION) if edit is self.dest_edit else None
+            _mark_field(edit, mark, placeholder, "", restyle=restyle)
+        for edit, field, placeholder in (
+            (self.from_edit, Field.FROM, movecopy.TIME_HINT),
+            (self.from_unix_edit, Field.FROM, UNIX_PLACEHOLDER),
+            (self.to_edit, Field.TO, movecopy.TIME_HINT),
+            (self.to_unix_edit, Field.TO, UNIX_PLACEHOLDER),
+        ):
+            _mark_field(edit, marks.get(field), placeholder, "", restyle=restyle)
+        self._mark_channels(marks.get(Field.CHANNELS))
         text = self._folder_wait_lines()
         self.queue_folder_label.setText(f"{MARKS[ItemState.TODO]}  {text}" if text else "")
         self.queue_folder_label.setStyleSheet(f"color: {self._colours()[ItemState.TODO].name()};")
         self.queue_folder_label.setVisible(bool(text))
+
+    def _mark_channels(self, mark: ChecklistItem | None) -> None:
+        """Frame the channel boxes while none is ticked (D101). The frame's place stays
+        when it is off, so the layout does not move."""
+        colour = mark_colour(self.channels_frame, mark)
+        border = "transparent" if colour is None else colour.name()
+        sheet = f"QFrame#channelsFrame {{ border: 2px solid {border}; border-radius: 3px; }}"
+        if self.channels_frame.styleSheet() != sheet:
+            self.channels_frame.setStyleSheet(sheet)
+        self.channels_frame.setProperty(MARK_PROPERTY, "" if mark is None else str(mark.state))
+        self.channels_frame.setToolTip("" if mark is None else mark.text)
 
     def _show_queue_note(self) -> None:
         item = self._selected_queue_item()
@@ -2523,6 +2619,7 @@ class TransferTab(QWidget):
         selected = self._selected_unfinished() is not None
         self.resume_button.setEnabled(not busy and selected)
         self.forget_button.setEnabled(not busy and selected)
+        self._show_field_marks()
         if not has_db:
             self._set_message(ItemState.TODO, NO_DATABASE)
         elif self._message_text == NO_DATABASE:  # a path was saved since

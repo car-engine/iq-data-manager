@@ -118,6 +118,7 @@ Rules for this file:
 | D98 | Queue items from the Viewer wait for their folder | 2026-10-23, version 1.3 | Active; amends D81 and D96 |
 | D99 | The page shown after Add to queue in the Viewer | 2026-10-24, version 1.3 | Active; amends D98 |
 | D100 | "Forget" under Unfinished transfers keeps its name | 2026-10-24, version 1.3 | Active |
+| D101 | The Archive and Copy pages frame the fields to fill in or correct | 2026-10-24, version 1.3 | Active |
 
 ## D1. Sample types
 
@@ -2497,3 +2498,36 @@ was called "Forget...", and chose on 2026-10-24 to keep the name without the dot
 - The button reads "Forget". It still asks first, with No as the default.
 
 Affects: `gui/transfer_tab.py`, the user guide.
+
+## D101. The Archive and Copy pages frame the fields to fill in or correct
+
+Closes O60 and O61. The user's manual test of 1.3.0 (2026-10-24): on the Archive page
+the empty NAS folder for archives was not marked (step 1.2), and a preview error such as
+"Choose a destination folder" did not show which field to fill in. The user chose the
+Log tab's rule on 2026-10-24: amber for a field to fill in, red for a wrong value. The
+Check page's preview line read strangely (step 1.6); the user approved the new wording.
+
+- The frames are the Log tab's (D95). They follow the form as it changes, before any
+  preview, on the page shown. `movecopy.form_marks()` gives them without Qt.
+- **Amber, to fill in:**
+  - an empty destination marks its folder field, "NAS folder for archives" or "Folder
+    for copies", when that is empty too, because the folder fills in the destination;
+    otherwise the destination itself;
+  - on the Copy page, the channel boxes when none is ticked, and an empty "From" or
+    "To" of a time range (both the time and the Unix field).
+  The placeholder of an empty framed field ends with "(required)", so the state does
+  not rest on colour alone (D38).
+- **Red, to correct,** with the reason as tooltip: a time that cannot be read, an end
+  before the start, and the destination errors of a preview made for the form (the
+  destination checks, and another recording logged at an archive's destination).
+- Errors that belong to no field, such as "The recording is already archived." or a
+  folder that differs from its entry, give no frame; the preview lists them.
+- An archived recording on the Archive page, and the Check page, have nothing to
+  frame.
+- The folder frames of D98 (items that wait in the queue) stay, and win over the form's
+  frame for the same field.
+- **The Check page's preview line** reads '"Check archive" and "Compare with laptop
+  copy" need no preview. Their result shows below.'
+
+Affects: SPEC section 8, `movecopy.py` (`FormField`, `form_marks()`,
+`destination_errors()`), `gui/transfer_tab.py`, the user guide.

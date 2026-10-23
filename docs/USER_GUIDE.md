@@ -301,6 +301,10 @@ queue and the unfinished transfers are two tabs at the bottom; drag the bar abov
 them to give them more room. While a preview, transfer or check started on a page
 runs, the pages are locked. While the queue runs, you can change pages.
 
+A field with an amber frame is still to fill in; its placeholder ends with "(required)".
+A field with a red frame holds a wrong value; point at it to read why. The preview
+lists any problem that belongs to no field.
+
 The Viewer's **Archive / copy** button opens the Archive page for a recording on the
 laptop, and for an archived recording whose laptop copy is still to be checked or
 deleted. It opens the Copy page for any other recording. **Load** keeps the page you

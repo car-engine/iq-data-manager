@@ -9,7 +9,7 @@ from conftest import recording_from
 from iqdm import movecopy
 from iqdm.config import Config
 from iqdm.db import repository as repo
-from iqdm.db.connection import DatabaseBusyError, write_transaction
+from iqdm.db.connection import DatabaseBusyError, open_db, write_transaction
 from iqdm.entry import ItemState
 from iqdm.models import ArchiveState, HashMode, Operation, TransferEntry, Verification
 from iqdm.movecopy import (
@@ -17,6 +17,7 @@ from iqdm.movecopy import (
     NOT_FINISHED,
     ArchiveCheck,
     FormError,
+    FormField,
     FormInput,
     LaptopStep,
     Page,
@@ -25,7 +26,9 @@ from iqdm.movecopy import (
     check_after_archive,
     check_needed_note,
     default_copy_destination,
+    destination_errors,
     form_from_transfer,
+    form_marks,
     format_time_input,
     format_unix_input,
     laptop_copy,
@@ -243,6 +246,88 @@ def test_resume_fills_the_form_from_the_stored_transfer(rec):
 def test_the_copy_destination_keeps_the_relative_path(root, rel, expected):
     """D60."""
     assert default_copy_destination(root, rel) == expected
+
+
+# ---------------------------------------------------------------------------
+# Fields to fill in or correct (D101)
+# ---------------------------------------------------------------------------
+
+
+def marks_of(rec, *, folder="", time_errors=None, preview=None, **kw):
+    return {
+        field: (item.state, item.text)
+        for field, item in form_marks(
+            form(rec, **kw), folder=folder, time_errors=time_errors or {}, preview=preview
+        ).items()
+    }
+
+
+def test_an_empty_destination_marks_the_folder_that_fills_it(rec):
+    archive = {"operation": Operation.ARCHIVE, "destination": ""}
+    assert marks_of(rec, **archive) == {
+        FormField.FOLDER: (ItemState.TODO, "Choose the NAS folder for archives.")
+    }
+    assert marks_of(rec, folder="N:\\iq", **archive) == {
+        FormField.DESTINATION: (ItemState.TODO, "Choose a destination folder.")
+    }
+    assert marks_of(rec, destination="") == {
+        FormField.FOLDER: (ItemState.TODO, "Choose the folder for copies.")
+    }
+    assert marks_of(rec) == {}  # the form helper fills in a destination
+    assert marks_of(rec, recording=None, destination="") == {}
+
+
+def test_copy_fields_to_fill_in_or_correct(rec):
+    assert marks_of(rec, channels=()) == {
+        FormField.CHANNELS: (ItemState.TODO, "Select at least one channel.")
+    }
+    ranged = {"whole": False, "start_unix": None, "end_unix": None}
+    assert marks_of(rec, **ranged) == {
+        FormField.FROM: (ItemState.TODO, "Enter the start of the range."),
+        FormField.TO: (ItemState.TODO, "Enter the end of the range."),
+    }
+    wrong = marks_of(rec, time_errors={"from": "From: Write the time as …"}, **ranged)
+    assert wrong[FormField.FROM] == (ItemState.ERROR, "From: Write the time as …")
+    backwards = marks_of(rec, whole=False, start_unix=T0 + 4, end_unix=T0 + 2)
+    assert backwards == {
+        FormField.TO: (ItemState.ERROR, "The end of the range must be after its start.")
+    }
+    # An archive takes the whole recording: its channels and range are not checked
+    assert marks_of(rec, operation=Operation.ARCHIVE, channels=(), **ranged) == {}
+
+
+def test_a_preview_marks_the_destination_with_its_errors(db_path, logged, tmp_path):
+    _, rid = logged
+    dest = tmp_path / "pc" / "rec"
+    target = local_path(dest, preview_of(db_path, rid, dest).selection.files[0].rel_path)
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"other size")
+    preview = preview_of(db_path, rid, dest)
+    assert not preview.ok
+    with open_db(db_path, readonly=True) as conn:
+        rec = repo.get_recording(conn, rid)
+    marks = marks_of(rec, destination=str(dest), preview=preview)
+    state, text = marks[FormField.DESTINATION]
+    assert state is ItemState.ERROR
+    assert text.startswith("Files in the destination have the same name")
+    assert destination_errors(preview) == list(preview.check.errors)
+
+
+def test_errors_that_belong_to_no_field_give_no_mark(db_path, logged, tmp_path):
+    """The archive rules of D50 belong to no field, except another recording at the
+    destination folder."""
+    _, rid = logged
+    preview = preview_of(db_path, rid, tmp_path / "pc" / "rec")
+    assert preview.ok
+    elsewhere = "Recording 9 is already logged at the destination folder."
+    spoiled = dataclasses.replace(
+        preview, errors=("The recording is already archived.", elsewhere)
+    )
+    assert destination_errors(spoiled) == [elsewhere]
+    only_rule = dataclasses.replace(preview, errors=("The recording is already archived.",))
+    with open_db(db_path, readonly=True) as conn:
+        rec = repo.get_recording(conn, rid)
+    assert marks_of(rec, destination=str(tmp_path / "pc" / "rec"), preview=only_rule) == {}
 
 
 # ---------------------------------------------------------------------------

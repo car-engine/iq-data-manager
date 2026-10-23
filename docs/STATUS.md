@@ -149,7 +149,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `10fa5d2` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
 | O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
 | O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | `85e7d7d` (with its report and USER_GUIDE.md section 5), `1a8254a` (the pages during a queue run), `8db0a65` and `ad5b9d3` (STATUS: the manual test) | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
-| O63 and O64, the page after Add to queue (D99) and "Forget" (D100) | Done, not merged | `queue-actions`, from `queue-asks-for-folder` at `ad5b9d3` | The commit of this work, with its report | [2026-10-24-queue-actions](reports/2026-10-24-queue-actions.md) |
+| O63 and O64, the page after Add to queue (D99) and "Forget" (D100) | Done, not merged | `queue-actions`, from `queue-asks-for-folder` at `ad5b9d3` | `ce63581` (with its report) | [2026-10-24-queue-actions](reports/2026-10-24-queue-actions.md) |
+| O60 and O61, frames on the Archive and Copy pages, and the Check page's line (D101) | Done, not merged | `transfer-field-marks`, from `queue-actions` at `ce63581` | The commit of this work, with its report | [2026-10-24-transfer-field-marks](reports/2026-10-24-transfer-field-marks.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -205,14 +206,12 @@ column holds the approved answers.
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
-| O60 | The Archive and Copy pages do not mark the field to fill in: an empty NAS folder for archives (step 1.2), or the field behind a preview error such as "Choose a destination folder" | 1.3.0, before the release | Frames as in the Log tab (D95), shown as the form changes: amber for an empty field to fill in, red for a wrong value with the reason as tooltip (the user's choice, 2026-10-24). An empty destination frames its folder field when that is empty too. Errors that belong to no field get no frame. | Manual test of 1.3.0, step 1.2 and the user's note |
-| O61 | The Check page's preview line "The checks on the Check page start from their own buttons." reads strangely | 1.3.0, before the release | Say what it means: 'Check archive and Compare with laptop copy need no preview. Their result shows below.', with the names in quotes (O62). Approved by the user, 2026-10-24. | Manual test of 1.3.0, step 1.6 |
 | O62 | Names of buttons, fields, pages and panels in the app's text are not in quotation marks, so "Preview" reads as an ordinary word | 1.3.0, before the release | Double quotes round every such name in every message, tooltip, dialog and placeholder of all tabs, without a trailing "..."; a check in `tests/test_user_text.py`. The user guide keeps bold for names (the user's choice, 2026-10-24). | Manual test of 1.3.0, step 2.1 and the user's note |
 | O37 | Small files copy slowly to the NAS: about 18 to 25 ms per 64 KB file, with or without the flush, and more files at once help little. A day of 1 s files is about 26 minutes per channel. | Not needed for 1.x (D72) | Measure which per-file step costs most (create, write, flush, set the time, check the name, rename) before changing the copy engine. Measure the D75 identity check per file at the same time. | NAS field test, 2026-10-05 |
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D100). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D101). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -274,6 +273,8 @@ Decided items are in `docs/DECISIONS.md` (D1–D100). The M0 review table in
 | O59 | Adding recordings from the Viewer to the queue without a NAS folder or a copy folder is refused | D98 (2026-10-23) |
 | O63 | Add to queue in the Viewer: the page shown should follow the action | D99 (2026-10-24) |
 | O64 | The rationale for "Forget..." under Unfinished transfers | D100 (2026-10-24): the name stays, without the dots |
+| O60 | The Archive and Copy pages do not mark the field to fill in | D101 (2026-10-24) |
+| O61 | The Check page's preview line reads strangely | D101 (2026-10-24) |
 
 ## Pending checks for the user
 

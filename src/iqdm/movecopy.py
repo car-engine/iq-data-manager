@@ -8,6 +8,7 @@
 - The state of the laptop copy after an archive: check before delete, delete (D55).
 - Check before delete straight after each archive, for the form and the queue (D97).
 - The tab's pages, and the page the Viewer's button opens (D96).
+- The fields of the Archive and Copy pages to fill in or correct (D101).
 - The state of an unfinished copy or archive, and progress, speed and time left.
 """
 
@@ -15,7 +16,7 @@ import math
 import ntpath
 import re
 from collections import deque
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -224,6 +225,86 @@ def archive_destination(nas_folder: str, rel_path: str) -> str:
     """The NAS folder for archives and the recording's relative path (D81, D96). '' without
     a NAS folder."""
     return default_copy_destination(nas_folder, rel_path)
+
+
+# ---------------------------------------------------------------------------
+# Fields to fill in or correct (D101)
+# ---------------------------------------------------------------------------
+
+
+class FormField(StrEnum):
+    FOLDER = "folder"  # the NAS folder for archives, or the folder for copies
+    DESTINATION = "destination"
+    CHANNELS = "channels"
+    FROM = "from"
+    TO = "to"
+
+
+def destination_errors(preview: Preview) -> list[str]:
+    """The preview's errors that concern the destination folder: the destination checks
+    (D51, D75), and another recording logged at an archive's destination (D50)."""
+    errors = list(preview.check.errors)
+    errors += [
+        e
+        for e in preview.errors
+        if e not in errors and e.endswith("is already logged at the destination folder.")
+    ]
+    return errors
+
+
+def form_marks(
+    form: FormInput,
+    *,
+    folder: str,
+    time_errors: Mapping[str, str],
+    preview: Preview | None = None,
+) -> dict[FormField, ChecklistItem]:
+    """Each field of the Archive or Copy page that is empty but needed (TODO), or wrong
+    (ERROR), with the reason (D101, after D95).
+
+    `folder` is the page's folder field. An empty destination marks that folder when it
+    is empty too, because the folder fills in the destination; else the destination
+    itself. `time_errors` holds the time fields' own errors by "from" and "to". A
+    preview, made for this form, adds its destination errors. Errors that belong to no
+    field, such as "The recording is already archived.", give no mark.
+    """
+    marks: dict[FormField, ChecklistItem] = {}
+    rec = form.recording
+    if rec is None:
+        return marks
+    archive = form.operation is Operation.ARCHIVE
+    if not form.destination.strip():
+        if not folder.strip():
+            what = "the NAS folder for archives" if archive else "the folder for copies"
+            marks[FormField.FOLDER] = ChecklistItem(ItemState.TODO, f"Choose {what}.")
+        else:
+            marks[FormField.DESTINATION] = ChecklistItem(
+                ItemState.TODO, "Choose a destination folder."
+            )
+    elif preview is not None:
+        errors = destination_errors(preview)
+        if errors:
+            marks[FormField.DESTINATION] = ChecklistItem(ItemState.ERROR, " ".join(errors))
+    if archive:
+        return marks
+    if not form.channels:
+        marks[FormField.CHANNELS] = ChecklistItem(ItemState.TODO, "Select at least one channel.")
+    if form.whole:
+        return marks
+    for key, field, value, name in (
+        ("from", FormField.FROM, form.start_unix, "start"),
+        ("to", FormField.TO, form.end_unix, "end"),
+    ):
+        if time_errors.get(key):
+            marks[field] = ChecklistItem(ItemState.ERROR, time_errors[key])
+        elif value is None:
+            marks[field] = ChecklistItem(ItemState.TODO, f"Enter the {name} of the range.")
+    start, end = form.start_unix, form.end_unix
+    if start is not None and end is not None and end <= start:
+        marks[FormField.TO] = ChecklistItem(
+            ItemState.ERROR, "The end of the range must be after its start."
+        )
+    return marks
 
 
 # ---------------------------------------------------------------------------
