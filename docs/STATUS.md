@@ -56,7 +56,9 @@ its report. Last updated: 2026-10-23 (work for version 1.2.1).
   the team's feedback on 1.2 (D92 to D95), on four branches from `wheel-guard` to
   `required-field-marks`, listed under "Work after 1.0". At the last branch: 1,958
   tests pass and 4 skip; `ruff check` is clean. Next: the user's manual test of
-  1.2.1, then the merge and the release (HANDOFF.md, section 4). O57 to O59, the Archive / copy tab,
+  1.2.1 (`dev/test-1.2.1/CHECKLIST.html`, 28 steps, on the test build
+  `dist/test-1.2.1` from `b29c497` and the data in `dev/test-1.2.1/data`), then the
+  merge and the release (HANDOFF.md, section 4). O57 to O59, the Archive / copy tab,
   are for version 1.3.0 in another session. A new session starts from the prompt
   "Work after a release" in [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
@@ -246,6 +248,11 @@ Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
 
 Things that cannot be tested on the development PC, or were tested only partly.
 
+- **The manual test of 1.2.1** (`dev/test-1.2.1/CHECKLIST.html`): the mouse wheel
+  with real input, including a touchpad (D92); the frames by eye under the real
+  Windows 11 style, and a theme switch while the app runs (D95); the log rows in
+  "Several folders" (D93); Logged by (D94).
+
 - **Version 1.2 in the field:** several real folders of one day on the NAS (scan
   time over the network, and Cancel during a long scan, step 3.16 of the manual
   test), and a delete with a second PC working on the catalogue.
@@ -315,7 +322,11 @@ that (checked on 2026-10-23).
   `m6-shots`, `m7-checklist`, `m7-legacy`, `o38-shots`, `o43-shots`, `o44-shots`,
   `o45-shots`, `o46-shots` and `review` (screenshots, probes, timings and synthetic
   data of earlier milestones and versions). From the 1.2.1 work: `o54-debug.py` and
-  the folders `o54-shots` and `o55-shots` (probe and screenshot scripts).
+  the folders `o54-shots` and `o55-shots` (probe and screenshot scripts), and, after
+  the manual test, `test-1.2.1` (the checklist, its data and scripts, and `harness`,
+  which holds a copy of the page, a headless Edge profile and a screenshot).
+- The test build of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/` and
+  `build/test-1.2.1-build.log`, after the manual test.
 - The pytest folders under `%TEMP%\pytest-of-Perry\` hold directory junctions from
   the release review and the D75 tests. Remove each as a link, so that its target is
   not touched.
@@ -326,14 +337,16 @@ that (checked on 2026-10-23).
   writes on the NAS.
 - Outside the repository: `claude_pw.py` in `%TEMP%`, and the sessions' scratch
   folders under `%TEMP%\claude\`. The 1.2 session's folder holds about 720,000 small
-  synthetic files of the O51 size check in `o51-size`.
+  synthetic files of the O51 size check in `o51-size`. The 1.2.1 session's folder
+  holds screenshots and a copy of the test data (`t121-copy`).
 
 ## Notes for agents
 
 These come from the safety configuration and from experience in this repository.
 
 - **The safety hook blocks Write and Edit outside the repository.** That includes
-  Claude Code plan files, the memory folder and the session scratchpad. Present plans
+  Claude Code plan files, the memory folder and the session scratchpad (met again on
+  2026-10-23, for a harness copy of a checklist page; it went under `dev/`). Present plans
   in chat; ExitPlanMode works without a plan file. Keep anything that must outlast a
   session in `docs/`. Put screenshot, timing and probe scripts under `dev/`, which is
   gitignored. The user removes old `dev/` folders, so do not rely on earlier scripts
