@@ -143,8 +143,9 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
-`main` as fast-forwards on 2026-10-23. None was pushed. They are not deleted yet;
-deleting them with `git branch -d` waits for the user's approval.
+`main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
+`git branch -d`, at `e9977e6`, `b5aaa55`, `07c6e18`, `b3b3bec` and `485434f`. None had
+been pushed.
 
 The five branches of 1.2.0, from `band-from-fc` to `release-1.2.0`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
