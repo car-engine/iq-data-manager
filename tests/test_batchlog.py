@@ -158,6 +158,44 @@ def test_the_logs_values_win_over_the_shared_ones(tmp_path):
     assert values is not None and values.dtype is SampleType.INT16
 
 
+def test_the_log_rows_shown_are_the_ones_saved(tmp_path):
+    """O55: what the screen lists is what form_for() puts into the entry."""
+    folder = scanned(recording(tmp_path, "rec", log={0: (300.0, 30.0)}))
+    shared = shared_form(
+        1,
+        dtype=SampleType.INT8,
+        params=[
+            ParamInput(param="Antenna", value="Yagi"),
+            ParamInput(param="USRP gain", value="10", unit="dB"),
+        ],
+    )
+    shown = batchlog.log_shown(shared, folder)
+    assert shown is not None
+    form, _ = batchlog.form_for(shared, folder)
+    assert [p for p in form.params if p not in shared.params] == list(shown.rows)
+    assert [(p.param, p.value, p.unit) for p in shown.rows] == [
+        ("USRP gain", "30", "dB"),
+        ("Clock reference", "GPSDO", ""),
+        ("USRP", "X310 + UBX", ""),
+    ]
+    assert shown.replaced == (ParamInput(param="USRP gain", value="10", unit="dB"),)
+    assert shown.dtype is SampleType.INT16
+
+
+def test_a_shared_usrp_row_stays_and_is_not_shown_as_replaced(tmp_path):
+    folder = scanned(recording(tmp_path, "rec", log={0: (300.0, 30.0)}))
+    shared = shared_form(1, params=[ParamInput(param="USRP", value="USRP-2954")])
+    shown = batchlog.log_shown(shared, folder)
+    assert shown is not None
+    assert "USRP" not in [p.param for p in shown.rows]  # D82: the form's own USRP row stays
+    assert shown.replaced == ()
+
+
+def test_no_log_rows_without_a_log(tmp_path):
+    assert batchlog.log_shown(shared_form(1), scanned(recording(tmp_path, "rec"))) is None
+    assert batchlog.log_shown(shared_form(1), BatchFolder(path=str(tmp_path))) is None
+
+
 def test_fs_follows_the_shared_format_without_a_log(tmp_path):
     folder = scanned(recording(tmp_path, "rec", header_bytes=0))
     form, _ = batchlog.form_for(shared_form(1), folder)

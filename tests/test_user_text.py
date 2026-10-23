@@ -63,6 +63,8 @@ from iqdm.gui.log_tab import (
     DELETE_TOOLTIP,
     DROP_FOLDERS_TITLE,
     KEEP_LOG_BUTTON,
+    LOG_ROWS_HEADERS,
+    LOG_ROWS_TOOLTIP,
     NO_FOLDER_SELECTED,
     NO_RECORDS_FOLDER,
     PARENT_IS_RECORDING,
@@ -75,6 +77,8 @@ from iqdm.gui.log_tab import (
     band_filled_tooltip,
     conflict_question,
     drop_folders_question,
+    log_rows_note,
+    log_rows_title,
     replace_template_question,
     save_button_text,
 )
@@ -101,6 +105,7 @@ from iqdm.models import (
     Operation,
     Param,
     Recording,
+    SampleType,
     TransferEntry,
 )
 from iqdm.scan.scanner import scan_recording
@@ -433,6 +438,17 @@ def test_several_folders_text_is_plain(qtbot, db_path, tmp_path, monkeypatch):
             names,
         )[1],
         batchlog.combined_items([])[0].text,
+        LOG_ROWS_TOOLTIP,
+        *LOG_ROWS_HEADERS,
+        log_rows_title("rec01"),
+        log_rows_note(
+            batchlog.LogShown(
+                rows=(),
+                replaced=(ParamInput(param="USRP gain", value="10", unit="dB"),),
+                dtype=SampleType.INT8,
+            ),
+            SampleType.INT16,
+        ),
     ]
     assert offending(texts) == []
 

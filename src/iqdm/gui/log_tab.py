@@ -14,6 +14,8 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractScrollArea,
     QApplication,
     QComboBox,
     QDoubleSpinBox,
@@ -41,7 +43,7 @@ from PySide6.QtWidgets import (
 from iqdm import bands, batchlog, entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db.connection import DatabaseError
-from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState
+from iqdm.entry import ChannelInput, Choices, EntryInput, ItemState, ParamInput
 from iqdm.gui.widgets.checklist import MARKS, ChecklistView, colours_for
 from iqdm.gui.widgets.folder_table import FolderRow, FolderTable
 from iqdm.gui.widgets.param_table import ParamTable
@@ -112,6 +114,35 @@ BATCH_TEMPLATE_LOG_NOTE = (
 PARENT_IS_RECORDING = (
     "This folder is itself a recording: its numbered subfolders are its channels."
 )
+LOG_ROWS_HEADERS = ("Applies to", "Parameter", "Value", "Unit")
+LOG_ROWS_TOOLTIP = (
+    "From this folder's recorder's log. To change a value for one folder, untick the "
+    "folder in the list and log it with One folder."
+)
+
+
+def log_rows_title(folder: str) -> str:
+    return f"From the recorder's log of {folder}. These rows are saved with this folder:"
+
+
+def log_rows_note(shown: batchlog.LogShown, shared_dtype: SampleType) -> str:
+    """The line under the log rows: shared rows they replace, and the log's sample type."""
+    lines = []
+    if shown.replaced:
+        rows = "; ".join(_param_text(p) for p in shown.replaced)
+        lines.append(f"For this folder they replace these shared rows: {rows}.")
+    if shown.dtype is not None and shown.dtype != shared_dtype:
+        lines.append(
+            f"This folder's log names the sample type {shown.dtype}. The folder is saved "
+            "with it, in place of the sample type in section 3."
+        )
+    return "\n".join(lines)
+
+
+def _param_text(p: ParamInput) -> str:
+    """'USRP gain 20 dB', 'Ch 1: USRP gain 25 dB'."""
+    text = " ".join(t for t in (p.param.strip(), p.value.strip(), p.unit.strip()) if t)
+    return text if p.channel_index is None else f"Ch {p.channel_index}: {text}"
 
 
 def drop_folders_question(count: int) -> str:
@@ -532,7 +563,36 @@ class LogTab(QWidget):
             QLabel("Add whatever is relevant; full detail stays in the recording plan.")
         )
         layout.addWidget(self.param_table)
+        layout.addWidget(self._build_log_rows())
         return box
+
+    def _build_log_rows(self) -> QWidget:
+        """Several folders: the selected folder's rows from its recorder's log (O55)."""
+        self.log_rows_label = QLabel()
+        self.log_rows_label.setWordWrap(True)
+        self.log_rows_table = QTableWidget(0, len(LOG_ROWS_HEADERS))
+        self.log_rows_table.setHorizontalHeaderLabels(LOG_ROWS_HEADERS)
+        self.log_rows_table.verticalHeader().setVisible(False)
+        self.log_rows_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.log_rows_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.log_rows_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.log_rows_table.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self.log_rows_table.setToolTip(LOG_ROWS_TOOLTIP)
+        header = self.log_rows_table.horizontalHeader()
+        for col in (1, 2):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
+        self.log_rows_note = QLabel()
+        self.log_rows_note.setWordWrap(True)
+        self.log_rows_box = QWidget()
+        layout = QVBoxLayout(self.log_rows_box)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.addWidget(self.log_rows_label)
+        layout.addWidget(self.log_rows_table)
+        layout.addWidget(self.log_rows_note)
+        self.log_rows_box.setVisible(False)
+        return self.log_rows_box
 
     def _build_side_panel(self) -> QGroupBox:
         box = QGroupBox("Before saving")
@@ -1734,6 +1794,7 @@ class LogTab(QWidget):
         self.folder_label.setVisible(False)
         self.folder_checklist.setVisible(False)
         self.channel_table.setEnabled(True)
+        self._show_log_rows(None, self.current_input())
         self._clear_message()
         self.refresh_checklist()
 
@@ -1982,6 +2043,7 @@ class LogTab(QWidget):
             self.folder_label.setText(f"Selected folder: {selected[0].name}")
             self.folder_checklist.set_items(selected[1].items)
         self.folder_table.set_rows([self._folder_row(f, v) for f, v in self._views])
+        self._show_log_rows(None if selected is None else selected[0], shared)
         self.kept_note.setVisible(False)
         self.edit_existing_button.setVisible(False)
         self.use_parent_button.setVisible(False)
@@ -1989,6 +2051,49 @@ class LogTab(QWidget):
             "" if selected is None else entry.state_note(selected[0].location, None)
         )
         self._update_buttons()
+
+    def _show_log_rows(self, folder: batchlog.BatchFolder | None, shared: EntryInput) -> None:
+        """The selected folder's RF chain rows and sample type from its log (O55).
+
+        They are saved with the folder (batchlog.form_for()), but section 5 holds only
+        the shared rows. Hidden in "One folder" mode and for a folder without a log.
+        """
+        shown = (
+            None
+            if folder is None or not self.batch_mode
+            else batchlog.log_shown(shared, folder, self._choices.param_names)
+        )
+        self.log_rows_box.setVisible(shown is not None)
+        table = self.log_rows_table
+        table.setRowCount(0)
+        if shown is None or folder is None:
+            self.log_rows_label.clear()
+            self.log_rows_note.clear()
+            return
+        self.log_rows_label.setText(log_rows_title(folder.name))
+        for position, p in enumerate(shown.rows):
+            table.insertRow(position)
+            scope = "Recording" if p.channel_index is None else f"Ch {p.channel_index}"
+            for col, text in enumerate((scope, p.param, p.value, p.unit)):
+                cell = _cell(text)
+                font = cell.font()
+                font.setItalic(True)  # as the other values from the log (D82)
+                cell.setFont(font)
+                cell.setToolTip(LOG_ROWS_TOOLTIP)
+                table.setItem(position, col, cell)
+        table.setVisible(bool(shown.rows))
+        self.log_rows_label.setVisible(bool(shown.rows))
+        note = log_rows_note(shown, shared.dtype)
+        self.log_rows_note.setText(note)
+        self.log_rows_note.setVisible(bool(note))
+
+    def log_rows(self) -> list[tuple[str, ...]]:
+        """The rows of the log table as shown, for tests."""
+        table = self.log_rows_table
+        return [
+            tuple(table.item(r, c).text() for c in range(table.columnCount()))
+            for r in range(table.rowCount())
+        ]
 
     def _folder_row(self, folder: batchlog.BatchFolder, view: batchlog.FolderView) -> FolderRow:
         state, state_text = batchlog.folder_state(folder, view.items)

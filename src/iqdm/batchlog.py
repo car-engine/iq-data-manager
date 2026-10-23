@@ -23,7 +23,7 @@ from pathlib import Path
 
 from iqdm import entry, recorderlog
 from iqdm.db.connection import DatabaseError
-from iqdm.entry import ChannelInput, ChecklistItem, EntryInput, ItemState
+from iqdm.entry import ChannelInput, ChecklistItem, EntryInput, ItemState, ParamInput
 from iqdm.location import DriveResolver, Location, LocationError, split_location
 from iqdm.models import Recording, SameStart, SampleType
 from iqdm.scan.scanner import DEFAULT_EXTENSIONS, ScanError, ScanResult, scan_recording
@@ -288,6 +288,39 @@ def form_for(
         params=params,
     )
     return form, values
+
+
+@dataclass(frozen=True)
+class LogShown:
+    """What a folder's recorder's log adds to the shared fields, for the screen (O55).
+
+    rows are the log's RF chain rows, saved with the folder. replaced are the shared
+    rows of the same names, which the folder does not get (recorderlog.merge_params()).
+    dtype is the log's sample type, or None when the log names none.
+    """
+
+    rows: tuple[ParamInput, ...]
+    replaced: tuple[ParamInput, ...]
+    dtype: SampleType | None
+
+
+def log_shown(
+    shared: EntryInput, folder: BatchFolder, known_param_names: Sequence[str] = ()
+) -> LogShown | None:
+    """The log rows and sample type that form_for() puts into the folder's entry.
+
+    None for a folder that is not scanned or has no recorder's log with values.
+    """
+    log = folder.recorder
+    if folder.scan is None or log is None or not log.found:
+        return None
+    indices = [c.channel_index for c in folder.scan.channels]
+    values = recorderlog.form_values(log, indices, shared.params, known_param_names)
+    names = {p.param.casefold() for p in values.params}
+    replaced = tuple(p for p in shared.params if p.param.strip().casefold() in names)
+    if not values.params and folder.log_dtype is None:
+        return None
+    return LogShown(rows=values.params, replaced=replaced, dtype=folder.log_dtype)
 
 
 def _end_unix(scan: ScanResult, duration: float) -> float | None:

@@ -405,6 +405,13 @@ folders with one set-up. The logic is in `batchlog.py` (no Qt).
   over the shared fields. Sections 2, 3 and 5 hold the shared fields; the file
   duration field cannot be changed in this mode. Selecting a folder shows its times,
   location and channels; fc, band and fs typed in section 4 belong to that folder.
+- Under section 5's shared rows, a read-only table lists the selected folder's RF
+  chain rows from its recorder's log, in italics: the rows that folder is saved with.
+  A line under it names the shared rows of the same name that they replace for that
+  folder, and the log's sample type when it differs from section 3's. The table is
+  hidden for a folder whose log gives none of these, and in "One folder" mode. To
+  change such a value for one folder, the user unticks it and logs it in "One
+  folder" mode (D93).
 - The folder table shows per folder: a "Save" tick box, folder, start, end, channel
   count, fc, band, fs, sample type, files, size, and a state with mark and colour. An
   already logged folder starts unticked.

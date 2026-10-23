@@ -110,6 +110,7 @@ Rules for this file:
 | D90 | Logging several folders with one set-up | 2026-10-23, version 1.2 | Active |
 | D91 | A deleted entry's number can be given again | 2026-10-23, version 1.2 | Active; amends D89 |
 | D92 | The mouse wheel never changes a field | 2026-10-23, version 1.2.1 | Active |
+| D93 | "Several folders" shows each folder's log rows | 2026-10-23, version 1.2.1 | Active; amends D90 |
 
 ## D1. Sample types
 
@@ -2192,3 +2193,30 @@ changed them. The user chose "never" over "only after the field is clicked"
 - The main window installs the filter, once per application.
 
 Affects: SPEC section 9, `gui/widgets/wheel_guard.py`, `app.py`, the user guide.
+
+## D93. "Several folders" shows each folder's log rows
+
+Closes O55. Amends D90. Team feedback on 1.2 (2026-10-23): after several folders were
+scanned, the side panel said that the USRP, the USRP gain and the Clock reference were
+filled in from the recorder's log, but section 5 did not show them. The saved
+entries held them. The user chose read-only rows (2026-10-23).
+
+- In 1.2.0, `batchlog.form_for()` merged each folder's log rows into the entry it
+  saved, and section 5 showed only the shared rows. The folder's sample type from its
+  log was shown only in the folder table. So the user could not review these values
+  before the save, and a wrong value from a log reached the catalogue unseen.
+- Under the shared rows, a read-only table lists the selected folder's rows from its
+  log: Applies to, parameter, value and unit, in italics as the other values from the
+  log (D82). They are the rows `form_for()` saves, from `batchlog.log_shown()`.
+- A line under the table names the shared rows of the same name that the log's rows
+  replace for that folder (`recorderlog.merge_params()`), and the log's sample type
+  when it differs from the one in section 3.
+- The table is hidden for a folder whose log gives no row and no sample type, and in
+  "One folder" mode.
+- The rows cannot be changed in this mode. To change one for one folder, the user
+  unticks the folder and logs it in "One folder" mode, where the log's values fill
+  ordinary fields. Rows that can be changed per folder would need per-folder RF chain
+  rows in `BatchFolder`, as section 4's channel values have.
+
+Affects: SPEC section 6, "Several folders", `batchlog.py` (`LogShown`, `log_shown()`),
+`gui/log_tab.py`, the user guide.

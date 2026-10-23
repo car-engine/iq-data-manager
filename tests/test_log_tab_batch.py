@@ -155,6 +155,85 @@ def test_folders_are_added_scanned_and_sorted_by_start(qtbot, tab, tmp_path):
     assert texts(tab.checklist.items, ItemState.TODO) == ["Choose a site (all 2 folders)"]
 
 
+LOG_ROWS_20 = [
+    ("Recording", "USRP gain", "20", "dB"),
+    ("Recording", "Clock reference", "GPSDO", ""),
+    ("Recording", "USRP", "X310 + UBX", ""),
+]
+
+
+def test_the_selected_folders_log_rows_are_shown(qtbot, tab, tmp_path):
+    """O55: section 5 shows the rows the folder's log adds, for the selected folder."""
+    several(qtbot, tab, session(tmp_path))
+    early, late = tab.folders
+    assert early.name == "b-early"
+    assert not tab.log_rows_box.isHidden()
+    assert tab.log_rows_label.text() == log_tab_module.log_rows_title("b-early")
+    assert tab.log_rows() == LOG_ROWS_20
+    assert tab.param_table.rows() == []  # the shared rows stay apart
+    tab._select_folder(late.key)
+    tab.refresh_checklist()
+    assert tab.log_rows()[0] == ("Recording", "USRP gain", "30", "dB")
+    assert tab.log_rows_label.text() == log_tab_module.log_rows_title("a-late")
+
+
+def test_a_folder_without_a_log_shows_no_log_rows(qtbot, tab, tmp_path):
+    parent = tmp_path / "session"
+    recording(parent, "rec")
+    several(qtbot, tab, parent)
+    assert tab.log_rows_box.isHidden()
+    assert tab.log_rows() == []
+
+
+def test_a_shared_row_that_the_log_replaces_is_named(qtbot, tab, tmp_path):
+    several(qtbot, tab, session(tmp_path))
+    assert tab.log_rows_note.isHidden()
+    tab.param_table.add_row(entry.ParamInput(param="USRP gain", value="10", unit="dB"))
+    tab.param_table.add_row(entry.ParamInput(param="Antenna", value="Yagi"))
+    tab.refresh_checklist()
+    assert tab.log_rows_note.text() == (
+        "For this folder they replace these shared rows: USRP gain 10 dB."
+    )
+    assert not tab.log_rows_note.isHidden()
+
+
+def test_the_logs_sample_type_is_named_when_it_differs(qtbot, tab, tmp_path):
+    parent = tmp_path / "session"
+    root = recording(parent, "rec")
+    (root / "recorder_rec.log").write_text(
+        recorder_log_text({0: (145.8, 20.0)}, sample_format="sc8"), encoding="utf-8"
+    )
+    several(qtbot, tab, parent)
+    assert tab.dtype_combo.currentData() == SampleType.INT16
+    assert tab.log_rows_note.text() == (
+        "This folder's log names the sample type int8. The folder is saved with it, in "
+        "place of the sample type in section 3."
+    )
+    tab.dtype_combo.setCurrentIndex(tab.dtype_combo.findData(SampleType.INT8))
+    tab.refresh_checklist()
+    assert tab.log_rows_note.isHidden()
+
+
+def test_the_log_rows_shown_are_saved(qtbot, tab, tmp_path, site_id, db_path, save_answer):
+    several(qtbot, tab, session(tmp_path))
+    ready(tab, site_id)
+    shown = tab.log_rows()
+    tab.save()
+    wait_idle(qtbot, tab)
+    with open_db(db_path, readonly=True) as conn:
+        saved = repository.get_recording(conn, 1)
+    assert sorted((p.param, p.value, p.unit or "") for p in saved.params) == sorted(
+        (param, value, unit) for _scope, param, value, unit in shown
+    )
+
+
+def test_the_log_rows_go_with_one_folder_mode(qtbot, tab, tmp_path, monkeypatch):
+    several(qtbot, tab, session(tmp_path))
+    monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes)
+    tab.one_radio.setChecked(True)
+    assert tab.log_rows_box.isHidden()
+
+
 def test_save_saves_each_folder_with_the_shared_fields(
     qtbot, tab, tmp_path, site_id, db_path, save_answer
 ):

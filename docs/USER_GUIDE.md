@@ -208,7 +208,12 @@ tab.
    fills these too.
 3. Each folder takes its times, channels, centre frequencies, sample rates, band and
    the recorder's values from its own scan and log. The table lists them, with a
-   state for each folder.
+   state for each folder. Under the RF chain, a second table shows the rows the
+   selected folder takes from its recorder's log, such as the USRP gain, the clock
+   reference and the USRP. These rows are saved with that folder, in place of any
+   row of the same name typed above, and the line under the table names such a row.
+   To change one of these values for one folder, untick the folder and log it with
+   **One folder**.
 4. The checklist names what still stops a save, once for all folders where it is the
    same. Click a folder to see its own checklist and its channels; type a missing
    centre frequency there, for example for a folder without a recorder log.
