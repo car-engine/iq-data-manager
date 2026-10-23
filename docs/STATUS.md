@@ -291,8 +291,11 @@ page's preview line means (O61). The comments and notes gave O60 to O64.
 
 - **Version 1.3.0, the second manual test:** the changes after the first test (O60 to
   O64): the page after an add, the frames on the Archive and Copy pages, the Check
-  page's line, "Forget", and the quoted names in each tab. Its checklist follows with
-  the next commit.
+  page's line, "Forget", and the quoted names in each tab. The checklist is
+  `dev/test-1.3.0-b/CHECKLIST.html` (21 steps), on the build `dist/test-1.3.0-3` (from
+  `875d40c`) and the data in `dev/test-1.3.0-b/testdata` (made by `make_test_data.py`;
+  `check_expectations.py` read the quoted texts from the app offscreen). Step 0.1
+  shares `testdata\nas` as `iqtest13b`. A harness in headless Edge checked the export.
 - **Version 1.3.0, the first manual test (done, see above):** the three pages on a
   real display in light and dark mode, Run archive with its Check before delete, Stop
   during that check, items from the Viewer that wait for a folder, and a queue run with
@@ -406,7 +409,10 @@ that (checked on 2026-10-23).
 - The test builds of 1.3.0, after the manual test: `dist/test-1.3.0/`,
   `build/work-test-1.3.0/` and `build/test-1.3.0-build.log` (made before the fix of
   `1a8254a`, not for the test), and `dist/test-1.3.0-2/`, `build/work-test-1.3.0-2/`
-  and `build/test-1.3.0-2-build.log`. Also the share `iqtest13` of step 0.1.
+  and `build/test-1.3.0-2-build.log`. Also the share `iqtest13` of step 0.1. After the
+  second manual test: `dist/test-1.3.0-3/`, `build/work-test-1.3.0-3/`,
+  `build/test-1.3.0-3-build.log`, `dev/test-1.3.0-b/` (its checklist, scripts, data
+  and harness) and the share `iqtest13b`.
 - The test builds of 1.2.1: `dist/test-1.2.1/`, `build/work-test-1.2.1/`,
   `build/test-1.2.1-build.log`, `dist/test-1.2.1-2/`, `build/work-test-1.2.1-2/` and
   `build/test-1.2.1-2-build.log`, after the manual test. Also `dev/o56-popup/`.
