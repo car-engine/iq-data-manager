@@ -116,6 +116,8 @@ Rules for this file:
 | D96 | The Archive / copy tab in three pages | 2026-10-23, version 1.3 | Active; D98 keeps the pages usable during a queue run |
 | D97 | Check before delete straight after each archive | 2026-10-23, version 1.3 | Active; amends D81 and D85 |
 | D98 | Queue items from the Viewer wait for their folder | 2026-10-23, version 1.3 | Active; amends D81 and D96 |
+| D99 | The page shown after Add to queue in the Viewer | 2026-10-24, version 1.3 | Active; amends D98 |
+| D100 | "Forget" under Unfinished transfers keeps its name | 2026-10-24, version 1.3 | Active |
 
 ## D1. Sample types
 
@@ -2455,3 +2457,43 @@ questions 5 to 7.
 Affects: SPEC section 8, `transferqueue.py` (`QueueState.NEEDS_NAS_FOLDER`,
 `NEEDS_COPY_FOLDER`, `QueueItem.rel_path`, `fill_folder()`, `waiting_for_folder()`,
 `item_for_recording()`, `run_item()`), `gui/transfer_tab.py`, the user guide.
+
+## D99. The page shown after Add to queue in the Viewer
+
+Closes O63. Amends D98. The user's manual test of 1.3.0 (2026-10-24, step 3.6): the
+page should follow the action of the items added. The user chose on 2026-10-24 to keep
+"Archive or copy" for a selection that holds laptop and archived recordings together,
+and asked which page shows then; the answer is a fixed order.
+
+- "Archive or copy" stays one action. A selection may hold laptop recordings, which
+  are archived, and archived ones, which are copied.
+- After an add, the tab shows the first page that matches an added item, in this
+  order (`transferqueue.page_after_add()`):
+  1. Archive, when an item waits for the NAS folder for archives;
+  2. Copy, when an item waits for the folder for copies;
+  3. Archive, when an archive was added;
+  4. Copy, when a copy was added;
+  5. Check, when a Check archive was added.
+  A folder that items wait for comes first, because Start waits for it (D98). The
+  cursor then goes into that folder field.
+- Nothing added (every recording refused) leaves the page as it is.
+- While an operation started from a page runs, the pages are locked, and the page
+  stays (D96, D98). During a queue run the page changes.
+- A change of page drops the form's preview, as any change of page does (D96).
+
+Affects: SPEC section 8, `transferqueue.py` (`page_after_add()`),
+`gui/transfer_tab.py`, the user guide.
+
+## D100. "Forget" under Unfinished transfers keeps its name
+
+Closes O64. The user asked after the manual test of 1.3.0 (2026-10-24) why the button
+was called "Forget...", and chose on 2026-10-24 to keep the name without the dots.
+
+- No decision recorded why Milestone 6 named the button. It hides one row from the
+  list of unfinished transfers (`transfer_log.dismissed_at`). The row stays in the
+  catalogue and in the recording's history, and the files already copied stay.
+  "Remove" could be read as removing those too, and the queue has a "Remove" button
+  that takes an item out of the queue.
+- The button reads "Forget". It still asks first, with No as the default.
+
+Affects: `gui/transfer_tab.py`, the user guide.

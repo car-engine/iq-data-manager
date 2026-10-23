@@ -17,7 +17,7 @@ from iqdm.config import Config
 from iqdm.db import repository as repo
 from iqdm.db.connection import DatabaseBusyError, DatabaseError, open_db, write_transaction
 from iqdm.models import ArchiveState, HashMode, Operation, Verification
-from iqdm.movecopy import CHECK_PHASE
+from iqdm.movecopy import CHECK_PHASE, Page
 from iqdm.transfer.copier import CopyProgress
 from iqdm.transfer.delete import DeleteRefused
 from iqdm.transfer.operations import CHECK_NEEDS_HASHES, TransferRequest
@@ -272,6 +272,23 @@ def waiting_item(rid: int, kind=QueueKind.ARCHIVE, rel_path: str | None = None) 
         state=transferqueue.FOLDER_STATE[kind],
         rel_path=rel_path or f"day1\\rec{rid}",
     )
+
+
+@pytest.mark.parametrize(
+    ("items", "page"),
+    [
+        ([], None),
+        ([item(1, kind=QueueKind.CHECK_ARCHIVE)], Page.CHECK),
+        ([item(1, kind=QueueKind.COPY)], Page.COPY),
+        ([item(1, kind=QueueKind.COPY), item(2)], Page.ARCHIVE),  # an archive before a copy
+        ([item(2), waiting_item(1, QueueKind.COPY)], Page.COPY),  # a missing folder first
+        ([waiting_item(1, QueueKind.COPY), waiting_item(2)], Page.ARCHIVE),
+        ([item(1, kind=QueueKind.CHECK_ARCHIVE), item(2, kind=QueueKind.COPY)], Page.COPY),
+    ],
+)
+def test_the_page_after_an_add_follows_a_fixed_order(items, page):
+    """D99: a folder that items wait for, NAS before copies; then Archive, Copy, Check."""
+    assert transferqueue.page_after_add(items) is page
 
 
 def test_items_that_wait_for_a_folder_do_not_run():

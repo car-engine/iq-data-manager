@@ -1118,6 +1118,38 @@ def test_viewer_archives_wait_for_the_nas_folder(env, make_recording):
     assert states(tab) == [QueueState.DONE, QueueState.DONE]
 
 
+def test_the_page_follows_the_action_added_from_the_viewer(env, make_recording):
+    """D99: Archive for archives, Copy for copies, Check for Check archive, and Archive
+    for a selection that holds both an archive and a copy."""
+    tab = env.loaded(env.tab())
+    archive_to_nas(env, tab)  # recording env.rid is now archived
+    laptop = second_recording(env, make_recording)
+    tab.nas_folder_edit.setText(str(env.nas / "2026"))
+    tab.show_page(Page.CHECK)
+    tab.add_recordings([env.rid])  # a copy
+    env.idle(tab)
+    assert tab.page() is Page.COPY
+    tab.add_recordings([env.rid], check_archive=True)
+    env.idle(tab)
+    assert tab.page() is Page.CHECK
+    tab.add_recordings([env.rid, laptop])  # the copy is refused as a repeat; the archive joins
+    env.idle(tab)
+    assert tab.page() is Page.ARCHIVE
+    for queued in tab.queue:
+        tab._queue.remove(queued.key)
+    tab.show_page(Page.CHECK)
+    tab.copy_folder_edit.clear()
+    tab.add_recordings([env.rid, laptop])  # the copy waits for its folder
+    env.idle(tab)
+    assert [i.state for i in tab.queue] == [QueueState.NEEDS_COPY_FOLDER, QueueState.WAITING]
+    assert tab.page() is Page.COPY
+
+
+def test_forget_has_no_dots(env):
+    """D100: the button keeps its name and asks first; it has no "..."."""
+    assert env.tab().forget_button.text() == "Forget"
+
+
 def test_start_takes_a_folder_typed_without_enter(env):
     """A disabled button takes no click and no focus, so the field would not finish its
     edit. Start is on once the field holds text, and fills the items in itself (D98)."""

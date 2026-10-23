@@ -374,12 +374,15 @@ page.
      or **Check archive**. Laptop recordings are archived into the **NAS folder for
      archives** on the Archive page, with that page's Compare choice. Archived
      recordings are copied into the **Folder for copies** on the Copy page, with that
-     page's Compare choice. Each recording goes into a folder of its own name.
+     page's Compare choice. Each recording goes into a folder of its own name. One
+     selection may hold both kinds. The tab then shows the page of the action:
+     Archive, Copy or Check. When the selection holds archives and copies, it shows
+     Archive.
    - Or set up one transfer on the Archive or Copy page, click **Preview**, then **Add
      to queue** in place of Run. Use this for a copy of some channels or a time range.
 2. If that folder is not chosen yet, the items join the queue as **○ Needs a NAS
-   folder** or **○ Needs a copy folder**. The tab opens the page with the folder, and
-   the field has an amber frame. Type the folder and press Enter, or click
+   folder** or **○ Needs a copy folder**. The tab then shows the page with that folder
+   first, and the field has an amber frame. Type the folder and press Enter, or click
    **Browse...**. The waiting items then get their destinations. **Start** stays off
    while that folder is empty, and a line under the queue says which folder.
 3. To change an item, select it and click **Edit**. It goes back to its page, Archive
@@ -422,7 +425,8 @@ on its own. While the queue still holds that transfer, use **Resume**.
 under **Unfinished transfers**. Select it and click **Open in form** to fill in its
 page again; the preview then names the files already in place, which are not copied
 again. Click **Run** to continue it.
-**Forget...** removes a row from the list and leaves the files.
+**Forget** asks first, then removes a row from the list. The files already copied and
+the transfer's history stay.
 
 ## 6. When something goes wrong
 

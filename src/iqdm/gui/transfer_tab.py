@@ -645,7 +645,7 @@ class TransferTab(QWidget):
             "already in place are not copied again."
         )
         self.resume_button.clicked.connect(self.resume_selected)
-        self.forget_button = QPushButton("Forget...")
+        self.forget_button = QPushButton("Forget")  # it asks first (D100)
         self.forget_button.clicked.connect(self.forget_selected)
         self.refresh_list_button = QPushButton("Refresh")
         self.refresh_list_button.clicked.connect(self.refresh_unfinished)
@@ -1872,22 +1872,23 @@ class TransferTab(QWidget):
         self._set_result(state, text)
         self._show_queue()
         self._update_buttons()
-        self._ask_for_folder(waiting)
+        self._show_page_after_add(added)
         keys = [i.key for i in added if i.request is not None and i.state is QueueState.WAITING]
         if keys and not self.is_busy:
             self._check_queue_items(keys)
 
-    def _ask_for_folder(self, waiting: Mapping[QueueState, int]) -> None:
-        """Show the page whose folder new items wait for, with the cursor in the field
-        (D98). While an operation from the form runs, the pages are locked and stay as
-        they are; the result line and the line under the queue name the page."""
-        if self.is_busy and not self._queue_running:
+    def _show_page_after_add(self, added: Sequence[QueueItem]) -> None:
+        """Show the page of the added items' action, or of a folder they wait for, with
+        the cursor in that folder field (D98, D99). While an operation from the form
+        runs, the pages are locked and stay as they are; the result line and the line
+        under the queue name the page."""
+        page = transferqueue.page_after_add(added)
+        if page is None or (self.is_busy and not self._queue_running):
             return
-        if waiting.get(QueueState.NEEDS_NAS_FOLDER):
-            self.show_page(Page.ARCHIVE)
+        self.show_page(page)
+        if any(i.state is QueueState.NEEDS_NAS_FOLDER for i in added):
             self.nas_folder_edit.setFocus()
-        elif waiting.get(QueueState.NEEDS_COPY_FOLDER):
-            self.show_page(Page.COPY)
+        elif any(i.state is QueueState.NEEDS_COPY_FOLDER for i in added):
             self.copy_folder_edit.setFocus()
 
     def _check_queue_items(self, keys: Sequence[int]) -> None:

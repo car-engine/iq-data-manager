@@ -663,8 +663,8 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   page's Compare choice (D96). Each item holds its own request; Edit takes it back
   into the form, and "Add to queue" puts it back in its place.
 - Without that folder, the item joins the queue without a destination, as ○ "Needs a
-  NAS folder" or ○ "Needs a copy folder" (D98). The tab shows the page with the
-  folder, unless an operation runs, and frames the field as a required field (D95). A
+  NAS folder" or ○ "Needs a copy folder" (D98). The field has the frame of a
+  required field (D95). A
   line under the queue names the folder and the page. Choosing the folder (Enter,
   leaving the field, or Browse) gives each such item the folder plus its relative path
   as destination; the item then waits to run and is previewed if the tab is idle.
@@ -672,6 +672,11 @@ D81. `transferqueue.py` holds the queue and runs one item; it has no Qt.
   holds text, Start fills the items in before it runs. A running queue skips such
   items until their folder is chosen. Both folder fields stay usable while an
   operation runs. `run_item()` refuses an item without a destination.
+- After an add from the Viewer, the tab shows the first page that matches an added
+  item: Archive when an item waits for the NAS folder, Copy when one waits for the
+  folder for copies, then Archive for an archive, Copy for a copy, Check for a Check
+  archive (D99). The cursor goes into a folder field that items wait for. While an
+  operation started from a page runs, the page stays.
 - An item that repeats an active item is refused: an archive or Check archive of the
   same recording, or any item to the same destination. Two copies of one recording to
   different folders are allowed; two that both wait for the copy folder repeat each

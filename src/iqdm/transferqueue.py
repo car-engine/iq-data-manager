@@ -12,7 +12,7 @@ already in place (D51, D63). No Qt here.
 """
 
 import ntpath
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
@@ -24,6 +24,7 @@ from iqdm.db.connection import open_db
 from iqdm.models import ArchiveState, HashMode, Operation, Recording, Verification
 from iqdm.movecopy import (
     CHECK_PHASE,
+    Page,
     check_after_archive,
     check_needed_note,
     default_copy_destination,
@@ -337,6 +338,28 @@ def item_for_recording(
         created_at=rec.created_at,
         rel_path=rec.rel_path,
     )
+
+
+PAGE_PRIORITY = (  # the first rule that matches an added item wins (D99)
+    (lambda i: i.state is QueueState.NEEDS_NAS_FOLDER, Page.ARCHIVE),
+    (lambda i: i.state is QueueState.NEEDS_COPY_FOLDER, Page.COPY),
+    (lambda i: i.kind is QueueKind.ARCHIVE, Page.ARCHIVE),
+    (lambda i: i.kind is QueueKind.COPY, Page.COPY),
+    (lambda i: i.kind is QueueKind.CHECK_ARCHIVE, Page.CHECK),
+)
+
+
+def page_after_add(items: Sequence[QueueItem]) -> Page | None:
+    """The page the tab shows after items were added from the Viewer, or None (D99).
+
+    A folder that items wait for comes first, because Start waits for it (D98): the
+    NAS folder for archives, then the folder for copies. Then the page of the action:
+    Archive, Copy, Check. A selection may hold archives and copies together.
+    """
+    for matches, page in PAGE_PRIORITY:
+        if any(matches(i) for i in items):
+            return page
+    return None
 
 
 def scope_text(item: QueueItem, offset_hours: float) -> str:
