@@ -276,7 +276,7 @@ Flow: choose folder, scan, review and complete fields, validate, save.
 2. **Recording fields**: start and end (from scan, read-only, at the display offset,
    UTC+8 by default; D24), file duration (default 1.0 s), logged by (typed by the
    user: empty when the app starts and after Clear form, with the placeholder "Your
-   name"; a typed name stays across folders, saves and the switch between "One
+   name (required)"; a typed name stays across folders, saves and the switch between "One
    folder" and "Several folders"; D94), site (dropdown plus "Add site"), project
    (optional dropdown with an empty choice, plus "Add project"; D73), recording plan
    reference, storage root and relative path (derived from the folder, read-only),
@@ -331,6 +331,19 @@ Validation before save (shown as a checklist):
 Each checklist item is ok, information, to do or error (D23). To do marks a field
 still to fill in. Error marks a wrong value or a folder that cannot be logged as it
 stands. Saving needs no to-do item and no error.
+
+The fields themselves show the same items (D95). `entry.field_marks()` gives, per
+field, the to-do item or error that the checklist names for it: logged by, site, fc
+and fs of each channel, and the name, value and "Applies to" of each RF chain row that
+is not blank. The checklist's lines for these fields are built from it, so the two
+agree. An empty required field gets a 2-pixel frame in the information colour
+(amber) and a placeholder with the word "Required" ("Your name (required)", "Choose a
+site (required)", "Required", "Required, e.g. 10M"). A wrong value gets a frame in the
+error colour (red), and its tooltip gives the reason. The frames use the checklist's
+colours for the theme and follow a switch between light and dark. A frame keeps the
+italics of a value filled in from the log, the file size or fc. In "Several folders"
+mode the frames cover the shared fields and the selected folder's channels. While
+Save is disabled, its tooltip says "Complete the items under Before saving first."
 
 Values filled in after a scan:
 

@@ -112,6 +112,7 @@ Rules for this file:
 | D92 | The mouse wheel never changes a field | 2026-10-23, version 1.2.1 | Active |
 | D93 | "Several folders" shows each folder's log rows | 2026-10-23, version 1.2.1 | Active; amends D90 |
 | D94 | Logged by is typed by the user | 2026-10-23, version 1.2.1 | Active |
+| D95 | Fields to fill in or correct are framed | 2026-10-23, version 1.2.1 | Active; amends D23 |
 
 ## D1. Sample types
 
@@ -2241,5 +2242,43 @@ form empties the field.
   folder logged in place on the NAS takes the typed name for its check row, as D2
   says.
 - Entries logged before version 1.2.1 keep their stored names.
+- The placeholder became "Your name (required)" with D95.
 
 Affects: SPEC section 6, `gui/log_tab.py`, the user guide.
+
+## D95. Fields to fill in or correct are framed
+
+Closes O54. Amends D23. Team feedback on 1.2 (2026-10-23): when a required field was
+empty, the only signs were a line in the "Before saving" checklist and the disabled
+Save button, so the field itself was hard to find. The user chose an amber frame with
+"Required" for an empty field and a red frame for a wrong value (2026-10-23).
+
+- `entry.field_marks()` gives each field's to-do item or error, with the reason as
+  the checklist words it for that field: logged by, site, fc and fs of each channel,
+  and the name, value and "Applies to" of each RF chain row that is not blank.
+  `_required_items()` and `_param_items()` build the checklist's lines for these
+  fields from it, so the frames and the checklist cannot disagree. The checklist's
+  lines are unchanged; fc and fs stay grouped ("Enter fc (MHz) for channel 0, 1").
+- An empty required field gets a 2-pixel frame in the information colour (amber),
+  and its placeholder holds the word "Required" ("Your name (required)", "Choose a
+  site (required)", "Required", "Required, e.g. 10M"). The word means the state does
+  not rest on colour alone (D38). Amber in place of the checklist's grey to-do colour,
+  which is too faint for a frame.
+- A wrong value gets a frame in the error colour (red), and its tooltip gives the
+  reason, for example "Channel 0: fs ...".
+- The colours are the checklist's for the theme. A widget with a style sheet keeps
+  the palette it had when the sheet was set, so after a switch between light and
+  dark the tab sets each field's sheet again. That also corrects the background of
+  the italic fields of D21, D82 and D88 after such a switch.
+- A frame keeps the italics of a value filled in from the log, the file size or fc.
+- The RF chain rows' channels are checked only once the channels are known, as the
+  checklist does (D79).
+- In "Several folders" the frames cover the shared fields and the selected folder's
+  channels in section 4.
+- While Save is disabled, its tooltip says "Complete the items under Before saving
+  first."
+- A dropdown with a style sheet draws with Qt's own frame and arrow in the Windows 11
+  style, so a framed site field looks a little different from the other dropdowns.
+
+Affects: SPEC section 6, `entry.py` (`FieldName`, `field_marks()`), `gui/log_tab.py`,
+the user guide.

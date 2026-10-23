@@ -62,6 +62,7 @@ from iqdm.gui.log_tab import (
     DELETE_TITLE,
     DELETE_TOOLTIP,
     DROP_FOLDERS_TITLE,
+    FS_PLACEHOLDER,
     KEEP_LOG_BUTTON,
     LOG_ROWS_HEADERS,
     LOG_ROWS_TOOLTIP,
@@ -69,8 +70,11 @@ from iqdm.gui.log_tab import (
     NO_RECORDS_FOLDER,
     PARENT_IS_RECORDING,
     REPLACE_TEMPLATE_TITLE,
+    REQUIRED_PLACEHOLDER,
+    SAVE_BLOCKED_TOOLTIP,
     SAVE_FOLDERS_TITLE,
     SEVERAL_TOOLTIP,
+    SITE_PLACEHOLDER,
     TEMPLATE_FILTER,
     USE_TEMPLATE_BUTTON,
     LogTab,
@@ -243,7 +247,8 @@ def test_log_tab_text_is_plain(qtbot, db_path):
     qtbot.addWidget(tab)
     qtbot.waitUntil(lambda: not tab.runner.busy, timeout=10_000)
     texts = visible_texts(tab) + [item.text for item in tab.checklist.items]
-    assert "Your name" in texts  # the placeholder of Logged by (D94)
+    assert "Your name (required)" in texts  # the placeholder of Logged by (D94, D95)
+    texts += [SITE_PLACEHOLDER, REQUIRED_PLACEHOLDER, FS_PLACEHOLDER, SAVE_BLOCKED_TOOLTIP]
     assert offending(texts) == []
 
 

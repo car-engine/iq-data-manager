@@ -158,6 +158,25 @@ def test_folders_are_added_scanned_and_sorted_by_start(qtbot, tab, tmp_path):
     ]
 
 
+def test_the_shared_fields_and_the_selected_folders_channels_are_framed(qtbot, tab, tmp_path):
+    """D95: the marks cover the shared fields and the channels in section 4."""
+    parent = tmp_path / "session"
+    recording(parent, "a-log", log={0: (145.8, 20.0)})
+    recording(parent, "b-none", start=T0 + 3600)
+    several(qtbot, tab, parent)
+    assert tab.field_mark(tab.logged_by_edit) == "todo"
+    assert tab.field_mark(tab.site_combo) == "todo"
+    _band, fc, _fs = tab.channel_widgets(0)
+    assert tab.field_mark(fc) == ""  # from a-log's log
+    tab._select_folder(tab.folders[1].key)
+    tab.refresh_checklist()
+    _band, fc, _fs = tab.channel_widgets(0)
+    assert tab.field_mark(fc) == "todo"  # b-none has no log
+    fc.setText("433")
+    tab.refresh_checklist()
+    assert tab.field_mark(fc) == ""
+
+
 LOG_ROWS_20 = [
     ("Recording", "USRP gain", "20", "dB"),
     ("Recording", "Clock reference", "GPSDO", ""),

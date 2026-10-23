@@ -177,7 +177,10 @@ filled in from the frequency.
 The list also offers the other bands already in the catalogue.
 
 The **Before saving** checklist shows what is still to do and what is wrong. **Save
-entry** is possible when the checklist shows no error and nothing to do. The line under
+entry** is possible when the checklist shows no error and nothing to do. The fields
+show the same: a field you still have to fill in has an amber frame and reads
+**Required** while it is empty; a field with a wrong value has a red frame, and
+pointing at it shows why. The line under
 the buttons shows the result of what you did last, with the same marks: ✓ done, ⓘ
 done with something to check, ✗ not done.
 

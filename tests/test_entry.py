@@ -1582,3 +1582,107 @@ def test_the_band_line_does_not_block_saving(make_recording):
         channels=[ChannelInput(channel_index=0, band="UHF", fc_mhz="145.8", fs_text=FS_TEXT)],
     )
     assert can_save(ready_items(form, scan, split_location(info.root)))
+
+
+# ---------------------------------------------------------------------------
+# Fields to fill in or correct (D95)
+# ---------------------------------------------------------------------------
+
+F = entry.FieldName
+
+
+def marked(form: EntryInput, indices=(0, 1)) -> dict:
+    return {k: (m.state, m.text) for k, m in entry.field_marks(form, indices).items()}
+
+
+def test_a_filled_form_has_no_field_marks():
+    form = EntryInput(
+        logged_by="u",
+        site_id=1,
+        channels=[
+            ChannelInput(channel_index=i, fc_mhz="145.8", fs_text="1k") for i in (0, 1)
+        ],
+        params=[ParamInput(param="LNA", value="on"), ParamInput()],  # a blank row is no row
+    )
+    assert marked(form) == {}
+
+
+def test_empty_required_fields_are_to_do():
+    form = EntryInput(channels=[ChannelInput(channel_index=0, fc_mhz="145.8")])
+    assert marked(form) == {
+        (F.LOGGED_BY, None): (ItemState.TODO, "Enter the logged-by name"),
+        (F.SITE, None): (ItemState.TODO, "Choose a site"),
+        (F.FS, 0): (ItemState.TODO, "Enter fs for channel 0"),
+        (F.FC, 1): (ItemState.TODO, "Enter fc (MHz) for channel 1"),
+        (F.FS, 1): (ItemState.TODO, "Enter fs for channel 1"),
+    }
+
+
+def test_wrong_values_are_errors_with_their_reason():
+    form = EntryInput(
+        logged_by="u",
+        site_id=1,
+        channels=[
+            ChannelInput(channel_index=0, fc_mhz="abc", fs_text="1k"),
+            ChannelInput(channel_index=1, fc_mhz="145.8", fs_text="-5"),
+        ],
+    )
+    marks = entry.field_marks(form, (0, 1))
+    assert set(marks) == {(F.FC, 0), (F.FS, 1)}
+    assert all(m.state is ItemState.ERROR for m in marks.values())
+    assert marks[(F.FC, 0)].text.startswith("Channel 0: fc (MHz) ")
+
+
+def test_rf_chain_rows_are_marked_by_their_position():
+    form = EntryInput(
+        logged_by="u",
+        site_id=1,
+        params=[
+            ParamInput(),  # blank: not marked, but it keeps its position
+            ParamInput(value="20", unit="dB"),
+            ParamInput(param="LNA"),
+            ParamInput(channel_index=5, param="Antenna", value="Yagi"),
+        ],
+    )
+    assert marked(form, ()) == {
+        (F.PARAM, 1): (ItemState.TODO, "RF chain row 2: enter the parameter name"),
+        (F.VALUE, 2): (ItemState.TODO, "RF chain row 3 (LNA): enter a value"),
+        (F.APPLIES_TO, 3): (
+            ItemState.ERROR,
+            "RF chain row 4 (Antenna): channel 5 is not in this recording",
+        ),
+    }
+    assert (F.APPLIES_TO, 3) not in entry.field_marks(form, None)  # channels not known yet
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        EntryInput(),
+        EntryInput(channels=[ChannelInput(channel_index=0, fc_mhz="x", fs_text="")]),
+        EntryInput(
+            logged_by="u",
+            site_id=1,
+            channels=[ChannelInput(channel_index=1, fc_mhz="145.8", fs_text="1k")],
+            params=[ParamInput(channel_index=3, param="LNA"), ParamInput(value="1")],
+        ),
+    ],
+)
+def test_every_blocking_checklist_line_about_a_field_has_a_mark(make_recording, form):
+    """The checklist is built from the marks (D95), so they name the same problems."""
+    info = make_recording(n_channels=2)
+    scan = scan_recording(Path(info.root), 1.0)
+    items = checklist(form, scan=scan, location=split_location(info.root))
+    marks = entry.field_marks(form, [0, 1])
+    blocking = {i.text for i in items if i.state in (ItemState.TODO, ItemState.ERROR)}
+    for mark in marks.values():
+        grouped = mark.text.rsplit(" for channel ", 1)[0]  # "Enter fs for channel 0, 1"
+        assert mark.text in blocking or any(t.startswith(grouped) for t in blocking)
+    field_lines = {
+        t
+        for t in blocking
+        if t.startswith(("Enter ", "Choose a site", "Channel ", "RF chain row "))
+        and "outside" not in t
+    }
+    for line in field_lines:
+        assert any(line.startswith(m.text.rsplit(" for channel ", 1)[0]) for m in marks.values())

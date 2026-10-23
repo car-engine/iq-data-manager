@@ -52,8 +52,11 @@ its report. Last updated: 2026-10-23 (work for version 1.2.1).
   support, and the shipped user guide, release notes and `defaults.example.toml`
   match their sources. At the release: 1,925 tests pass and 4 skip; `ruff check` is
   clean. The schema is unchanged (version 1).
-- **Version 1.2.1 is in progress** (2026-10-23): O53 to O56 from the team's feedback
-  on 1.2, one branch each, under "Work after 1.0". O57 to O59, the Archive / copy tab,
+- **The work for version 1.2.1 is done, not merged** (2026-10-23): O53 to O56 from
+  the team's feedback on 1.2 (D92 to D95), on four branches from `wheel-guard` to
+  `required-field-marks`, listed under "Work after 1.0". At the last branch: 1,958
+  tests pass and 4 skip; `ruff check` is clean. Next: the user's manual test of
+  1.2.1, then the merge and the release (HANDOFF.md, section 4). O57 to O59, the Archive / copy tab,
   are for version 1.3.0 in another session. A new session starts from the prompt
   "Work after a release" in [KICKOFF.md](KICKOFF.md).
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
@@ -124,7 +127,8 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Release 1.2.0 | Released: tag `v1.2.0`, pushed | `release-1.2.0`, from `main` at `fc64422` | `616b18c`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 | O56, the mouse wheel never changes a field (D92) | Done, not merged | `wheel-guard`, from `main` at `f22bc20` | `e9977e6` (with its report) | [2026-10-23-wheel-guard](reports/2026-10-23-wheel-guard.md) |
 | O55, "Several folders" shows each folder's log rows (D93) | Done, not merged | `batch-log-rf-rows`, from `wheel-guard` at `e9977e6` | `b5aaa55` (with its report) | [2026-10-23-batch-log-rf-rows](reports/2026-10-23-batch-log-rf-rows.md) |
-| O53, Logged by is typed by the user (D94) | Done, not merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | The commit of the code and its report | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
+| O53, Logged by is typed by the user (D94) | Done, not merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
+| O54, fields to fill in or correct are framed (D95) | Done, not merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | The commit of the code and its report | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
 
 The five branches of 1.2.0, from `band-from-fc` to `release-1.2.0`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -173,7 +177,6 @@ user's answers so far are in the "Proposed default" column.
 | --- | --- | --- | --- | --- |
 | O19 | GUI for the confirmed "Upgrade database" action | With the first real schema migration | A button in the Settings tab's database section, shown only when the schema needs an upgrade, plus a startup message that points to it. Deferred by D30; until then an older database gives a red status line (D38). | D6; D29; D30 |
 | O40 | Four suspicions from the release review, not confirmed: path work on the Qt main thread (the Log tab's folder field calls `WNetGetConnectionW` on each change; New database checks `exists()`); an `OSError` during Check before delete or Compare with laptop copy leaves the check row without `finished_at`; `legacy.main()` does not catch a `sqlite3.IntegrityError` other than a repeated location; a read-only connection cannot roll back a hot journal after a crash | When a fault points at one of them | Confirm each with a test before changing code. Details: the release review, "Unconfirmed suspicions". | Release review |
-| O54 | An empty or wrong required field in the Log tab is not marked on the field; only the checklist and the disabled Save button show it | 1.2.1 | An empty required field gets an amber frame and the placeholder "Required"; a wrong value gets a red frame with the reason as its tooltip (the user's choice, 2026-10-23). | Team feedback on 1.2, 2026-10-23 |
 | O57 | Run archive in the form runs no Check before delete afterwards. The user's case was a queue run, with Compare at hashes of 0.5 % of the files; the box "After each archive, run Check before delete" may not have been ticked. | 1.3.0 | Check before delete runs straight after each archive, from the form and from the queue. The user chose this over one check pass at the end of the queue, and asked that the check-after box be removed (2026-10-23). Still to decide: an archive with "Sizes only", for which the check cannot run (D55). | Team feedback on 1.2, 2026-10-23 |
 | O58 | The Archive / copy tab shows the controls for copies, archives and checks at once | 1.3.0 | Pages Archive, Check and Copy under a shared recording row, with the preview at the right and the queue and unfinished transfers in two tabs below. The user found this layout fine for now (2026-10-23); the mock-up and the plan notes are in [reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md), "Notes for version 1.3.0". Still to decide: where Check before delete and Delete laptop copy go, which page the Viewer's "Archive / copy" button opens, and the tab's name. | Team feedback on 1.2, 2026-10-23 |
 | O59 | Adding recordings from the Viewer to the queue without a NAS folder for archives, or without a default copy folder, is refused; the user must choose the folder and add them again | 1.3.0 | The items join the queue and wait for the folder; the tab opens the page with the missing field. Start stays disabled while an item waits. Not yet discussed with the user. | Team feedback on 1.2, 2026-10-23 |
@@ -181,7 +184,7 @@ user's answers so far are in the "Proposed default" column.
 
 ## Closed items
 
-Decided items are in `docs/DECISIONS.md` (D1–D94). The M0 review table in
+Decided items are in `docs/DECISIONS.md` (D1–D95). The M0 review table in
 [reports/M0.md](reports/M0.md) shows which review items each decision closed.
 
 | ID | Item | Closed by |
@@ -237,6 +240,7 @@ Decided items are in `docs/DECISIONS.md` (D1–D94). The M0 review table in
 | O56 | The mouse wheel changes a dropdown or number field while the user scrolls the page | D92 (2026-10-23) |
 | O55 | "Several folders" saves but does not show each folder's RF chain rows and sample type from its log | D93 (2026-10-23) |
 | O53 | "Logged by" is filled in with the Windows login | D94 (2026-10-23) |
+| O54 | An empty or wrong required field is not marked on the field | D95 (2026-10-23) |
 
 ## Pending checks for the user
 
@@ -310,7 +314,8 @@ that (checked on 2026-10-23).
   (about 4.8 GB), `m5-testset-quick`, `m6-3-testset`, `m6-exe-check`, `m6-manual`,
   `m6-shots`, `m7-checklist`, `m7-legacy`, `o38-shots`, `o43-shots`, `o44-shots`,
   `o45-shots`, `o46-shots` and `review` (screenshots, probes, timings and synthetic
-  data of earlier milestones and versions).
+  data of earlier milestones and versions). From the 1.2.1 work: `o54-debug.py` and
+  the folders `o54-shots` and `o55-shots` (probe and screenshot scripts).
 - The pytest folders under `%TEMP%\pytest-of-Perry\` hold directory junctions from
   the release review and the D75 tests. Remove each as a link, so that its target is
   not touched.

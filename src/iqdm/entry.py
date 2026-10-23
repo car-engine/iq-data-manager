@@ -721,32 +721,106 @@ def _size_relevant_change(form: EntryInput, original: Recording) -> bool:
     return False
 
 
-def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
-    """Empty fields are to-do items, grouped by field. Wrong values are errors (D23)."""
-    items: list[ChecklistItem] = []
+# ---------------------------------------------------------------------------
+# Fields to fill in or correct (DECISIONS.md D23, D95)
+# ---------------------------------------------------------------------------
+
+
+class FieldName(StrEnum):
+    """A Log tab field that the checklist can name. Channel and row fields add a number."""
+
+    LOGGED_BY = "logged by"
+    SITE = "site"
+    FC = "fc"
+    FS = "fs"
+    PARAM = "parameter"  # an RF chain row's name
+    VALUE = "value"  # an RF chain row's value
+    APPLIES_TO = "applies to"  # an RF chain row's channel
+
+
+FieldKey = tuple[FieldName, int | None]
+"""A field: LOGGED_BY and SITE with None, FC and FS with the channel number, and the RF
+chain fields with the row's position in EntryInput.params, from 0."""
+
+_CHANNEL_FIELDS = (
+    (FieldName.FC, "fc (MHz)", lambda inp: inp.fc_mhz, parse_mhz),
+    (FieldName.FS, "fs", lambda inp: inp.fs_text, parse_frequency),
+)
+
+
+def field_marks(
+    form: EntryInput, indices: Sequence[int] | None
+) -> dict[FieldKey, ChecklistItem]:
+    """Each field that is empty but required (TODO), or holds a wrong value (ERROR).
+
+    The item's text is the reason, as the checklist words it for that one field. The
+    checklist is built from these marks, so the two always agree (D95). indices None
+    means the channels are not known yet; channel fields and the RF chain rows'
+    channels are then not checked.
+    """
+    marks: dict[FieldKey, ChecklistItem] = {}
     if not form.logged_by.strip():
-        items.append(ChecklistItem(ItemState.TODO, "Enter the logged-by name"))
+        marks[(FieldName.LOGGED_BY, None)] = ChecklistItem(
+            ItemState.TODO, "Enter the logged-by name"
+        )
     if form.site_id is None:
-        items.append(ChecklistItem(ItemState.TODO, "Choose a site"))
-    if not math.isfinite(form.file_duration_s) or form.file_duration_s <= 0:
-        items.append(ChecklistItem(ItemState.ERROR, "File duration must be positive"))
-    if form.header_bytes < 0:
-        items.append(ChecklistItem(ItemState.ERROR, "Header bytes must be 0 or more"))
-    fields = (
-        ("fc (MHz)", lambda inp: inp.fc_mhz, parse_mhz),
-        ("fs", lambda inp: inp.fs_text, parse_frequency),
-    )
-    for label, text_of, parse in fields:
-        empty = []
-        for index in indices:
+        marks[(FieldName.SITE, None)] = ChecklistItem(ItemState.TODO, "Choose a site")
+    for name, label, text_of, parse in _CHANNEL_FIELDS:
+        for index in indices or ():
             text = text_of(form.channel(index) or ChannelInput(channel_index=index))
             if not text.strip():
-                empty.append(index)
+                marks[(name, index)] = ChecklistItem(
+                    ItemState.TODO, f"Enter {label} for channel {index}"
+                )
                 continue
             try:
                 parse(text)
             except ValueError as exc:
-                items.append(ChecklistItem(ItemState.ERROR, f"Channel {index}: {label} {exc}"))
+                marks[(name, index)] = ChecklistItem(
+                    ItemState.ERROR, f"Channel {index}: {label} {exc}"
+                )
+    for position, p in enumerate(form.params):
+        if p.is_blank:
+            continue
+        name = p.param.strip()
+        label = f"RF chain row {position + 1}" + (f" ({name})" if name else "")
+        if not name:
+            marks[(FieldName.PARAM, position)] = ChecklistItem(
+                ItemState.TODO, f"{label}: enter the parameter name"
+            )
+        if not p.value.strip():
+            marks[(FieldName.VALUE, position)] = ChecklistItem(
+                ItemState.TODO, f"{label}: enter a value"
+            )
+        if indices is not None and p.channel_index is not None and p.channel_index not in indices:
+            marks[(FieldName.APPLIES_TO, position)] = ChecklistItem(
+                ItemState.ERROR, f"{label}: channel {p.channel_index} is not in this recording"
+            )
+    return marks
+
+
+def _required_items(form: EntryInput, indices: Sequence[int]) -> list[ChecklistItem]:
+    """Empty fields are to-do items, grouped by field. Wrong values are errors (D23)."""
+    marks = field_marks(form, indices)
+    items: list[ChecklistItem] = [
+        marks[key]
+        for key in ((FieldName.LOGGED_BY, None), (FieldName.SITE, None))
+        if key in marks
+    ]
+    if not math.isfinite(form.file_duration_s) or form.file_duration_s <= 0:
+        items.append(ChecklistItem(ItemState.ERROR, "File duration must be positive"))
+    if form.header_bytes < 0:
+        items.append(ChecklistItem(ItemState.ERROR, "Header bytes must be 0 or more"))
+    for name, label, _text_of, _parse in _CHANNEL_FIELDS:
+        empty = []
+        for index in indices:
+            mark = marks.get((name, index))
+            if mark is None:
+                continue
+            if mark.state is ItemState.TODO:
+                empty.append(index)
+            else:
+                items.append(mark)
         if empty:
             items.append(
                 ChecklistItem(ItemState.TODO, f"Enter {label} for channel {_index_list(empty)}")
@@ -784,24 +858,14 @@ def _param_items(form: EntryInput, indices: Sequence[int] | None) -> list[Checkl
 
     indices None means the channels are not known yet; channel rows are then not checked.
     """
-    items = []
-    for row, p in enumerate(form.params, start=1):
-        if p.is_blank:
-            continue
-        name = p.param.strip()
-        label = f"RF chain row {row}" + (f" ({name})" if name else "")
-        if not name:
-            items.append(ChecklistItem(ItemState.TODO, f"{label}: enter the parameter name"))
-        if not p.value.strip():
-            items.append(ChecklistItem(ItemState.TODO, f"{label}: enter a value"))
-        if indices is not None and p.channel_index is not None and p.channel_index not in indices:
-            items.append(
-                ChecklistItem(
-                    ItemState.ERROR,
-                    f"{label}: channel {p.channel_index} is not in this recording",
-                )
-            )
-    return items
+    marks = field_marks(replace(form, channels=[]), indices)
+    rf_fields = (FieldName.PARAM, FieldName.VALUE, FieldName.APPLIES_TO)
+    return [
+        marks[(name, position)]
+        for position in range(len(form.params))
+        for name in rf_fields
+        if (name, position) in marks
+    ]
 
 
 # ---------------------------------------------------------------------------

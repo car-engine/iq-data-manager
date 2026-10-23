@@ -18,7 +18,7 @@ from iqdm import entry, recorderlog, templates
 from iqdm.config import Config
 from iqdm.db import repository
 from iqdm.db.connection import DatabaseBusyError, create_database, open_db, write_transaction
-from iqdm.entry import ItemState
+from iqdm.entry import ItemState, ParamInput
 from iqdm.gui.log_tab import (
     NO_PROJECT,
     REPLACE_TEMPLATE_TITLE,
@@ -162,7 +162,7 @@ def test_logged_by_starts_empty_for_the_user_to_type(make_tab, monkeypatch):
     monkeypatch.setattr("iqdm.entry.getpass.getuser", lambda: "lab-laptop")
     tab = make_tab()
     assert tab.logged_by_edit.text() == ""
-    assert tab.logged_by_edit.placeholderText() == "Your name"
+    assert tab.logged_by_edit.placeholderText() == "Your name (required)"
     assert "Enter the logged-by name" in checklist_texts(tab, ItemState.TODO)
 
 
@@ -1775,6 +1775,106 @@ def themed_palette(base: str, text: str, window: str) -> QPalette:
 
 DARK = themed_palette("#2d2d2d", "#ffffff", "#202020")  # Windows 11 dark, approximately
 LIGHT = themed_palette("#ffffff", "#000000", "#f0f0f0")
+
+
+# ---------------------------------------------------------------------------
+# Fields to fill in or correct (D95)
+# ---------------------------------------------------------------------------
+
+
+def test_empty_required_fields_are_framed(qtbot, make_tab, make_recording, site_id):
+    tab = make_tab()
+    tab.refresh_checklist()
+    assert tab.field_mark(tab.logged_by_edit) == "todo"
+    assert tab.field_mark(tab.site_combo) == "todo"
+    assert "border" in tab.logged_by_edit.styleSheet()
+    assert tab.site_combo.placeholderText() == "Choose a site (required)"
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    tab.refresh_checklist()
+    _band, fc, fs = tab.channel_widgets(1)
+    assert tab.field_mark(fc) == "todo" and fc.placeholderText() == "Required"
+    assert tab.field_mark(fs) == ""  # filled in from the file size
+    assert "italic" in fs.styleSheet() and "border" not in fs.styleSheet()
+    logged_ready(qtbot, tab, make_recording(), site_id)
+    for field in (tab.logged_by_edit, tab.site_combo, *tab.channel_widgets(0)[1:]):
+        assert tab.field_mark(field) == ""
+        assert "border" not in field.styleSheet()
+
+
+def test_a_wrong_value_is_framed_with_its_reason(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    _band, fc, fs = tab.channel_widgets(0)
+    fc.setText("abc")
+    fs.setText("fast")
+    tab.refresh_checklist()
+    assert tab.field_mark(fc) == "error" and tab.field_mark(fs) == "error"
+    assert fc.toolTip().startswith("Channel 0: fc (MHz) ")
+    assert fc.toolTip() in checklist_texts(tab, ItemState.ERROR)
+    fc.setText("145.8")
+    tab.refresh_checklist()
+    assert tab.field_mark(fc) == "" and fc.toolTip() == ""
+
+
+def test_a_mark_keeps_the_italics_of_a_value_from_the_log(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording().root)
+    row = tab._channel_rows[0]
+    row.fc.setText("abc")
+    row.fc_log = True  # as the recorder's log leaves it (D82)
+    tab.refresh_checklist()
+    assert "italic" in row.fc.styleSheet() and "border" in row.fc.styleSheet()
+
+
+def test_rf_chain_rows_are_framed(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)
+    tab.param_table.add_row(ParamInput(value="20", unit="dB"))
+    tab.param_table.add_row(ParamInput(channel_index=0, param="LNA"))
+    tab.param_table.add_row()  # blank: not framed
+    tab.refresh_checklist()
+    _applies_to, name, value, _unit = tab.param_table.row_widgets(0)
+    assert tab.field_mark(name) == "todo" and name.placeholderText() == "Required"
+    assert tab.field_mark(value) == "" and value.placeholderText() == ""
+    assert tab.field_mark(tab.param_table.row_widgets(1)[2]) == "todo"
+    assert all(tab.field_mark(w) == "" for w in tab.param_table.row_widgets(2))
+
+
+def test_an_rf_chain_row_on_a_missing_channel_is_framed(qtbot, make_tab, make_recording):
+    tab = make_tab()
+    tab.param_table.add_row(ParamInput(channel_index=2, param="LNA", value="on"))
+    tab.refresh_checklist()
+    assert tab.field_mark(tab.param_table.row_widgets(0)[0]) == ""  # no scan yet (D79)
+    scan_folder(qtbot, tab, make_recording(n_channels=2).root)  # drops that row (D79)
+    tab.param_table.add_row(ParamInput(channel_index=2, param="LNA", value="on"))
+    tab.refresh_checklist()
+    applies_to = tab.param_table.row_widgets(0)[0]
+    assert tab.field_mark(applies_to) == "error"
+    assert applies_to.toolTip() == "RF chain row 1 (LNA): channel 2 is not in this recording"
+
+
+def test_the_disabled_save_button_says_why(qtbot, make_tab, make_recording, site_id):
+    tab = make_tab()
+    tab.refresh_checklist()
+    assert not tab.save_button.isEnabled()
+    assert tab.save_button.toolTip() == "Complete the items under Before saving first."
+    logged_ready(qtbot, tab, make_recording(), site_id)
+    assert tab.save_button.isEnabled() and tab.save_button.toolTip() == ""
+
+
+def test_the_frames_follow_a_theme_switch(qtbot, make_tab, app_palette, qapp):
+    app_palette(LIGHT)
+    tab = make_tab()
+    tab.refresh_checklist()
+    assert LIGHT_COLOURS[ItemState.INFO].name() in tab.logged_by_edit.styleSheet()
+    app_palette(DARK)
+    qapp.processEvents()
+    qtbot.waitUntil(
+        lambda: DARK_COLOURS[ItemState.INFO].name() in tab.logged_by_edit.styleSheet(),
+        timeout=2_000,
+    )
+    # A field with a style sheet takes the new theme's background too (_restyle_sheets).
+    assert field_colours(tab.logged_by_edit) == (QColor("#2d2d2d"), QColor("#ffffff"))
 
 
 @pytest.fixture

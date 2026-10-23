@@ -62,7 +62,11 @@ FS_FILLED_TOOLTIP = (
 )
 NO_DATABASE = "No database configured. Set the database path in the Settings tab."
 NO_PROJECT = "No project"  # the first entry of the project dropdown (D73)
-LOGGED_BY_PLACEHOLDER = "Your name"
+LOGGED_BY_PLACEHOLDER = "Your name (required)"
+SITE_PLACEHOLDER = "Choose a site (required)"
+REQUIRED_PLACEHOLDER = "Required"
+FS_PLACEHOLDER = "Required, e.g. 10M"
+SAVE_BLOCKED_TOOLTIP = "Complete the items under Before saving first."
 FS_TOOLTIP = f"Sample rate: {entry.FREQUENCY_HELP}. A number without a unit is Hz."
 READ_ONLY_TOOLTIP = "Filled in by the app. You cannot edit this field."
 READ_ONLY_PROPERTY = "iqdmReadOnly"  # marks line edits whose colours follow the theme
@@ -275,6 +279,8 @@ class _ChannelRow:
     fs_log: bool = False  # fs came from the recorder's log (D82)
     band_auto: bool = False  # the band was filled in from fc (D88); marks the field only
     fc_before: str = ""  # the fc text the band last followed (D88)
+    fc_mark: entry.ChecklistItem | None = None  # fc is empty or wrong (D95)
+    fs_mark: entry.ChecklistItem | None = None
 
 
 class LogTab(QWidget):
@@ -467,6 +473,7 @@ class LogTab(QWidget):
         self.logged_by_edit.setPlaceholderText(LOGGED_BY_PLACEHOLDER)
         self.logged_by_edit.textChanged.connect(self._schedule_refresh)
         self.site_combo = QComboBox()
+        self.site_combo.setPlaceholderText(SITE_PLACEHOLDER)
         self.site_combo.currentIndexChanged.connect(self._schedule_refresh)
         self.add_site_button = QPushButton("Add site")
         self.add_site_button.clicked.connect(self.add_site)
@@ -686,9 +693,12 @@ class LogTab(QWidget):
             QEvent.Type.StyleChange,
         ):
             _restyle_fields(self)
+            if event.type() != QEvent.Type.StyleChange:
+                _restyle_sheets(self)
             if hasattr(self, "kept_note"):  # the palette can change before _build ends
                 self._show_kept_note()
                 self._show_message()
+                self._schedule_refresh()  # the field marks take the theme's colours (D95)
         super().changeEvent(event)
 
     # =====================================================================
@@ -997,8 +1007,9 @@ class LogTab(QWidget):
             )
             band.setCurrentText(inp.band if filled is None else filled.name)
             fc = QLineEdit(inp.fc_mhz)
+            fc.setPlaceholderText(REQUIRED_PLACEHOLDER)
             fs = QLineEdit(inp.fs_text)
-            fs.setPlaceholderText("e.g. 10M")
+            fs.setPlaceholderText(FS_PLACEHOLDER)
             row = _ChannelRow(
                 index=index,
                 band=band,
@@ -1197,11 +1208,42 @@ class LogTab(QWidget):
             extra_items=recorderlog.checklist_items(self._recorder, self._scan, filled),
         )
         self.checklist.set_items(items)
+        self._show_field_marks(known=self._scan is not None or self._original is not None)
         self._show_kept_note()
         self.state_note.setText(entry.state_note(self._location, self._original))
         self.edit_existing_button.setVisible(self._original is None and self._logged_id is not None)
         self.use_parent_button.setVisible(self._channel_like_parent() is not None)
         self._update_buttons()
+
+    def _show_field_marks(self, *, known: bool) -> None:
+        """Frame the fields that the checklist names as to do or wrong (D95).
+
+        known is False before the channels are known, as the checklist then does not
+        check the RF chain rows' channels (D79). In "Several folders" mode the marks
+        cover the shared fields and the selected folder's channels.
+        """
+        form = self.current_input()
+        indices = [r.index for r in self._channel_rows]
+        marks = entry.field_marks(form, indices if known else None)
+        name = entry.FieldName
+        _show_mark(self.logged_by_edit, marks.get((name.LOGGED_BY, None)))
+        _show_mark(self.site_combo, marks.get((name.SITE, None)))
+        for row in self._channel_rows:
+            row.fc_mark = marks.get((name.FC, row.index))
+            row.fs_mark = marks.get((name.FS, row.index))
+            _mark_fc(row)
+            _mark_fs(row)
+        for position in range(len(form.params)):
+            applies_to, param, value, _unit = self.param_table.row_widgets(position)
+            _show_mark(applies_to, marks.get((name.APPLIES_TO, position)))
+            for edit, key in ((param, name.PARAM), (value, name.VALUE)):
+                mark = marks.get((key, position))
+                _show_mark(edit, mark)
+                edit.setPlaceholderText(REQUIRED_PLACEHOLDER if mark is not None else "")
+
+    def field_mark(self, widget: QWidget) -> str:
+        """A field's mark, "todo", "error" or "", for tests."""
+        return str(widget.property(MARK_PROPERTY) or "")
 
     def _show_kept_note(self) -> None:
         """The information note on values kept from the previous entry (D79)."""
@@ -1229,6 +1271,7 @@ class LogTab(QWidget):
         self.save_button.setEnabled(
             bool(self.config.db_path) and not scanning and not self._saving and can_save
         )
+        self.save_button.setToolTip("" if can_save else SAVE_BLOCKED_TOOLTIP)
         self.delete_button.setVisible(self._original is not None)
         self.delete_button.setEnabled(
             bool(self.config.db_path) and not scanning and not self._saving
@@ -2045,6 +2088,7 @@ class LogTab(QWidget):
             self.folder_label.setText(f"Selected folder: {selected[0].name}")
             self.folder_checklist.set_items(selected[1].items)
         self.folder_table.set_rows([self._folder_row(f, v) for f, v in self._views])
+        self._show_field_marks(known=selected is not None and selected[0].scan is not None)
         self._show_log_rows(None if selected is None else selected[0], shared)
         self.kept_note.setVisible(False)
         self.edit_existing_button.setVisible(False)
@@ -2487,6 +2531,19 @@ def _restyle_fields(root: QWidget) -> None:
             edit.setPalette(field_palette(edit, bool(read_only)))
 
 
+def _restyle_sheets(root: QWidget) -> None:
+    """Set each field's style sheet again after the theme changes.
+
+    A widget with a style sheet keeps the palette it had when the sheet was set, so
+    an italic or framed field would keep the old theme's background (D95).
+    """
+    for widget in [*root.findChildren(QLineEdit), *root.findChildren(QComboBox)]:
+        sheet = widget.styleSheet()
+        if sheet:
+            widget.setStyleSheet("")
+            widget.setStyleSheet(sheet)
+
+
 def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness]) -> QComboBox:
     combo = QComboBox()
     for member in enum_type:
@@ -2494,20 +2551,61 @@ def _enum_combo(enum_type: type[SampleType] | type[IqLayout] | type[Endianness])
     return combo
 
 
+MARK_PROPERTY = "iqdmMark"  # the field's mark for tests: "todo", "error" or ""
+
+
+def mark_style(
+    widget: QWidget, mark: entry.ChecklistItem | None, *, italic: bool = False
+) -> str:
+    """The style sheet of a field: italic for a filled-in value, and a frame for a mark.
+
+    An empty required field gets a frame in the information colour (amber), and a wrong
+    value one in the error colour (red), from the checklist's colours for the theme
+    (D95). The rules name the widget's type, so a dropdown's list keeps its own look.
+    """
+    rules = ["font-style: italic;"] if italic else []
+    if mark is not None:
+        state = ItemState.INFO if mark.state is ItemState.TODO else ItemState.ERROR
+        # The application's palette: a widget with a style sheet keeps its old palette
+        # after a theme switch until its sheet is set again (_restyle_sheets()).
+        colour = colours_for(QApplication.palette(widget))[state]
+        rules.append(f"border: 2px solid {colour.name()}; border-radius: 3px;")
+    if not rules:
+        return ""
+    kind = "QComboBox" if isinstance(widget, QComboBox) else "QLineEdit"
+    return f"{kind} {{ {' '.join(rules)} }}"
+
+
+def _show_mark(
+    widget: QLineEdit | QComboBox,
+    mark: entry.ChecklistItem | None,
+    *,
+    italic: bool = False,
+    tooltip: str = "",
+) -> None:
+    """Frame a field that is empty but required, or wrong (D95). A wrong value's
+    tooltip gives the reason; otherwise the field keeps `tooltip`."""
+    widget.setStyleSheet(mark_style(widget, mark, italic=italic))
+    widget.setProperty(MARK_PROPERTY, "" if mark is None else str(mark.state))
+    error = mark is not None and mark.state is ItemState.ERROR
+    widget.setToolTip(mark.text if error and mark is not None else tooltip)
+
+
 def _mark_fs(row: _ChannelRow) -> None:
     """Italic text and a tooltip on an fs value filled in from the file size (D21) or
-    from the recorder's log (D82)."""
-    row.fs.setStyleSheet("font-style: italic;" if row.fs_auto or row.fs_log else "")
+    from the recorder's log (D82), and the frame of an empty or wrong fs (D95)."""
     if row.fs_log:
-        row.fs.setToolTip(recorderlog.FROM_LOG_TOOLTIP)
+        tooltip = recorderlog.FROM_LOG_TOOLTIP
     else:
-        row.fs.setToolTip(FS_FILLED_TOOLTIP if row.fs_auto else FS_TOOLTIP)
+        tooltip = FS_FILLED_TOOLTIP if row.fs_auto else FS_TOOLTIP
+    _show_mark(row.fs, row.fs_mark, italic=row.fs_auto or row.fs_log, tooltip=tooltip)
 
 
 def _mark_fc(row: _ChannelRow) -> None:
-    """Italic text and a tooltip on an fc value from the recorder's log (D82)."""
-    row.fc.setStyleSheet("font-style: italic;" if row.fc_log else "")
-    row.fc.setToolTip(recorderlog.FROM_LOG_TOOLTIP if row.fc_log else "")
+    """Italic text and a tooltip on an fc value from the recorder's log (D82), and the
+    frame of an empty or wrong fc (D95)."""
+    tooltip = recorderlog.FROM_LOG_TOOLTIP if row.fc_log else ""
+    _show_mark(row.fc, row.fc_mark, italic=row.fc_log, tooltip=tooltip)
 
 
 def _mark_band(row: _ChannelRow) -> None:
