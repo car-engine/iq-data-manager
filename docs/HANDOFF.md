@@ -1,22 +1,22 @@
-# Handoff: IQ Data Manager after release 1.2.1
+# Handoff: IQ Data Manager after release 1.3.0
 
 Read this file first when you pick up the repository. It says where the project
 stands, how work proceeds, and what is still open. It points to the other documents
-for the detail. Last updated: 2026-10-23, at the release of version 1.2.1.
+for the detail. Last updated: 2026-10-27, at the release of version 1.3.0.
 [STATUS.md](STATUS.md) is updated after every piece of work and is the current record.
 
 ## 1. State
 
 | | |
 | --- | --- |
-| Version | 1.2.1, tag `v1.2.1` on `485434f` (annotated, pushed, 2026-10-23). Earlier: 1.2.0 (`v1.2.0` on `616b18c`), 1.1.1 (`v1.1.1` on `3108c63`), 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
-| `main` | `485434f` at the release, pushed to `origin`; a later commit records the release |
-| Tests | 1,959 passed, 4 skipped (`pytest`); `ruff check` clean |
-| Release build | `dist/release-1.2.1/IQDataManager/` on the development PC, built from `485434f`. The older `dist/release-*` folders stay until the team runs 1.2.1. `dist/` is gitignored, so a new PC builds its own with README "Build". |
+| Version | 1.3.0, tag `v1.3.0` on `7eb9ab6` (annotated, pushed, 2026-10-27). Earlier: 1.2.1 (`v1.2.1` on `485434f`), 1.2.0 (`v1.2.0` on `616b18c`), 1.1.1 (`v1.1.1` on `3108c63`), 1.1.0 (`v1.1.0` on `ed1afe8`), 1.0.0 (`v1.0.0` on `674434c`). |
+| `main` | `7eb9ab6` at the release, pushed to `origin`; a later commit records the release |
+| Tests | 2,014 passed, 4 skipped (`pytest`); `ruff check` clean |
+| Release build | `dist/release-1.3.0/IQDataManager/` on the development PC, built from `7eb9ab6`. The older `dist/release-*` folders stay until the team runs 1.3.0. `dist/` is gitignored, so a new PC builds its own with README "Build". |
 | Schema | Version 1, unchanged since 1.0.0 (section 5) |
 | Milestones | 0 to 8 done, then work after 1.0 from open items (STATUS.md, "Work after 1.0"). |
-| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). The user's manual tests of 1.2 and 1.2.1 passed (2026-10-23). |
-| Next | Version 1.3.0: O57 to O59, the Archive / copy tab (section 6). The ready prompt is "Version 1.3.0" in [KICKOFF.md](KICKOFF.md). |
+| In use | Yes. The real catalogue exists, the pilot passed (2026-10-20), the team no longer uses the legacy logging scripts, a backup of the catalogue runs outside the app (O22), and the field checks of 1.1 passed (2026-10-22). The user's manual tests of 1.2 and 1.2.1 passed (2026-10-23), and those of 1.3.0 (2026-10-24 and 2026-10-27). |
+| Next | No ready items. The team's feedback on 1.3.0, with the prompt "Work after a release" in [KICKOFF.md](KICKOFF.md). The field checks of 1.3.0 are in section 6. |
 
 The app is a Windows desktop tool (Python 3.12, PySide6) that logs RF IQ recordings
 into a shared SQLite catalogue on the NAS, and copies, archives and deletes recordings
@@ -31,11 +31,20 @@ with verification. The team uses the packaged build; the laptops have no Python.
    this repository. Read the notes before the first shell command.
 4. [SPEC.md](SPEC.md): the current requirements. Read the sections your change
    touches.
-5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D95. Every SPEC rule names its
+5. [DECISIONS.md](DECISIONS.md): the reasons, D1 to D102. Every SPEC rule names its
    decision.
-6. The latest reports, of version 1.2.1:
+6. The latest reports, of version 1.3.0, which describe the Archive / copy tab as it
+   stands:
+   [reports/2026-10-23-transfer-pages.md](reports/2026-10-23-transfer-pages.md),
+   [reports/2026-10-23-check-after-archive.md](reports/2026-10-23-check-after-archive.md),
+   [reports/2026-10-23-queue-asks-for-folder.md](reports/2026-10-23-queue-asks-for-folder.md)
+   (with the table "Code paths that delete or overwrite a file" for the version),
+   [reports/2026-10-24-queue-actions.md](reports/2026-10-24-queue-actions.md),
+   [reports/2026-10-24-transfer-field-marks.md](reports/2026-10-24-transfer-field-marks.md)
+   and [reports/2026-10-24-quoted-names.md](reports/2026-10-24-quoted-names.md). Of
+   version 1.2.1:
    [reports/2026-10-23-wheel-guard.md](reports/2026-10-23-wheel-guard.md) (with
-   "Notes for version 1.3.0", the plan for O57 to O59),
+   "Notes for version 1.3.0", the plan that 1.3.0 started from),
    [reports/2026-10-23-batch-log-rf-rows.md](reports/2026-10-23-batch-log-rf-rows.md),
    [reports/2026-10-23-logged-by-typed.md](reports/2026-10-23-logged-by-typed.md) and
    [reports/2026-10-23-required-field-marks.md](reports/2026-10-23-required-field-marks.md),
@@ -61,7 +70,7 @@ after a release" and "Review of a release". Earlier prompts are in
 a milestone did:
 
 1. **Record it.** A request or a fault gets an open item in STATUS.md, "Open items",
-   with the next free number (STATUS.md names it; O60 is next on 2026-10-23), a
+   with the next free number (STATUS.md names it; O65 is next on 2026-10-27), a
    proposed default and its origin.
 2. **Plan.** Propose a plan with its test list in chat, and wait for approval
    (CLAUDE.md, "Workflow"). The safety hook blocks plan files outside the
@@ -69,7 +78,7 @@ a milestone did:
 3. **Branch.** One branch per piece of work, named after it, for example
    `viewer-multi-filter`. Never commit straight to `main`.
 4. **Implement with tests.** Run `pytest` and `ruff check` before declaring it done.
-5. **Record the decision.** A new entry in DECISIONS.md (D96 is next on 2026-10-23),
+5. **Record the decision.** A new entry in DECISIONS.md (D103 is next on 2026-10-27),
    the current requirement in SPEC.md, and the item moved to "Closed items" in
    STATUS.md.
 6. **Report.** `docs/reports/<YYYY-MM-DD>-<topic>.md`, following
@@ -85,8 +94,10 @@ a milestone did:
 
 A change that copies, renames or deletes files updates the table "Code paths that
 delete or overwrite a file" (last full list in [reports/M6.md](reports/M6.md), with
-changes in [reports/M7.md](reports/M7.md), [reports/M8.md](reports/M8.md) part 2 and
-the reports of 1.1 and 1.1.1) in its report. A change that deletes catalogue rows
+changes in [reports/M7.md](reports/M7.md), [reports/M8.md](reports/M8.md) part 2,
+the reports of 1.1 and 1.1.1, and for 1.3.0
+[reports/2026-10-23-queue-asks-for-folder.md](reports/2026-10-23-queue-asks-for-folder.md))
+in its report. A change that deletes catalogue rows
 lists them the same way.
 
 ## 4. Versions and releases
@@ -130,11 +141,20 @@ lists them the same way.
   table or column of `schema.sql` as older. It compares tables and columns only, not
   constraints or triggers (release review, finding 14). With numbered migrations this
   limit no longer matters.
-- Versions 1.1.0 to 1.2.1 changed no schema statement.
+- Versions 1.1.0 to 1.3.0 changed no schema statement.
 
 ## 6. Outstanding items
 
 STATUS.md, "Open items", is the current list. At this handoff:
+
+### Done in version 1.3.0
+
+From the team's feedback on 1.2: O58 (the Archive / copy tab in three pages, D96),
+O57 (Check before delete straight after each archive, D97) and O59 (queue items wait
+for their folder, D98). From the user's first manual test of 1.3.0: O63 (the page after
+Add to queue, D99), O64 ("Forget", D100), O60 and O61 (frames on the Archive and Copy
+pages, and the Check page's line, D101) and O62 (names of controls in quotation marks,
+D102). The six reports are listed in section 2.
 
 ### Done in version 1.2.1
 
@@ -155,9 +175,6 @@ schema change; D91 holds the reason.
 
 | ID | Item | When |
 | --- | --- | --- |
-| O57 | Check before delete straight after each archive, from the form and the queue; the check-after box goes | Version 1.3.0 |
-| O58 | The Archive / copy tab split into Archive, Check and Copy pages, with the queue and unfinished transfers shared | Version 1.3.0 |
-| O59 | Adding from the Viewer without a NAS folder or copy folder opens the page that needs it | Version 1.3.0 |
 | O19 | "Upgrade database" in the Settings tab | With the first schema migration |
 | O37 | Small files copy slowly to the NAS | Measure first; not needed for 1.x. The team has not found it a problem (2026-10-22). |
 | O40 | Unconfirmed suspicions from the release review: path work on the Qt main thread, a network error during a check, SQLite errors in the legacy import, a read-only connection after a crash | When a fault points at one of them. None seen in use (2026-10-22). |
@@ -171,6 +188,8 @@ schema change; D91 holds the reason.
 | The GUI by eye in dark mode on Windows | Offscreen renders and the user's checks only | User, with each build |
 | Version 1.2 on the NAS: several real folders of a day (scan time, Cancel during a long scan), and a delete while a second PC works on the catalogue | The manual test used local synthetic data on one PC | User, in the field |
 | Version 1.2.1: the mouse wheel on a laptop's touchpad, and a theme switch while the app runs on a team PC | Step 1.7 of the manual test was optional and not run; tests cannot send real wheel input | User, in the field |
+| Version 1.3.0: Check before delete after each archive on the real NAS, for a queue of real recordings overnight | The manual tests used a Windows share of the development PC and synthetic data | User, in the field |
+| Version 1.3.0: Compare with laptop copy on the Check page, and the Archive page's start at the sampled hashes when Settings says "Sizes only" | Automated tests only; the test data held no recording logged on the NAS | User, when it comes up |
 
 The checks of 1.1 on the NAS and in the field passed (STATUS.md, "Pending checks for
 the user"). The user's rollout steps after 1.0 are done: the real catalogue, the
@@ -192,7 +211,7 @@ settings path needs `APPDATA`, so a Linux build would need another settings loca
 | --- | --- | --- |
 | Entry points | `app.py` (window, `--config`, `--db`, `--smoke-test`), `check_main.py` (console program) | |
 | Database | `db/schema.sql`, `db/connection.py`, `db/version.py`, `db/repository.py`, `db/migrations.py`, `db/legacy.py` | All SQL lives in `db/`; only `db/` imports `sqlite3` |
-| Logic without Qt | `entry.py` (Log tab; deleting an entry, D89), `bands.py` (the band list, D88), `batchlog.py` (several folders, D90), `deletion_record.py` (the copy of a deleted entry, D89), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81, D86), `recorderlog.py` (values from the recorder's log, D82; a template after the log, D87), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
+| Logic without Qt | `entry.py` (Log tab; deleting an entry, D89), `bands.py` (the band list, D88), `batchlog.py` (several folders, D90), `deletion_record.py` (the copy of a deleted entry, D89), `templates.py` (Log tab templates, D80), `transferqueue.py` (Archive / copy queue, D81, D86; items that wait for a folder and the page after an add, D98, D99), `recorderlog.py` (values from the recorder's log, D82; a template after the log, D87), `viewer.py` (Viewer), `movecopy.py` (Archive / copy tab: the pages and `page_for()`, D96; `check_after_archive()`, D97; `form_marks()`, D101), `legacy.py`, `config.py`, `location.py`, `models.py` | Tested without a display |
 | Transfers | `transfer/selection.py`, `pathcheck.py`, `copier.py`, `verify.py`, `uncached.py`, `manifest.py`, `delete.py`, `operations.py` | `delete.py` is the only module that deletes files (`tests/test_architecture.py`, ruff TID251) |
 | GUI | `gui/viewer_tab.py`, `log_tab.py`, `transfer_tab.py`, `settings_tab.py`, `workers.py` (`TaskRunner`), `widgets/` | Work over about 100 ms runs in the `TaskRunner` |
 | Diagnostics | `diagnostics/`, wrapped by `tools/` and `IQDataManager-check.exe` | `diagnostics/fixtures.py` makes synthetic recordings for tests and manual tests |
@@ -201,6 +220,8 @@ settings path needs `APPDATA`, so a Linux build would need another settings loca
 | Several folders | `gui/log_tab.py`: `_folders`, `_selected_key`, `_views`, `_checks` (D90); `gui/widgets/folder_table.py` | Section 4 shows the selected folder's channels; `_sync_selected()` keeps what was typed there with that folder. A scanned channel keeps its size counts (`ChannelScan.size_counts`), so a refresh of 50 folders stays near 50 ms. The selected folder's log rows show under section 5 (`_show_log_rows()`, `batchlog.log_shown()`, D93) |
 | Field frames | `entry.field_marks()` (D95), `gui/log_tab.py`: `_show_field_marks()`, `_show_mark()`, `_restyle_sheets()`; `gui/widgets/mark_frame.py` for dropdowns | The checklist's field lines are built from `field_marks()`. A dropdown gets no style sheet; its `MarkFrame` paints the frame. A widget with a style sheet keeps its old palette after a theme switch until the sheet is set again |
 | Mouse wheel | `gui/widgets/wheel_guard.py`, installed by `MainWindow` (D92) | An application event filter; tests cannot send the real wheel input that Qt passes to the parent |
+| Archive / copy pages | `gui/transfer_tab.py`: `pages`, `page()`, `show_page()`; `dest_edit` and `hash_combo` are properties that return the field of the page shown (D96). `_show_field_marks()` frames the folder, destination, time and channel fields (D98, D101) | The pages lock while an operation started from a page runs, not during a queue run (D98). Check before delete reads the Archive page's Compare, Compare with laptop copy the Check page's, whatever page is shown |
+| Quoted names | `tests/user_text_names.py`, `tests/test_user_text.py` (`unquoted_names()`) (D102) | A control name in a sentence needs double quotes, or the text test fails. Add the name of a new control to `user_text_names.py` |
 
 ## 8. Traps that cost time before
 
@@ -230,6 +251,10 @@ The full list is "Notes for agents" in STATUS.md. The ones met most often:
   (D76).
 - **User-facing text** follows CLAUDE.md, "User-facing text";
   `tests/test_user_text.py` checks each tab and the dialog texts. Add new texts there.
+  Since D102 it also fails a control name used in a sentence without quotes.
+- **A test that fails while the queue holds an item hangs the suite:** the window's
+  teardown asks a real question. Run long suites with `timeout` in front (STATUS.md,
+  "Notes for agents"); in 1.3.0 a changed text did this once.
 - **A throwaway test under `dev/`** can reuse the suite's fixtures: insert `tests/` in
   `sys.path` and import the fixtures by name, as the review probes of 1.1.0 did
   (review report, "Points a new maintainer would miss").

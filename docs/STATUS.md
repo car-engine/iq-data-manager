@@ -2,7 +2,7 @@
 
 Read this file at the start of every session, after `CLAUDE.md` and
 [HANDOFF.md](HANDOFF.md). Update it after every piece of work, in the same commit as
-its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
+its report. Last updated: 2026-10-27 (version 1.3.0 released).
 
 ## Current state
 
@@ -68,17 +68,25 @@ its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
   declare long-path support, and the shipped user guide, release notes and
   `defaults.example.toml` match their sources. At the release: 1,959 tests pass and 4
   skip; `ruff check` is clean. The schema is unchanged (version 1).
-- **Version 1.3.0 is in progress**: O57 to O59, the Archive / copy tab. The user
-  approved the plan on 2026-10-23, with the recommended answers to its seven
-  questions; the reports of the three branches record them. O58 is done on
-  `transfer-pages` (D96), O57 on `check-after-archive` (D97) and O59 on
-  `queue-asks-for-folder` (D98), each branch made from the one before. None is merged.
-  USER_GUIDE.md section 5 describes the new screen. The user's manual test of
-  2026-10-24 passed 24 of 25 steps, none failed, and gave O60 to O64, which the
-  user chose to fix before the release: `queue-actions` (O63, O64; D99, D100),
-  `transfer-field-marks` (O60, O61; D101) and `quoted-names` (O62; D102) follow on.
-  The user's second manual test of 2026-10-27 passed all 21 steps. Version 1.3.0 waits
-  for the user's approval to merge and release.
+- **Version 1.3.0 is released** (2026-10-27). The tag `v1.3.0` is on `7eb9ab6`;
+  `main` and the tag are pushed. It holds O58 (the Archive / copy tab in three pages,
+  D96), O57 (Check before delete straight after each archive, D97) and O59 (queue
+  items wait for their folder, D98), from the team's feedback on 1.2, and O60 to O64
+  (D99 to D102) from the user's first manual test. The user approved the plan on
+  2026-10-23, with the recommended answers to its seven questions, and the plan for
+  O60 to O64 on 2026-10-24. The manual test of 2026-10-24 passed 24 of 25 steps, none
+  failed (step 1.6 was not marked; its comment gave O61); the second manual test of
+  2026-10-27 passed all 21 steps. `main` was fast-forwarded to `quoted-names` at
+  `f9bb882`, then `release-1.3.0` set the version and the release notes (`7eb9ab6`).
+  The build is `dist/release-1.3.0` (104 MB), made from `7eb9ab6`: `--smoke-test`
+  passed, both programs print 1.3.0, `IQDataManager-check.exe --help` lists its
+  commands, both declare long-path support, and the shipped user guide, release notes
+  and `defaults.example.toml` match their sources. At the release: 2,014 tests pass and
+  4 skip; `ruff check` is clean. The schema is unchanged (version 1).
+- **The next work** has no ready items. The open items O19, O37 and O40 wait for their
+  trigger. The next session starts from the team's feedback on 1.3.0 with the prompt
+  "Work after a release" in [KICKOFF.md](KICKOFF.md). The field checks of 1.3.0 are
+  under "Pending checks for the user".
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -150,12 +158,17 @@ One branch per piece of work (HANDOFF.md, section 3).
 | O53, Logged by is typed by the user (D94) | Done, merged | `logged-by-typed`, from `batch-log-rf-rows` at `b5aaa55` | `07c6e18` (with its report) | [2026-10-23-logged-by-typed](reports/2026-10-23-logged-by-typed.md) |
 | O54, fields to fill in or correct are framed (D95) | Done, merged | `required-field-marks`, from `logged-by-typed` at `07c6e18` | `b29c497` (with its report), `0de5087` (the manual test), `808b97b` (the tooltip), `101ac99` (the dropdown frame), `b3b3bec` (STATUS) | [2026-10-23-required-field-marks](reports/2026-10-23-required-field-marks.md) |
 | Release 1.2.1 | Released: tag `v1.2.1`, pushed | `release-1.2.1`, from `main` at `b3b3bec` | `485434f`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
-| O58, the Archive / copy tab in three pages (D96) | Done, not merged | `transfer-pages`, from `main` at `10fa5d2` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
-| O57, Check before delete straight after each archive (D97) | Done, not merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
-| O59, queue items from the Viewer wait for their folder (D98) | Done, not merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | `85e7d7d` (with its report and USER_GUIDE.md section 5), `1a8254a` (the pages during a queue run), `8db0a65` and `ad5b9d3` (STATUS: the manual test) | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
-| O63 and O64, the page after Add to queue (D99) and "Forget" (D100) | Done, not merged | `queue-actions`, from `queue-asks-for-folder` at `ad5b9d3` | `ce63581` (with its report) | [2026-10-24-queue-actions](reports/2026-10-24-queue-actions.md) |
-| O60 and O61, frames on the Archive and Copy pages, and the Check page's line (D101) | Done, not merged | `transfer-field-marks`, from `queue-actions` at `ce63581` | `e9cdccf` (with its report) | [2026-10-24-transfer-field-marks](reports/2026-10-24-transfer-field-marks.md) |
-| O62, names of controls in quotation marks (D102) | Done, not merged | `quoted-names`, from `transfer-field-marks` at `e9cdccf` | The commit of this work, with its report | [2026-10-24-quoted-names](reports/2026-10-24-quoted-names.md) |
+| O58, the Archive / copy tab in three pages (D96) | Done, merged | `transfer-pages`, from `main` at `10fa5d2` | `1cf1bf7` (with its report) | [2026-10-23-transfer-pages](reports/2026-10-23-transfer-pages.md) |
+| O57, Check before delete straight after each archive (D97) | Done, merged | `check-after-archive`, from `transfer-pages` at `1cf1bf7` | `db22f57` (with its report) | [2026-10-23-check-after-archive](reports/2026-10-23-check-after-archive.md) |
+| O59, queue items from the Viewer wait for their folder (D98) | Done, merged | `queue-asks-for-folder`, from `check-after-archive` at `db22f57` | `85e7d7d` (with its report and USER_GUIDE.md section 5), `1a8254a` (the pages during a queue run), `8db0a65` and `ad5b9d3` (STATUS: the manual test) | [2026-10-23-queue-asks-for-folder](reports/2026-10-23-queue-asks-for-folder.md) |
+| O63 and O64, the page after Add to queue (D99) and "Forget" (D100) | Done, merged | `queue-actions`, from `queue-asks-for-folder` at `ad5b9d3` | `ce63581` (with its report) | [2026-10-24-queue-actions](reports/2026-10-24-queue-actions.md) |
+| O60 and O61, frames on the Archive and Copy pages, and the Check page's line (D101) | Done, merged | `transfer-field-marks`, from `queue-actions` at `ce63581` | `e9cdccf` (with its report) | [2026-10-24-transfer-field-marks](reports/2026-10-24-transfer-field-marks.md) |
+| O62, names of controls in quotation marks (D102) | Done, merged | `quoted-names`, from `transfer-field-marks` at `e9cdccf` | `875d40c` (with its report), `b8a9c9b` and `f9bb882` (STATUS: the second manual test) | [2026-10-24-quoted-names](reports/2026-10-24-quoted-names.md) |
+| Release 1.3.0 | Released: tag `v1.3.0`, pushed | `release-1.3.0`, from `main` at `f9bb882` | `7eb9ab6`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
+
+The seven branches of 1.3.0, from `transfer-pages` to `release-1.3.0`, were merged into
+`main` as fast-forwards on 2026-10-27. None was pushed. They are not deleted yet; that
+waits for the user's approval.
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
@@ -386,11 +399,12 @@ that (checked on 2026-10-23).
 
 - Old builds: `dist/smoke-1/`, `dist/smoke-2/`, `dist/m7-4/`, `dist/m8-1/`,
   `dist/m8-2/`, `dist/review-1/` and `dist/review-1.1/`. Keep the `release-*`
-  folders the team may still use: `dist/release-1.2.1/` stays; `dist/release-1.2.0/`,
-  `dist/release-1.1.1/`, `dist/release-1.1.0/` and `dist/release-1.0.0/` can go once
-  the team runs 1.2.1.
+  folders the team may still use: `dist/release-1.3.0/` stays; `dist/release-1.2.1/`,
+  `dist/release-1.2.0/`, `dist/release-1.1.1/`, `dist/release-1.1.0/` and
+  `dist/release-1.0.0/` can go once the team runs 1.3.0.
 - `build/spec-removed-sections.md`, `build/release-1.2.0-build.log`,
-  `build/release-1.2.1-build.log` and `build/work-release-1.2.1/`.
+  `build/release-1.2.1-build.log`, `build/work-release-1.2.1/` (if still there),
+  `build/release-1.3.0-build.log` and `build/work-release-1.3.0/`.
 - `fixtures_out/demo/`, `fixtures_out/m2-demo/`, `fixtures_out/m2-big/` and
   `fixtures_out/m3-manual/`.
 - Under `dev/`: `test.db`, `m3.db` and `scratch.db` (scratch databases; the first two
