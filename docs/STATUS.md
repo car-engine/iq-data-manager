@@ -77,7 +77,8 @@ its report. Last updated: 2026-10-23 (version 1.3.0 in progress).
   2026-10-24 passed 24 of 25 steps, none failed, and gave O60 to O64, which the
   user chose to fix before the release: `queue-actions` (O63, O64; D99, D100),
   `transfer-field-marks` (O60, O61; D101) and `quoted-names` (O62; D102) follow on.
-  A short manual test of those changes comes next (pending checks below).
+  The user's second manual test of 2026-10-27 passed all 21 steps. Version 1.3.0 waits
+  for the user's approval to merge and release.
 - **The 1.1 field checks passed** (user, 2026-10-22): the queue on the NAS with Pause
   and Start, a recorder recording logged, archived with its logs, checked and deleted
   from the laptop, several folders with a shared template, and the Viewer's filters
@@ -289,7 +290,11 @@ build `dist/test-1.3.0-2` from `1a8254a`) and sent the page's exported results: 
 steps passed and none failed. Step 1.6 was not marked; its comment asked what the Check
 page's preview line means (O61). The comments and notes gave O60 to O64.
 
-- **Version 1.3.0, the second manual test:** the changes after the first test (O60 to
+On 2026-10-27 the user ran the second manual test of 1.3.0
+(`dev/test-1.3.0-b/CHECKLIST.html`, build `dist/test-1.3.0-3` from `875d40c`) and sent
+the page's exported results: all 21 steps passed, with no comments.
+
+- **Version 1.3.0, the second manual test (done, see above):** the changes after the first test (O60 to
   O64): the page after an add, the frames on the Archive and Copy pages, the Check
   page's line, "Forget", and the quoted names in each tab. The checklist is
   `dev/test-1.3.0-b/CHECKLIST.html` (21 steps), on the build `dist/test-1.3.0-3` (from
