@@ -1,5 +1,54 @@
 # IQ Data Manager: release notes
 
+## Version 1.3.0 (2026-10-27)
+
+A new layout for the Archive / copy tab, from the team's feedback on version 1.2. It
+uses the same catalogue; nothing needs to be upgraded. Install it in a new program
+folder, and copy `defaults.toml` across. User guide section 5 describes the new tab.
+
+### What is new
+
+- **Three pages: Archive, Check and Copy.** The page you choose sets what **Preview**
+  and **Run** do; the Copy and Archive buttons at the top are gone.
+  - **Archive** holds the **NAS folder for archives**, the destination (that folder
+    plus the recording's own folder name), **Compare**, and **Laptop copy** with
+    **Check before delete** and **Delete laptop copy**.
+  - **Check** holds **Check archive** and **Compare with laptop copy**.
+  - **Copy** holds the time range, the channels, the timeline and the **Folder for
+    copies**, which starts as the copy folder in Settings.
+  The preview stays on the right. The queue and the unfinished transfers are two tabs
+  at the bottom; drag the bar above them to give them more room.
+- **The Viewer's Archive / copy button opens the right page:** Archive for a recording
+  on the laptop, or one whose laptop copy is still to be checked or deleted; Copy for
+  any other recording.
+- **Check before delete runs straight after every archive,** from the Archive page and
+  from the queue. The tick box "After each archive, run Check before delete" is gone.
+  When the check passes, **Delete laptop copy** is ready at once. When it does not, the
+  archive still stands, the result is amber and says why, and you can run **Check
+  before delete** again. The Archive page no longer offers "Sizes only", because the
+  check reads the content of the files.
+- **Recordings added to the queue before their folder is chosen wait for it.** They
+  show as "Needs a NAS folder" or "Needs a copy folder". The tab opens the page with
+  that folder and frames the field in amber. Choose the folder and the items get their
+  destinations; **Start** stays off until then. After any add, the tab shows the page
+  of what was added.
+- **Fields to fill in or correct are framed,** as in the Log recording tab: amber for a
+  field still to fill in, red for a wrong value (point at it to see why).
+- **Names of buttons, fields, pages and tabs are in quotation marks** in the app's
+  messages and tooltips, for example 'Click "Check before delete" on the "Archive"
+  page.'
+- The button under Unfinished transfers reads **Forget**. It still asks first, and the
+  files already copied stay.
+
+### Known limits
+
+- The estimated time of an archive does not include Check before delete.
+- Through a Windows share of the same PC, Check before delete fails, most likely for
+  files whose size is not a multiple of 512 bytes; the real NAS does not have this
+  limit. Since
+  1.3.0 the check runs after every archive, so such a test shows an amber result.
+- The limits of version 1.2.1 below still apply.
+
 ## Version 1.2.1 (2026-10-23)
 
 Fixes from the team's feedback on version 1.2. It uses the same catalogue; nothing
