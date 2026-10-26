@@ -167,8 +167,9 @@ One branch per piece of work (HANDOFF.md, section 3).
 | Release 1.3.0 | Released: tag `v1.3.0`, pushed | `release-1.3.0`, from `main` at `f9bb882` | `7eb9ab6`, plus the commit of these records | This file and [RELEASE_NOTES.md](RELEASE_NOTES.md) |
 
 The seven branches of 1.3.0, from `transfer-pages` to `release-1.3.0`, were merged into
-`main` as fast-forwards on 2026-10-27. None was pushed. They are not deleted yet; that
-waits for the user's approval.
+`main` as fast-forwards on 2026-10-27. With the user's approval they were deleted with
+`git branch -d` on 2026-10-27, at `1cf1bf7`, `db22f57`, `ad5b9d3`, `ce63581`,
+`e9cdccf`, `f9bb882` and `7eb9ab6`. None had been pushed.
 
 The five branches of 1.2.1, from `wheel-guard` to `release-1.2.1`, were merged into
 `main` as fast-forwards on 2026-10-23. With the user's approval they were deleted with
